@@ -17,9 +17,14 @@ clap = { version = "4.5.41", features = ["derive"] }
 anstyle = "1.0.11"
 log = "0.4.27"
 env_logger = "0.11.8"
+parking_lot = "0.12.4"
+ariadne = "0.5.1"
+dashmap = "7.0.0-rc2"
+id-arena = "2.2.1"
 
 zirael_utils = { path = "crates/zirael_utils" }
 
+# Rules were taken from egui
 [workspace.lints.rust]
 unsafe_code = "deny"
 
