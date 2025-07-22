@@ -1,0 +1,13 @@
+[package]
+name = "xtask"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+publish = false
+
+[dependencies]
+xtaskops = "0.4.0"
+anyhow = { workspace = true }
+
+[lints]
+workspace = true

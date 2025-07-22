@@ -1,0 +1,15 @@
+[package]
+name = "zirael"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
+clap = { workspace = true }
+zirael_utils = { workspace = true }
+anyhow = { workspace = true }
+env_logger = { workspace = true }
+log = { workspace = true }
+
+[lints]
+workspace = true

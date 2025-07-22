@@ -1,0 +1,12 @@
+[package]
+name = "zirael_utils"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
+anstyle = { workspace = true }
+clap = { workspace = true }
+
+[lints]
+workspace = true

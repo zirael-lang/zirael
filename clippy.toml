@@ -1,0 +1,32 @@
+msrv = "1.85"
+allow-unwrap-in-tests = true
+avoid-breaking-exported-api = false
+max-fn-params-bools = 2
+
+# https://rust-lang.github.io/rust-clippy/master/index.html#/large_include_file
+max-include-file-size = 1000000
+
+# https://rust-lang.github.io/rust-clippy/master/index.html#/type_complexity
+type-complexity-threshold = 350
+
+# -----------------------------------------------------------------------------
+
+disallowed-macros = [
+    'dbg',
+    'std::unimplemented',
+]
+
+disallowed-methods = [
+    "std::env::temp_dir", # Use the tempdir crate instead
+    "std::thread::spawn", # Use `std::thread::Builder` and name the thread
+]
+
+disallowed-names = ["temp"]
+
+disallowed-types = [
+    # Use the faster & simpler non-poisonable primitives in `parking_lot` instead
+    "std::sync::Mutex",
+    "std::sync::RwLock",
+    "std::sync::Condvar",
+    # "std::sync::Once",
+]
