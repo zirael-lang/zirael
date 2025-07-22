@@ -23,6 +23,7 @@ dashmap = "7.0.0-rc2"
 id-arena = "2.2.1"
 
 zirael_utils = { path = "crates/zirael_utils" }
+zirael_core = { path = "crates/zirael_core" }
 
 # Rules were taken from egui
 [workspace.lints.rust]

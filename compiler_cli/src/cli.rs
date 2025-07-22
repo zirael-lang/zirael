@@ -21,6 +21,7 @@ pub const CLAP_STYLING: Styles = Styles::styled()
 
 pub fn try_cli() -> Result<()> {
     let cli = Cli::parse();
+    let context = Context::new();
 
     // Handle file inputs
     for file in &cli.files {
