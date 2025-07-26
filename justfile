@@ -23,3 +23,6 @@ fmt:
     cargo shear --fix
     cargo fmt --all
     dprint fmt
+
+comp-run:
+    cargo run -p zirael playground/test.zr

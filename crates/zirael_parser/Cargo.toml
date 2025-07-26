@@ -1,0 +1,17 @@
+[package]
+name = "zirael_parser"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+repository.workspace = true
+
+[dependencies]
+logos = { workspace = true }
+zirael_utils = { workspace = true }
+ariadne = { workspace = true }
+log = { workspace = true }
+id-arena = { workspace = true }
+colored = { workspace = true }
+
+[lints]
+workspace = true

@@ -21,9 +21,16 @@ parking_lot = "0.12.4"
 ariadne = "0.5.1"
 dashmap = "7.0.0-rc2"
 id-arena = "2.2.1"
+colored = "3.0.0"
+fs-err = "3.1.1"
+logos = "0.15.0"
+chumsky = "1.0.0-alpha.8"
+lasso = { version = "0.7.3", features = ["multi-threaded"] }
+once_cell = "1.21.3"
 
-zirael_utils = { path = "crates/zirael_utils" }
-zirael_core = { path = "crates/zirael_core" }
+zirael_utils = { path = "crates/zirael_utils", version = "0.1.0" }
+zirael_core = { path = "crates/zirael_core", version = "0.1.0" }
+zirael_parser = { path = "crates/zirael_parser", version = "0.1.0" }
 
 # Rules were taken from egui
 [workspace.lints.rust]

@@ -1,4 +1,3 @@
-use crate::Context;
 use id_arena::{Arena, Id};
 use parking_lot::RwLock;
 use std::{borrow::Cow, path::PathBuf, sync::Arc};

@@ -1,9 +1,15 @@
 use crate::{cli::try_cli, logger::setup_logger};
+use std::process::exit;
+use zirael_core::prelude::*;
 
 mod cli;
 mod logger;
 
-fn main() -> anyhow::Result<()> {
+fn main() {
     setup_logger();
-    try_cli()
+
+    if let Err(e) = try_cli() {
+        error!("{:?}", e);
+        exit(1);
+    }
 }

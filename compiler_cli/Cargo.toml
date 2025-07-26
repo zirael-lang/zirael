@@ -3,10 +3,10 @@ name = "zirael"
 edition.workspace = true
 license.workspace = true
 version.workspace = true
+description = "Zirael Compiler"
 
 [dependencies]
 clap = { workspace = true }
-zirael_utils = { workspace = true }
 zirael_core = { workspace = true }
 anyhow = { workspace = true }
 env_logger = { workspace = true }

@@ -1,0 +1,5 @@
+import "div.zr"
+
+fn main() {
+    var x: string = ""
+}
