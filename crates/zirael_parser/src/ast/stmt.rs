@@ -1,0 +1,19 @@
+use crate::ast::{expr::Expr, types::Type};
+use zirael_utils::prelude::*;
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Stmt(pub StmtKind);
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum StmtKind {
+    Expr(Expr),
+    Var(VarDecl),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct VarDecl {
+    pub name: Identifier,
+    /// Defaults to [Type::Inferred]
+    pub ty: Type,
+    pub value: Expr,
+}
