@@ -17,7 +17,7 @@ check:
     cargo check --workspace --all-features --all-targets --locked
 
 lint:
-    cargo clippy --workspace --all-targets --all-features -- --deny warnings
+    cargo clippy --workspace --all-targets --all-features --fix --allow-dirty -- --deny warnings
 
 fmt:
     cargo shear --fix

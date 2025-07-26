@@ -9,7 +9,7 @@ fn main() {
     setup_logger();
 
     if let Err(e) = try_cli() {
-        error!("{:?}", e);
+        error!("{e:?}");
         exit(1);
     }
 }

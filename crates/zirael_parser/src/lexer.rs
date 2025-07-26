@@ -1,5 +1,5 @@
 use crate::ast::keyword::Keyword;
-use logos::{Lexer, Logos, Span};
+use logos::Logos;
 use std::{
     fmt,
     fmt::{Display, Formatter},
@@ -201,12 +201,20 @@ pub enum TokenKind {
 
 impl Display for TokenKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        use TokenKind::*;
+        use TokenKind::{
+            Arrow, At, BitwiseAnd, BitwiseNot, BitwiseOr, BitwiseXor, Bool, BraceClose, BraceOpen,
+            BracketClose, BracketOpen, Colon, Comma, Decrement, Divide, DivideEquals, Dollar, Dot,
+            DoubleColon, Equals, EqualsEquals, FatArrow, Float, GreaterThan, GreaterThanOrEqual,
+            Hash, Identifier, Increment, Integer, Keyword, LeftShift, LessThan, LessThanOrEqual,
+            LogicalAnd, LogicalNot, LogicalOr, Minus, MinusEquals, Modulo, ModuloEquals, Multiply,
+            MultiplyEquals, NotEquals, ParenClose, ParenOpen, Plus, PlusEquals, Power, Question,
+            RightShift, Semicolon, String, Underscore,
+        };
 
         match self {
             Bool(true) => write!(f, "true"),
             Bool(false) => write!(f, "false"),
-            Keyword(keyword) => write!(f, "{}", keyword),
+            Keyword(keyword) => write!(f, "{keyword}"),
             BraceOpen => write!(f, "{{"),
             BraceClose => write!(f, "}}"),
             BracketOpen => write!(f, "["),

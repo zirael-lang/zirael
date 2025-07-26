@@ -1,7 +1,7 @@
 use crate::{
     TokenKind,
     ast::{BinaryOp, Expr, ExprKind, Literal, UnaryOp},
-    parser::{ParseResult, Parser},
+    parser::Parser,
 };
 
 impl<'a> Parser<'a> {
@@ -137,9 +137,9 @@ impl<'a> Parser<'a> {
 
                 if self.match_token(TokenKind::Comma) {
                     continue;
-                } else {
-                    break;
                 }
+
+                break;
             }
         }
 

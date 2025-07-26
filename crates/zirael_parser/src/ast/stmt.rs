@@ -13,7 +13,7 @@ pub enum StmtKind {
 #[derive(Debug, Clone, PartialEq)]
 pub struct VarDecl {
     pub name: Identifier,
-    /// Defaults to [Type::Inferred]
+    /// Defaults to [`Type::Inferred`]
     pub ty: Type,
     pub value: Expr,
 }

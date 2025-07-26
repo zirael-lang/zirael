@@ -1,10 +1,9 @@
 use crate::{
     TokenKind,
-    ast::{Stmt, StmtKind, Type, VarDecl},
+    ast::{Stmt, StmtKind, Type, VarDecl, keyword::Keyword},
     parser::Parser,
 };
 use zirael_utils::prelude::default_ident;
-use crate::ast::keyword::Keyword;
 
 impl<'a> Parser<'a> {
     pub fn parse_stmt(&mut self) -> Stmt {

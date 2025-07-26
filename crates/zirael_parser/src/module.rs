@@ -1,6 +1,6 @@
-use crate::{ast::Ast, get_tokens, parser::Parser};
+use crate::{ast::Ast, parser::Parser};
 use zirael_utils::{
-    prelude::{ReportBuilder, Reports},
+    prelude::Reports,
     sources::{SourceFileId, Sources},
 };
 
@@ -19,8 +19,8 @@ impl LexedModule {
 
 pub fn determine_lexed_modules<'a>(
     entrypoint: SourceFileId,
-    sources: Sources,
-    reports: Reports<'a>,
+    sources: &Sources,
+    reports: &Reports<'a>,
 ) -> Vec<LexedModule> {
     let mut mods = vec![];
 
@@ -28,7 +28,7 @@ pub fn determine_lexed_modules<'a>(
         let mut parser = Parser::new(sources.get_unchecked(source_file_id).content());
         mods.push(parser.parse(source_file_id));
         for report in parser.errors {
-            reports.add(source_file_id, report.clone())
+            reports.add(source_file_id, report.clone());
         }
     };
 

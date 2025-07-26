@@ -1,16 +1,15 @@
 [package]
 name = "zirael"
+version.workspace = true
 edition.workspace = true
 license.workspace = true
-version.workspace = true
 description = "Zirael Compiler"
 
 [dependencies]
 clap = { workspace = true }
-zirael_core = { workspace = true }
-anyhow = { workspace = true }
 env_logger = { workspace = true }
 log = { workspace = true }
+zirael_core = { workspace = true }
 
 [lints]
 workspace = true

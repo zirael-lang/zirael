@@ -1,10 +1,10 @@
 use crate::{
     TokenKind,
-    ast::{GenericArg, GenericParameter, TraitBound, Type},
+    ast::{GenericArg, GenericParameter, TraitBound},
     parser::Parser,
 };
 use ariadne::ReportKind;
-use zirael_utils::prelude::{Report, ReportBuilder};
+use zirael_utils::prelude::ReportBuilder;
 
 impl<'a> Parser<'a> {
     pub fn parse_generics(&mut self) -> Vec<GenericParameter> {
@@ -30,7 +30,6 @@ impl<'a> Parser<'a> {
                 if self.check(&TokenKind::GreaterThan) {
                     break;
                 }
-                continue;
             } else if self.match_token(TokenKind::GreaterThan) {
                 break;
             } else {
@@ -38,9 +37,7 @@ impl<'a> Parser<'a> {
 
                 self.synchronize(&[TokenKind::Comma, TokenKind::GreaterThan]);
 
-                if self.match_token(TokenKind::Comma) {
-                    continue;
-                } else if self.match_token(TokenKind::GreaterThan) {
+                if self.match_token(TokenKind::GreaterThan) {
                     break;
                 } else {
                     self.error_at_current("Unable to recover from generic parsing error");
@@ -60,18 +57,17 @@ impl<'a> Parser<'a> {
 
         if self.match_token(TokenKind::Colon) {
             loop {
-                match self.parse_trait_bound() {
-                    Some(constraint) => constraints.push(constraint),
-                    None => {
-                        self.error_at_current("Expected trait bound after ':'");
-                        self.synchronize(&[
-                            TokenKind::Plus,
-                            TokenKind::Comma,
-                            TokenKind::GreaterThan,
-                            TokenKind::Equals,
-                        ]);
-                        break;
-                    }
+                if let Some(constraint) = self.parse_trait_bound() {
+                    constraints.push(constraint);
+                } else {
+                    self.error_at_current("Expected trait bound after ':'");
+                    self.synchronize(&[
+                        TokenKind::Plus,
+                        TokenKind::Comma,
+                        TokenKind::GreaterThan,
+                        TokenKind::Equals,
+                    ]);
+                    break;
                 }
 
                 if self.match_token(TokenKind::Plus) {
@@ -83,7 +79,6 @@ impl<'a> Parser<'a> {
                         self.error_at_current("Expected trait bound after '+'");
                         break;
                     }
-                    continue;
                 } else {
                     break;
                 }
@@ -121,7 +116,7 @@ impl<'a> Parser<'a> {
                             "Expected identifier in named generic argument",
                             ReportKind::Error,
                         )
-                        .label("here", name_span)
+                            .label("here", name_span)
                     })?;
 
                     parser.expect(TokenKind::Equals);
@@ -132,7 +127,7 @@ impl<'a> Parser<'a> {
                             "Expected type after '=' in named generic argument",
                             ReportKind::Error,
                         )
-                        .label("here", type_span)
+                            .label("here", type_span)
                     })?;
 
                     Ok(GenericArg::Named { name, ty })
@@ -141,14 +136,12 @@ impl<'a> Parser<'a> {
                 if let Some(named_arg) = is_named_arg {
                     generic_args.push(named_arg);
                 } else {
-                    // Parse as positional argument: String
                     if let Some(ty) = self.parse_type() {
                         generic_args.push(GenericArg::Type(ty));
                     } else {
                         self.error_at_current(
                             "Expected type or named argument in generic parameter list",
                         );
-                        // Skip to next comma or end
                         self.synchronize(&[TokenKind::Comma, TokenKind::GreaterThan]);
                         if self.check(&TokenKind::GreaterThan) {
                             break;
@@ -163,7 +156,6 @@ impl<'a> Parser<'a> {
                     if self.check(&TokenKind::GreaterThan) {
                         break;
                     }
-                    continue;
                 } else if self.match_token(TokenKind::GreaterThan) {
                     break;
                 } else {
@@ -171,7 +163,6 @@ impl<'a> Parser<'a> {
 
                     self.synchronize(&[TokenKind::Comma, TokenKind::GreaterThan]);
                     if self.match_token(TokenKind::Comma) {
-                        continue;
                     } else if self.match_token(TokenKind::GreaterThan) {
                         break;
                     } else {

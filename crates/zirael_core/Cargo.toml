@@ -1,22 +1,19 @@
 [package]
 name = "zirael_core"
+version.workspace = true
 edition.workspace = true
 license.workspace = true
-version.workspace = true
 repository.workspace = true
 description = "Zirael Core"
 
 [dependencies]
-parking_lot = { workspace = true }
-ariadne = { workspace = true }
-dashmap = { workspace = true }
-id-arena = { workspace = true }
 anyhow = { workspace = true }
-log = { workspace = true }
 colored = { workspace = true }
-zirael_utils = { workspace = true }
 fs-err = { workspace = true }
+log = { workspace = true }
+parking_lot = { workspace = true }
 zirael_parser = { workspace = true }
+zirael_utils = { workspace = true }
 
 [lints]
 workspace = true

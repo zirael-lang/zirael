@@ -2,7 +2,7 @@ use crate::ast::{
     operator::{BinaryOp, UnaryOp},
     stmt::Stmt,
 };
-use colored::Colorize;
+use colored::Colorize as _;
 use std::fmt::{self, Debug, Formatter};
 use zirael_utils::prelude::*;
 
@@ -36,7 +36,7 @@ impl ExprKind {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct CouldntParse;
 
 impl Debug for CouldntParse {

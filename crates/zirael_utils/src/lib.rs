@@ -4,5 +4,5 @@ pub mod sources;
 pub mod style;
 
 pub mod prelude {
-    pub use crate::{ident_table::*, sources::*, style::*, reports::*};
+    pub use crate::{ident_table::*, reports::*, sources::*, style::*};
 }

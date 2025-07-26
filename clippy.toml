@@ -12,21 +12,21 @@ type-complexity-threshold = 350
 # -----------------------------------------------------------------------------
 
 disallowed-macros = [
-    'dbg',
-    'std::unimplemented',
+  'dbg',
+  'std::unimplemented',
 ]
 
 disallowed-methods = [
-    "std::env::temp_dir", # Use the tempdir crate instead
-    "std::thread::spawn", # Use `std::thread::Builder` and name the thread
+  "std::env::temp_dir", # Use the tempdir crate instead
+  "std::thread::spawn", # Use `std::thread::Builder` and name the thread
 ]
 
 disallowed-names = ["temp"]
 
 disallowed-types = [
-    # Use the faster & simpler non-poisonable primitives in `parking_lot` instead
-    "std::sync::Mutex",
-    "std::sync::RwLock",
-    "std::sync::Condvar",
-    # "std::sync::Once",
+  # Use the faster & simpler non-poisonable primitives in `parking_lot` instead
+  "std::sync::Mutex",
+  "std::sync::RwLock",
+  "std::sync::Condvar",
+  # "std::sync::Once",
 ]

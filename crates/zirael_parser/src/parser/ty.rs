@@ -146,9 +146,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_function_type(&mut self) -> Option<Type> {
-        if !self.expect(TokenKind::ParenOpen).is_some() {
-            return None;
-        }
+        self.expect(TokenKind::ParenOpen)?;
 
         let mut params = vec![];
 
@@ -172,9 +170,7 @@ impl<'a> Parser<'a> {
             }
         }
 
-        if !self.expect(TokenKind::ParenClose).is_some() {
-            return None;
-        }
+        self.expect(TokenKind::ParenClose)?;
 
         let return_type = (|| {
             if self.match_token(TokenKind::Arrow) {

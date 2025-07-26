@@ -10,9 +10,8 @@ use crate::{
     ast::{Ast, keyword::Keyword},
     get_tokens,
 };
-use ariadne::{Color, Label, Report, ReportKind, Span};
-use log::warn;
-use std::{collections::VecDeque, fmt, ops::Range};
+use ariadne::{ReportKind, Span as _};
+use std::ops::Range;
 use zirael_utils::prelude::{Identifier, ReportBuilder, SourceFileId, get_or_intern};
 
 pub type ParseResult<'report, T> = Result<T, ReportBuilder<'report>>;
@@ -37,7 +36,7 @@ impl<'a> Parser<'a> {
             tokens,
             position: 0,
             errors: Vec::new(),
-            source: input.to_string(),
+            source: input.to_owned(),
             sync_tokens: vec![TokenKind::BraceClose],
         }
     }
@@ -57,7 +56,7 @@ impl<'a> Parser<'a> {
 
     pub fn current(&self) -> Option<&Token> {
         if self.position == 0 {
-            return self.tokens.get(0);
+            return self.tokens.first();
         }
 
         self.tokens.get(self.position - 1)
@@ -177,12 +176,11 @@ impl<'a> Parser<'a> {
         F: FnOnce(&mut Self) -> ParseResult<T>,
     {
         let state = self.save_state();
-        match parse_fn(self) {
-            Ok(result) => Some(result),
-            Err(_) => {
-                self.restore_state(state);
-                None
-            }
+        if let Ok(result) = parse_fn(self) {
+            Some(result)
+        } else {
+            self.restore_state(state);
+            None
         }
     }
 
@@ -214,7 +212,7 @@ impl<'a> Parser<'a> {
             Some(token) => {
                 let error = ReportBuilder::builder(
                     if let Some(msg) = expected_msg {
-                        msg.to_string()
+                        msg.to_owned()
                     } else {
                         format!("Expected {:?}, found {:?}", expected, token.kind)
                     },
@@ -228,7 +226,7 @@ impl<'a> Parser<'a> {
                 let span = self.eof_span();
                 self.add_error(
                     ReportBuilder::builder(
-                        format!("Expected {:?}, found end of file", expected),
+                        format!("Expected {expected:?}, found end of file"),
                         ReportKind::Error,
                     )
                     .label("here", span),
@@ -256,7 +254,7 @@ impl<'a> Parser<'a> {
                 let span = self.eof_span();
                 self.add_error(
                     ReportBuilder::builder(
-                        format!("Expected one of {:?}, found end of file", expected),
+                        format!("Expected one of {expected:?}, found end of file"),
                         ReportKind::Error,
                     )
                     .label("here", span),
@@ -322,7 +320,7 @@ impl<'a> Parser<'a> {
             return true;
         }
 
-        self.error_at_peek(&format!("Expected keyword '{}'", expected.as_str()));
+        self.error_at_peek(format!("Expected keyword '{}'", expected.as_str()));
         false
     }
 
@@ -331,7 +329,7 @@ impl<'a> Parser<'a> {
             && let TokenKind::Identifier(ident) = &token.kind
         {
             if Keyword::is_valid(ident) {
-                self.error_at_peek(format!("Expected an identifier, found keyword {:?}", ident));
+                self.error_at_peek(format!("Expected an identifier, found keyword {ident:?}"));
                 return None;
             }
 

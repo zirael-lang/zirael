@@ -20,7 +20,7 @@ pub enum ItemKind {
     Import(ImportKind),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ImportKind {
     Path(PathBuf),
     ExternalModule(Vec<Identifier>),
@@ -34,7 +34,7 @@ pub struct Function {
     pub body: Option<Expr>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunctionModifiers {
     pub is_async: bool,
     pub is_const: bool,
@@ -42,7 +42,7 @@ pub struct FunctionModifiers {
     pub abi: Option<Abi>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Abi(pub String);
 
 #[derive(Debug, Clone, PartialEq)]
@@ -60,7 +60,7 @@ pub struct Parameter {
     pub default_value: Option<Expr>,
 }
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum ParameterKind {
     #[default]
     Plain,

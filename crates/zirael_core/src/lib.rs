@@ -2,10 +2,10 @@ mod context;
 mod unit;
 
 pub mod vars {
-    pub const FILE_EXTENSION: &'static str = "zr";
+    pub const FILE_EXTENSION: &str = "zr";
 }
 
-#[allow(unused_imports)]
+#[expect(unused_imports)]
 pub mod prelude {
     pub use crate::{context::*, unit::*, vars::*};
     pub use anyhow::{Result, anyhow, bail};

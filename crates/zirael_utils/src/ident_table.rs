@@ -1,4 +1,4 @@
-use lasso::{Rodeo, Spur, ThreadedRodeo};
+use lasso::{Spur, ThreadedRodeo};
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 use std::fmt::{Debug, Formatter};
@@ -9,6 +9,12 @@ pub struct IdentTable {
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Identifier(Spur);
+
+impl Default for IdentTable {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl IdentTable {
     pub fn new() -> Self {
@@ -27,7 +33,7 @@ impl IdentTable {
 #[cfg(debug_assertions)]
 impl Debug for Identifier {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", resolve(self.clone()))
+        write!(f, "{}", resolve(*self))
     }
 }
 
@@ -40,7 +46,7 @@ pub fn get_or_intern(name: &str) -> Identifier {
 
 #[inline]
 pub fn resolve(sym: Identifier) -> String {
-    GLOBAL_TABLE.lock().resolve(sym.0).to_string()
+    GLOBAL_TABLE.lock().resolve(sym.0).to_owned()
 }
 
 #[inline]

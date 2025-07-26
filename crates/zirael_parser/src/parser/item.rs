@@ -6,8 +6,7 @@ use crate::{
     },
     parser::Parser,
 };
-use log::debug;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use zirael_utils::{
     ident_table::default_ident,
     prelude::{Identifier, get_or_intern},
@@ -31,13 +30,13 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_import(&mut self) -> (ItemKind, Identifier) {
-        let string = self.expect_string().unwrap_or(String::new());
+        let string = self.expect_string().unwrap_or_default();
         let path = PathBuf::from(&string);
 
-        let kind = if path.is_file() && path.extension().map_or(false, |ext| ext == "zr") {
+        let kind = if path.is_file() && path.extension().is_some_and(|ext| ext == "zr") {
             ImportKind::Path(path)
         } else {
-            let parts = string.split('/').map(|c| get_or_intern(c)).collect::<Vec<_>>();
+            let parts = string.split('/').map(get_or_intern).collect::<Vec<_>>();
             ImportKind::ExternalModule(parts)
         };
 

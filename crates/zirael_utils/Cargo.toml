@@ -1,19 +1,19 @@
 [package]
 name = "zirael_utils"
+version.workspace = true
 edition.workspace = true
 license.workspace = true
-version.workspace = true
 repository.workspace = true
 description = "Zirael Utils"
 
 [dependencies]
 anstyle = { workspace = true }
-clap = { workspace = true }
-parking_lot = { workspace = true }
-id-arena = { workspace = true }
-once_cell = { workspace = true }
-lasso = { workspace = true }
 ariadne = { workspace = true }
+clap = { workspace = true }
+id-arena = { workspace = true }
+lasso = { workspace = true }
+once_cell = { workspace = true }
+parking_lot = { workspace = true }
 
 [lints]
 workspace = true

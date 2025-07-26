@@ -63,10 +63,6 @@ impl Sources {
         self.read(|arena| arena.get(id).is_some())
     }
 
-    pub fn len(&self) -> usize {
-        self.read(|arena| arena.len())
-    }
-
     pub fn iter(&self) -> Vec<(SourceFileId, SourceFile)> {
         self.read(|arena| arena.iter().map(|(id, source)| (id, source.clone())).collect())
     }

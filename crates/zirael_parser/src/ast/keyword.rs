@@ -23,7 +23,7 @@ pub enum Keyword {
     String,
     Char,
     Void,
-    Mut
+    Mut,
 }
 
 impl Display for Keyword {
@@ -33,41 +33,41 @@ impl Display for Keyword {
 }
 
 impl Keyword {
-    pub const ALL: &'static [Keyword] = &[
-        Keyword::Fn,
-        Keyword::Class,
-        Keyword::Enum,
-        Keyword::Import,
-        Keyword::Var,
-        Keyword::Extern,
-        Keyword::Const,
-        Keyword::Async,
-        Keyword::Int,
-        Keyword::Float,
-        Keyword::Bool,
-        Keyword::String,
-        Keyword::Char,
-        Keyword::Void,
-        Keyword::Mut,
+    pub const ALL: &'static [Self] = &[
+        Self::Fn,
+        Self::Class,
+        Self::Enum,
+        Self::Import,
+        Self::Var,
+        Self::Extern,
+        Self::Const,
+        Self::Async,
+        Self::Int,
+        Self::Float,
+        Self::Bool,
+        Self::String,
+        Self::Char,
+        Self::Void,
+        Self::Mut,
     ];
 
     pub const fn as_str(&self) -> &'static str {
         match self {
-            Keyword::Fn => "fn",
-            Keyword::Class => "class",
-            Keyword::Enum => "enum",
-            Keyword::Import => "import",
-            Keyword::Var => "var",
-            Keyword::Extern => "extern",
-            Keyword::Const => "const",
-            Keyword::Async => "async",
-            Keyword::Int => "int",
-            Keyword::Float => "float",
-            Keyword::Bool => "bool",
-            Keyword::String => "string",
-            Keyword::Char => "char",
-            Keyword::Void => "void",
-            Keyword::Mut => "mut",
+            Self::Fn => "fn",
+            Self::Class => "class",
+            Self::Enum => "enum",
+            Self::Import => "import",
+            Self::Var => "var",
+            Self::Extern => "extern",
+            Self::Const => "const",
+            Self::Async => "async",
+            Self::Int => "int",
+            Self::Float => "float",
+            Self::Bool => "bool",
+            Self::String => "string",
+            Self::Char => "char",
+            Self::Void => "void",
+            Self::Mut => "mut",
         }
     }
 
@@ -94,24 +94,16 @@ impl Keyword {
     pub const fn is_type(&self) -> bool {
         matches!(
             self,
-            Keyword::Int
-                | Keyword::Float
-                | Keyword::Bool
-                | Keyword::String
-                | Keyword::Char
-                | Keyword::Void
+            Self::Int | Self::Float | Self::Bool | Self::String | Self::Char | Self::Void
         )
     }
 
     pub const fn is_declaration(&self) -> bool {
-        matches!(
-            self,
-            Keyword::Fn | Keyword::Class | Keyword::Enum | Keyword::Import | Keyword::Var
-        )
+        matches!(self, Self::Fn | Self::Class | Self::Enum | Self::Import | Self::Var)
     }
 
     pub const fn is_modifier(&self) -> bool {
-        matches!(self, Keyword::Extern | Keyword::Const | Keyword::Async)
+        matches!(self, Self::Extern | Self::Const | Self::Async)
     }
 }
 

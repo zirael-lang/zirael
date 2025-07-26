@@ -1,5 +1,4 @@
 use crate::prelude::*;
-use std::collections::VecDeque;
 
 #[derive(Debug)]
 pub struct CompilationUnit<'ctx> {
@@ -15,12 +14,11 @@ impl<'ctx> CompilationUnit<'ctx> {
 
     pub fn compile(&self) {
         let reports = self.context.reports();
-        let structure =
-            determine_lexed_modules(self.entry_point, self.context.sources(), reports.clone());
+        let sources = self.context.sources();
+        let structure = determine_lexed_modules(self.entry_point, sources, reports);
 
-        println!("{:#?}", structure);
         if reports.has_errors() {
-            reports.print(&self.context.sources())
+            reports.print(sources);
         }
     }
 }

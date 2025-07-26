@@ -1,4 +1,4 @@
-use crate::prelude::{SourceFileId, Sources, SourcesImpl};
+use crate::prelude::{SourceFileId, Sources};
 use ariadne::{Color, Label, ReportKind, Source};
 use parking_lot::RwLock;
 use std::{collections::HashMap, ops::Range, path::PathBuf, sync::Arc};
@@ -36,13 +36,13 @@ impl<'a> Reports<'a> {
             for (id, report) in &reports.reports {
                 let file = sources.get_unchecked(*id);
                 let path = file.path().unwrap_or(&PathBuf::new()).clone();
-                let path = path.display().to_string();
+                let path = &path.display().to_string();
                 let source = Source::from(file.content());
 
-                let report = report.clone().build(path.clone());
-                report.eprint((path, source)).unwrap();
+                let report = report.clone().build(path);
+                report.eprint((path.to_string(), source)).unwrap();
             }
-        })
+        });
     }
 
     pub fn has_errors(&self) -> bool {
@@ -77,12 +77,12 @@ impl<'a> ReportBuilder<'a> {
             ReportKind::Error => Color::BrightRed,
             ReportKind::Warning => Color::BrightYellow,
             ReportKind::Advice => Color::BrightGreen,
-            _ => Color::BrightWhite,
+            ReportKind::Custom(..) => Color::BrightWhite,
         }
     }
 
     pub fn label(mut self, msg: &str, span: Range<usize>) -> Self {
-        let label = LocalLabel { msg: msg.to_string(), span, color: self.label_color() };
+        let label = LocalLabel { msg: msg.to_owned(), span, color: self.label_color() };
         self.labels.push(label);
         self
     }
@@ -92,14 +92,14 @@ impl<'a> ReportBuilder<'a> {
         self
     }
 
-    pub fn build(self, path: String) -> Report<'a> {
+    pub fn build(self, path: &str) -> Report<'a> {
         let mut report =
-            Report::build(self.kind, (path.clone(), 0usize..0usize)).with_message(self.message);
+            Report::build(self.kind, (path.to_string(), 0usize..0usize)).with_message(self.message);
 
         let labels = self
             .labels
             .into_iter()
-            .map(|l| Label::new((path.clone(), l.span)).with_message(l.msg).with_color(l.color))
+            .map(|l| Label::new((path.to_string(), l.span)).with_message(l.msg).with_color(l.color))
             .collect::<Vec<_>>();
 
         report = report.with_labels(labels);
