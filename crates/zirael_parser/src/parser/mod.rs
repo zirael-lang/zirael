@@ -5,11 +5,7 @@ mod item;
 mod stmt;
 mod ty;
 
-use crate::{
-    LexedModule, Token, TokenKind,
-    ast::{Ast, keyword::Keyword},
-    get_tokens,
-};
+use crate::{LexedModule, Token, TokenKind, ast::{Ast, keyword::Keyword}, get_tokens, ModuleId};
 use ariadne::{ReportKind, Span as _};
 use std::{ops::Range, path::PathBuf};
 use zirael_utils::prelude::{Identifier, ReportBuilder, SourceFile, SourceFileId, get_or_intern};
@@ -384,6 +380,6 @@ impl<'a> Parser<'a> {
             }
         }
 
-        LexedModule::new(entrypoint, Ast::new(items))
+        LexedModule::new(ModuleId::File(entrypoint), Ast::new(items))
     }
 }

@@ -1,0 +1,2 @@
+fn div(a: int, b: int): int {
+}

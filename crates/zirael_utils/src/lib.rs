@@ -11,5 +11,8 @@ pub mod prelude {
     pub use log::{debug, error, info, warn};
     pub use parking_lot::*;
     pub use rayon::prelude::*;
-    pub use std::path::PathBuf;
+    pub use std::{
+        collections::{HashMap, HashSet},
+        path::PathBuf,
+    };
 }

@@ -1,3 +1,4 @@
+use zirael_parser::Dependency;
 use zirael_utils::prelude::*;
 
 /// Main compiler struct. It holds data that is read and written throughout the whole compilation process.
@@ -5,6 +6,7 @@ use zirael_utils::prelude::*;
 pub struct Context<'reports> {
     sources: Sources,
     reports: Reports<'reports>,
+    dependencies: Vec<Dependency>,
 }
 
 impl<'reports> Context<'reports> {
@@ -21,6 +23,14 @@ impl<'reports> Context<'reports> {
 
     pub fn reports(&self) -> &Reports<'reports> {
         &self.reports
+    }
+
+    pub fn add_dependency(&mut self, dependency: Dependency) {
+        self.dependencies.push(dependency);
+    }
+
+    pub fn dependencies(&self) -> &Vec<Dependency> {
+        &self.dependencies
     }
 }
 
