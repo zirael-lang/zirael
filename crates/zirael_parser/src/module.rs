@@ -1,6 +1,7 @@
 use crate::{ast::Ast, parser::Parser};
 use ariadne::ReportKind;
-use std::collections::HashSet;
+use petgraph::{Directed, Graph};
+use std::collections::{HashMap, HashSet};
 use zirael_utils::prelude::*;
 
 #[derive(Clone, Debug)]
@@ -15,17 +16,31 @@ impl LexedModule {
     }
 }
 
+pub type DependencyGraph = Graph<SourceFileId, (), Directed>;
+
+#[derive(Debug, Default)]
+pub struct ModuleDiscoveryResult {
+    pub modules: Vec<LexedModule>,
+    pub dependency_graph: DependencyGraph,
+}
+
 pub fn determine_lexed_modules<'a>(
     entrypoint: SourceFileId,
     sources: &Sources,
     reports: &Reports<'a>,
-) -> Vec<LexedModule> {
+) -> ModuleDiscoveryResult {
     debug!("starting module discovery from entrypoint: {:?}", entrypoint);
 
     let mut all_modules = Vec::new();
+    let mut graph = Graph::new();
+    let mut file_to_node = HashMap::new();
     let processed = Mutex::new(HashSet::new());
     let mut current_wave = vec![entrypoint];
     let mut wave_number = 1;
+
+    // Add entrypoint to graph
+    let entrypoint_node = graph.add_node(entrypoint);
+    file_to_node.insert(entrypoint, entrypoint_node);
 
     while !current_wave.is_empty() {
         let wave_results: Vec<_> = current_wave
@@ -77,6 +92,22 @@ pub fn determine_lexed_modules<'a>(
 
         let mut next_wave = Vec::new();
         for (module, discovered) in wave_results {
+            let current_file = module.file;
+
+            if !file_to_node.contains_key(&current_file) {
+                let node = graph.add_node(current_file);
+                file_to_node.insert(current_file, node);
+            }
+
+            let current_node = file_to_node[&current_file];
+
+            for dep_file in &discovered {
+                let dep_node =
+                    *file_to_node.entry(*dep_file).or_insert_with(|| graph.add_node(*dep_file));
+
+                graph.add_edge(current_node, dep_node, ());
+            }
+
             all_modules.push(module);
             next_wave.extend(discovered);
         }
@@ -96,5 +127,34 @@ pub fn determine_lexed_modules<'a>(
     }
 
     debug!("Module discovery completed. Total modules processed: {}", all_modules.len());
-    all_modules
+
+    ModuleDiscoveryResult { modules: all_modules, dependency_graph: graph }
+}
+
+impl ModuleDiscoveryResult {
+    pub fn dependencies(&self, file: SourceFileId) -> Vec<SourceFileId> {
+        if let Some(node_idx) =
+            self.dependency_graph.node_indices().find(|&idx| self.dependency_graph[idx] == file)
+        {
+            self.dependency_graph
+                .neighbors(node_idx)
+                .map(|idx| self.dependency_graph[idx])
+                .collect()
+        } else {
+            Vec::new()
+        }
+    }
+
+    pub fn dependents(&self, file: SourceFileId) -> Vec<SourceFileId> {
+        if let Some(node_idx) =
+            self.dependency_graph.node_indices().find(|&idx| self.dependency_graph[idx] == file)
+        {
+            self.dependency_graph
+                .neighbors_directed(node_idx, petgraph::Direction::Incoming)
+                .map(|idx| self.dependency_graph[idx])
+                .collect()
+        } else {
+            Vec::new()
+        }
+    }
 }
