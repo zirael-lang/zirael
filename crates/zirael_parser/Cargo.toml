@@ -12,6 +12,8 @@ logos = { workspace = true }
 zirael_utils = { workspace = true }
 fs-err = { workspace = true }
 petgraph = { workspace = true }
+itertools = { workspace = true }
+ordinal = { workspace = true }
 
 [lints]
 workspace = true

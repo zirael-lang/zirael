@@ -1,5 +1,4 @@
 import "div.zr"
-import "std"
 
 fn main() {
     var x: string = ""

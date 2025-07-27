@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use crate::{
     TokenKind,
     ast::{
@@ -6,10 +7,13 @@ use crate::{
     },
     parser::Parser,
 };
+use ariadne::ReportKind;
+use itertools::Itertools;
+use ordinal::ToOrdinal;
 use std::path::PathBuf;
 use zirael_utils::{
     ident_table::default_ident,
-    prelude::{Identifier, get_or_intern},
+    prelude::{Identifier, ReportBuilder, Span, get_or_intern},
 };
 
 impl<'a> Parser<'a> {
@@ -101,6 +105,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_parameters(&mut self) -> Vec<Parameter> {
+        let span_start = self.peek_span().end;
         self.expect(TokenKind::ParenOpen);
         let mut params = vec![];
 
@@ -123,12 +128,62 @@ impl<'a> Parser<'a> {
                 break;
             }
         }
-
         self.expect(TokenKind::ParenClose);
+        let span = span_start..self.prev_span().start;
+        self.validate_parameters(&params, span);
+
         params
     }
 
+    pub fn validate_parameters(&mut self, params: &[Parameter], span: Span) {
+        let mut seen_names = HashSet::new();
+        let mut duplicate_params = Vec::new();
+
+        for param in params {
+            if !seen_names.insert(&param.name) {
+                duplicate_params.push(param);
+            }
+        }
+
+        if !duplicate_params.is_empty() {
+            let mut report = ReportBuilder::builder(
+                "Found multiple parameters with the same name",
+                ReportKind::Error,
+            );
+
+            for (i, param) in duplicate_params.iter().enumerate() {
+                report = report.label(
+                    &format!("{} parameter found here", (i + 1).to_ordinal_string()),
+                    param.span.clone(),
+                );
+            }
+
+            self.add_error(report);
+        }
+
+        self.validate_variadic(params, span);
+    }
+
+    pub fn validate_variadic(&mut self, params: &[Parameter], span: Span) {
+        let variadic_params: Vec<(usize, &Parameter)> =
+            params.iter().enumerate().filter(|(_, p)| p.kind == ParameterKind::Variadic).collect();
+
+        match variadic_params.len() {
+            0 => {}
+            1 => {
+                let (index, param) = variadic_params[0];
+                if index != params.len() - 1 {
+                    self.error_at("Variadic parameter must be last.", param.span.clone());
+                }
+            }
+            _ => {
+                self.error_at("Only one variadic parameter allowed per function.", span);
+            }
+        }
+    }
+
     pub fn parse_single_parameter(&mut self) -> Option<Parameter> {
+        let span = self.peek_span();
         let variadic = self.match_triple_dot();
 
         let name = self.expect_identifier()?;
@@ -143,11 +198,13 @@ impl<'a> Parser<'a> {
         let default_value =
             if self.match_token(TokenKind::Equals) { Some(self.parse_expr()) } else { None };
 
+        let span = span.start..self.prev_span().end;
         Some(Parameter {
             name,
             kind: if variadic { ParameterKind::Variadic } else { ParameterKind::Plain },
             ty,
             default_value,
+            span,
         })
     }
 }

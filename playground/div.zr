@@ -1,2 +1,2 @@
-fn div(a: int, b: int): int {
+fn div(a: int, a: int): int {
 }

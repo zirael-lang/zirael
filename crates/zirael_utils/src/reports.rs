@@ -1,7 +1,8 @@
 use crate::prelude::{SourceFileId, Sources};
 use ariadne::{Color, Label, ReportKind, Source};
+use log::error;
 use parking_lot::RwLock;
-use std::{collections::HashMap, ops::Range, path::PathBuf, sync::Arc};
+use std::{collections::HashMap, ops::Range, path::PathBuf, process::exit, sync::Arc};
 
 #[derive(Debug, Clone, Default)]
 pub struct Reports<'a>(Arc<RwLock<ReportsImpl<'a>>>);
@@ -43,6 +44,9 @@ impl<'a> Reports<'a> {
                 report.eprint((path.to_string(), source)).unwrap();
             }
         });
+
+        error!("exiting early due to compiler errors");
+        exit(1);
     }
 
     pub fn has_errors(&self) -> bool {

@@ -58,6 +58,7 @@ pub struct Parameter {
     pub ty: Type,
     pub kind: ParameterKind,
     pub default_value: Option<Expr>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
