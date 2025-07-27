@@ -24,5 +24,5 @@ fmt:
     cargo fmt --all
     dprint fmt
 
-comp-run:
-    cargo run -p zirael playground/test.zr
+comp-run args='':
+    cargo run -p zirael playground/test.zr {{ args }}

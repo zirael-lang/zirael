@@ -11,8 +11,8 @@ use crate::{
     get_tokens,
 };
 use ariadne::{ReportKind, Span as _};
-use std::ops::Range;
-use zirael_utils::prelude::{Identifier, ReportBuilder, SourceFileId, get_or_intern};
+use std::{ops::Range, path::PathBuf};
+use zirael_utils::prelude::{Identifier, ReportBuilder, SourceFile, SourceFileId, get_or_intern};
 
 pub type ParseResult<'report, T> = Result<T, ReportBuilder<'report>>;
 
@@ -25,19 +25,21 @@ pub struct Parser<'a> {
     tokens: Vec<Token>,
     position: usize,
     pub errors: Vec<ReportBuilder<'a>>,
-    source: String,
+    source: SourceFile,
     sync_tokens: Vec<TokenKind>,
+    pub discover_queue: Vec<(PathBuf, Range<usize>)>,
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(input: &str) -> Self {
-        let tokens = get_tokens(input);
+    pub fn new(input: SourceFile) -> Self {
+        let tokens = get_tokens(input.content());
         Self {
             tokens,
             position: 0,
             errors: Vec::new(),
-            source: input.to_owned(),
+            source: input,
             sync_tokens: vec![TokenKind::BraceClose],
+            discover_queue: Vec::new(),
         }
     }
 
@@ -54,7 +56,7 @@ impl<'a> Parser<'a> {
         self.peek().map(|token| token.span.clone()).unwrap_or_default()
     }
 
-    pub fn current(&self) -> Option<&Token> {
+    pub fn prev(&self) -> Option<&Token> {
         if self.position == 0 {
             return self.tokens.first();
         }
@@ -62,8 +64,8 @@ impl<'a> Parser<'a> {
         self.tokens.get(self.position - 1)
     }
 
-    pub fn current_span(&self) -> Range<usize> {
-        self.current().map(|token| token.span.clone()).unwrap_or_default()
+    pub fn prev_span(&self) -> Range<usize> {
+        self.prev().map(|token| token.span.clone()).unwrap_or_default()
     }
 
     pub fn peek_ahead(&self, offset: usize) -> Option<&Token> {
@@ -150,7 +152,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn error_at_current(&mut self, message: impl Into<String>) {
-        self.error_at(message, self.current_span());
+        self.error_at(message, self.prev_span());
     }
 
     pub fn error_at_peek(&mut self, message: impl Into<String>) {
@@ -158,7 +160,7 @@ impl<'a> Parser<'a> {
     }
 
     fn eof_span(&self) -> Range<usize> {
-        let end = self.source.len();
+        let end = self.source.content().len();
         end..end
     }
 
@@ -357,7 +359,7 @@ impl<'a> Parser<'a> {
 
     pub fn match_triple_dot(&mut self) -> bool {
         let mut dots = 0;
-        while let Some(token) = self.peek_ahead(dots + 1) {
+        while let Some(token) = self.peek_ahead(dots) {
             if token.kind == TokenKind::Dot {
                 dots += 1;
             } else {

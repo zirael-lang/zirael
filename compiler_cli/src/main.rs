@@ -6,8 +6,6 @@ mod cli;
 mod logger;
 
 fn main() {
-    setup_logger();
-
     if let Err(e) = try_cli() {
         error!("{e:?}");
         exit(1);

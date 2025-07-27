@@ -1,6 +1,9 @@
-pub fn setup_logger() {
+use log::LevelFilter;
+
+pub fn setup_logger(verbose: bool) {
+    let level = if verbose { LevelFilter::Debug } else { LevelFilter::Info };
     env_logger::Builder::from_default_env()
-        .filter_level(log::LevelFilter::Info)
+        .filter_level(level)
         .format(|buf, record| {
             use std::io::Write as _;
 

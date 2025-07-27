@@ -14,6 +14,11 @@ id-arena = { workspace = true }
 lasso = { workspace = true }
 once_cell = { workspace = true }
 parking_lot = { workspace = true }
+anyhow = { workspace = true }
+log = { workspace = true }
+colored = { workspace = true }
+fs-err = { workspace = true }
+rayon = { workspace = true }
 
 [lints]
 workspace = true

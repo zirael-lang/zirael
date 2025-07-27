@@ -1,3 +1,4 @@
+use crate::logger::setup_logger;
 use clap::{Parser, builder::Styles};
 use std::env::current_dir;
 use zirael_core::prelude::*;
@@ -9,6 +10,13 @@ use zirael_core::prelude::*;
 struct Cli {
     #[arg(value_name = "input", help = "Each input file is compiled as its own project.")]
     files: Vec<PathBuf>,
+    #[arg(
+        value_name = "verbose",
+        short = 'v',
+        long = "verbose",
+        help = "Enable verbose logging: debug and trace"
+    )]
+    verbose: bool,
 }
 
 pub const CLAP_STYLING: Styles = Styles::styled()
@@ -22,6 +30,8 @@ pub const CLAP_STYLING: Styles = Styles::styled()
 
 pub fn try_cli() -> Result<()> {
     let cli = Cli::parse();
+    setup_logger(cli.verbose);
+
     if cli.files.is_empty() {
         bail!("No input files provided.")
     }

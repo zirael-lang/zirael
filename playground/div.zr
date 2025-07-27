@@ -1,1 +1,2 @@
-fn div(a: int, b: int): int => a / b;
+fn div(a: int, b: int): int {
+}

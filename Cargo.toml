@@ -1,9 +1,9 @@
 [workspace]
 resolver = "2"
 members = [
-  "compiler_cli",
-  "crates/*",
-  "xtask",
+    "compiler_cli",
+    "crates/*",
+    "xtask",
 ]
 
 [workspace.package]
@@ -26,6 +26,7 @@ log = "0.4.27"
 logos = "0.15.0"
 once_cell = "1.21.3"
 parking_lot = "0.12.4"
+rayon = "1.10.0"
 
 zirael_core = { path = "crates/zirael_core", version = "0.1.0" }
 zirael_parser = { path = "crates/zirael_parser", version = "0.1.0" }

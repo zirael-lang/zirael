@@ -31,9 +31,12 @@ impl<'a> Parser<'a> {
 
     pub fn parse_import(&mut self) -> (ItemKind, Identifier) {
         let string = self.expect_string().unwrap_or_default();
-        let path = PathBuf::from(&string);
+        let span = self.prev_span();
+        let current_file = self.source.path().expect("No source file");
+        let path = current_file.parent().unwrap_or(&PathBuf::new()).join(string.clone());
 
         let kind = if path.is_file() && path.extension().is_some_and(|ext| ext == "zr") {
+            self.discover_queue.push((path.clone(), span));
             ImportKind::Path(path)
         } else {
             let parts = string.split('/').map(get_or_intern).collect::<Vec<_>>();
@@ -67,7 +70,7 @@ impl<'a> Parser<'a> {
         let generics = self.parse_generics();
         let parameters = self.parse_parameters();
 
-        let return_type = if self.match_token(TokenKind::Semicolon) {
+        let return_type = if self.match_token(TokenKind::Colon) {
             if let Some(ty) = self.parse_type() {
                 ReturnType::Type(ty)
             } else {
@@ -100,6 +103,7 @@ impl<'a> Parser<'a> {
     pub fn parse_parameters(&mut self) -> Vec<Parameter> {
         self.expect(TokenKind::ParenOpen);
         let mut params = vec![];
+
         if self.match_token(TokenKind::ParenClose) {
             return params;
         }
@@ -108,6 +112,14 @@ impl<'a> Parser<'a> {
             if let Some(param) = self.parse_single_parameter() {
                 params.push(param);
             } else {
+                break;
+            }
+
+            if !self.match_token(TokenKind::Comma) {
+                break;
+            }
+
+            if self.check(&TokenKind::ParenClose) {
                 break;
             }
         }
@@ -129,7 +141,7 @@ impl<'a> Parser<'a> {
         };
 
         let default_value =
-            if self.match_token(TokenKind::Colon) { Some(self.parse_expr()) } else { None };
+            if self.match_token(TokenKind::Equals) { Some(self.parse_expr()) } else { None };
 
         Some(Parameter {
             name,
