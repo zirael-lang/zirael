@@ -5,7 +5,11 @@ mod item;
 mod stmt;
 mod ty;
 
-use crate::{LexedModule, Token, TokenKind, ast::{Ast, keyword::Keyword}, get_tokens, ModuleId};
+use crate::{
+    LexedModule, ModuleId, Token, TokenKind,
+    ast::{Ast, keyword::Keyword},
+    get_tokens,
+};
 use ariadne::{ReportKind, Span as _};
 use std::{ops::Range, path::PathBuf};
 use zirael_utils::prelude::{Identifier, ReportBuilder, SourceFile, SourceFileId, get_or_intern};
@@ -20,7 +24,7 @@ pub struct ParserState {
 pub struct Parser<'a> {
     tokens: Vec<Token>,
     position: usize,
-    pub errors: Vec<ReportBuilder<'a>>,
+    pub reports: Vec<ReportBuilder<'a>>,
     source: SourceFile,
     sync_tokens: Vec<TokenKind>,
     pub discover_queue: Vec<(PathBuf, Range<usize>)>,
@@ -32,7 +36,7 @@ impl<'a> Parser<'a> {
         Self {
             tokens,
             position: 0,
-            errors: Vec::new(),
+            reports: Vec::new(),
             source: input,
             sync_tokens: vec![TokenKind::BraceClose],
             discover_queue: Vec::new(),
@@ -135,13 +139,13 @@ impl<'a> Parser<'a> {
         self.expect_impl(expected, Some(message))
     }
 
-    pub fn add_error(&mut self, error: ReportBuilder<'a>) {
-        self.errors.push(error);
+    pub fn add_report(&mut self, error: ReportBuilder<'a>) {
+        self.reports.push(error);
     }
 
     pub fn error_at(&mut self, message: impl Into<String>, span: Range<usize>) {
         let message = message.into();
-        self.add_error(
+        self.add_report(
             ReportBuilder::builder(message.clone(), ReportKind::Error)
                 .label(message.as_str(), span),
         );
@@ -161,12 +165,12 @@ impl<'a> Parser<'a> {
     }
 
     pub fn save_state(&self) -> ParserState {
-        ParserState { position: self.position, error_count: self.errors.len() }
+        ParserState { position: self.position, error_count: self.reports.len() }
     }
 
     pub fn restore_state(&mut self, state: ParserState) {
         self.position = state.position;
-        self.errors.truncate(state.error_count);
+        self.reports.truncate(state.error_count);
     }
 
     pub fn try_parse<T, F>(&mut self, parse_fn: F) -> Option<T>
@@ -183,11 +187,11 @@ impl<'a> Parser<'a> {
     }
 
     pub fn has_errors(&self) -> bool {
-        !self.errors.is_empty()
+        !self.reports.is_empty()
     }
 
     pub fn clear_errors(&mut self) {
-        self.errors.clear();
+        self.reports.clear();
     }
 
     pub fn check(&self, kind: &TokenKind) -> bool {
@@ -217,12 +221,12 @@ impl<'a> Parser<'a> {
                     ReportKind::Error,
                 )
                 .label("here", token.span.clone());
-                self.add_error(error);
+                self.add_report(error);
                 None
             }
             None => {
                 let span = self.eof_span();
-                self.add_error(
+                self.add_report(
                     ReportBuilder::builder(
                         format!("Expected {expected:?}, found end of file"),
                         ReportKind::Error,
@@ -239,7 +243,7 @@ impl<'a> Parser<'a> {
             // Changed from current() to peek()
             Some(token) if expected.contains(&token.kind) => Some(self.advance().unwrap()),
             Some(token) => {
-                self.add_error(
+                self.add_report(
                     ReportBuilder::builder(
                         format!("Expected one of {:?}, found {:?}", expected, token.kind),
                         ReportKind::Error,
@@ -250,7 +254,7 @@ impl<'a> Parser<'a> {
             }
             None => {
                 let span = self.eof_span();
-                self.add_error(
+                self.add_report(
                     ReportBuilder::builder(
                         format!("Expected one of {expected:?}, found end of file"),
                         ReportKind::Error,
@@ -318,7 +322,7 @@ impl<'a> Parser<'a> {
             return true;
         }
 
-        self.error_at_peek(format!("Expected keyword '{}'", expected.as_str()));
+        self.error_at_peek(format!("expected keyword '{}'", expected.as_str()));
         false
     }
 
@@ -327,7 +331,7 @@ impl<'a> Parser<'a> {
             && let TokenKind::Identifier(ident) = &token.kind
         {
             if Keyword::is_valid(ident) {
-                self.error_at_peek(format!("Expected an identifier, found keyword {ident:?}"));
+                self.error_at_peek(format!("expected an identifier, found keyword {ident:?}"));
                 return None;
             }
 
@@ -336,7 +340,7 @@ impl<'a> Parser<'a> {
             return Some(get_or_intern(&ident));
         }
 
-        self.error_at_peek(format!("Expected an identifier, found {:?}", self.peek()));
+        self.error_at_peek(format!("expected an identifier, found {:?}", self.peek()));
         None
     }
 
@@ -349,7 +353,7 @@ impl<'a> Parser<'a> {
             }
         }
 
-        self.error_at_current("Expected a string literal");
+        self.error_at_current("expected a string literal");
         None
     }
 

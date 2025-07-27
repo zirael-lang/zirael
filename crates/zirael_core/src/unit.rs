@@ -17,8 +17,6 @@ impl<'ctx> CompilationUnit<'ctx> {
         let sources = self.context.sources();
         let structure = determine_lexed_modules(self.entry_point, sources, reports);
 
-        if reports.has_errors() {
-            reports.print(sources);
-        }
+        reports.print(sources);
     }
 }

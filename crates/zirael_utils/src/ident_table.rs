@@ -25,15 +25,15 @@ impl IdentTable {
         self.interner.get_or_intern(name)
     }
 
-    pub fn resolve(&self, sym: Spur) -> &str {
-        self.interner.resolve(&sym)
+    pub fn resolve(&self, sym: &Spur) -> &str {
+        self.interner.resolve(sym)
     }
 }
 
 #[cfg(debug_assertions)]
 impl Debug for Identifier {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", resolve(*self))
+        write!(f, "{}", resolve(self))
     }
 }
 
@@ -45,8 +45,8 @@ pub fn get_or_intern(name: &str) -> Identifier {
 }
 
 #[inline]
-pub fn resolve(sym: Identifier) -> String {
-    GLOBAL_TABLE.lock().resolve(sym.0).to_owned()
+pub fn resolve(sym: &Identifier) -> String {
+    GLOBAL_TABLE.lock().resolve(&sym.0).to_owned()
 }
 
 #[inline]

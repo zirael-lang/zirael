@@ -144,7 +144,7 @@ impl<'a> Parser<'a> {
         }
 
         if !self.match_token(TokenKind::ParenClose) {
-            self.error_at_current("Expected ')' after function arguments");
+            self.error_at_current("expected ')' after function arguments");
         }
 
         Expr(ExprKind::Call { callee: Box::new(callee), args })
@@ -223,7 +223,7 @@ impl<'a> Parser<'a> {
                     let expr = self.parse_expr();
 
                     if !self.match_token(TokenKind::ParenClose) {
-                        self.error_at_current("Expected ')' after expression");
+                        self.error_at_current("expected ')' after expression");
                     }
 
                     Expr(ExprKind::Paren(Box::new(expr)))
@@ -235,13 +235,13 @@ impl<'a> Parser<'a> {
                 }
 
                 _ => {
-                    self.error_at_peek(format!("Unexpected token in expression: {:?}", token.kind));
+                    self.error_at_peek(format!("unexpected token in expression: {:?}", token.kind));
                     self.advance();
                     Expr(ExprKind::couldnt_parse())
                 }
             }
         } else {
-            self.error_at_current("Unexpected end of input in expression");
+            self.error_at_current("unexpected end of input in expression");
             Expr(ExprKind::couldnt_parse())
         }
     }
@@ -255,7 +255,7 @@ impl<'a> Parser<'a> {
         }
 
         if !self.match_token(TokenKind::BraceClose) {
-            self.error_at_current("Expected '}' to close block");
+            self.error_at_current("expected '}' to close block");
         }
 
         Expr(ExprKind::Block(stmts))

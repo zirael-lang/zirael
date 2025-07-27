@@ -39,16 +39,16 @@ impl<'a> Parser<'a> {
                             return Some(Type::Array(Box::new(element_type), Some(size as usize)));
                         }
                     } else {
-                        self.error_at_current("Expected array size");
+                        self.error_at_current("expected array size");
                     }
                 } else if self.match_token(TokenKind::BracketClose) {
                     // Dynamic array [T]
                     return Some(Type::Array(Box::new(element_type), None));
                 } else {
-                    self.error_at_current("Expected ';' or ']' in array type");
+                    self.error_at_current("expected ';' or ']' in array type");
                 }
             } else {
-                self.error_at_current("Expected element type in array");
+                self.error_at_current("expected element type in array");
             }
             return None;
         }
@@ -61,7 +61,7 @@ impl<'a> Parser<'a> {
             } else if let Some(inner_type) = self.parse_type() {
                 return Some(Type::Reference(Box::new(inner_type)));
             }
-            self.error_at_current("Expected type after '&'");
+            self.error_at_current("expected type after '&'");
             return None;
         }
 
@@ -69,7 +69,7 @@ impl<'a> Parser<'a> {
             if let Some(inner_type) = self.parse_type() {
                 return Some(Type::Pointer(Box::new(inner_type)));
             }
-            self.error_at_current("Expected type after '*'");
+            self.error_at_current("expected type after '*'");
             return None;
         }
 
@@ -83,7 +83,7 @@ impl<'a> Parser<'a> {
 
         if let Some(ident) = self.try_parse(|parser| {
             parser.expect_identifier().ok_or_else(|| {
-                ReportBuilder::builder("Expected type identifier", ReportKind::Error)
+                ReportBuilder::builder("expected type identifier", ReportKind::Error)
                     .label("here", parser.eof_span())
             })
         }) {
@@ -104,7 +104,7 @@ impl<'a> Parser<'a> {
                             if let Some(ty) = self.parse_type() {
                                 generics.push(ty);
                             } else {
-                                self.error_at_current("Expected type in generic argument list");
+                                self.error_at_current("expected type in generic argument list");
                                 self.synchronize(&[TokenKind::Comma, TokenKind::GreaterThan]);
                                 if self.check(&TokenKind::GreaterThan) {
                                     break;
@@ -123,7 +123,7 @@ impl<'a> Parser<'a> {
                                 break;
                             } else {
                                 self.error_at_current(
-                                    "Expected ',' or '>' in type generic arguments",
+                                    "expected ',' or '>' in type generic arguments",
                                 );
                                 self.synchronize(&[TokenKind::GreaterThan]);
                                 self.match_token(TokenKind::GreaterThan);
@@ -134,7 +134,7 @@ impl<'a> Parser<'a> {
 
                     base_type = Type::Named { name, generics };
                 } else {
-                    self.error_at_current("Generic arguments can only be applied to named types");
+                    self.error_at_current("generic arguments can only be applied to named types");
                     return None;
                 }
             } else {
@@ -155,7 +155,7 @@ impl<'a> Parser<'a> {
                 if let Some(param_type) = self.parse_type() {
                     params.push(param_type);
                 } else {
-                    self.error_at_current("Expected parameter type in function type");
+                    self.error_at_current("expected parameter type in function type");
                     return None;
                 }
 

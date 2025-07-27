@@ -16,7 +16,7 @@ impl<'a> Parser<'a> {
                 Type::Inferred
             };
 
-            self.expect_message(TokenKind::Equals, "Every variable must be initialized");
+            self.expect_message(TokenKind::Equals, "every variable must be initialized");
             let value = self.parse_expr();
             self.match_token(TokenKind::Semicolon);
 

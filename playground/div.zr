@@ -1,2 +1,2 @@
-fn div(a: int, a: int): int {
+fn div_safe(a: int, b: int): int {
 }

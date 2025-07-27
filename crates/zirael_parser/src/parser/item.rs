@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use crate::{
     TokenKind,
     ast::{
@@ -8,12 +7,14 @@ use crate::{
     parser::Parser,
 };
 use ariadne::ReportKind;
+use colored::Colorize;
+use convert_case::{Case, Casing};
 use itertools::Itertools;
 use ordinal::ToOrdinal;
-use std::path::PathBuf;
+use std::{collections::HashSet, path::PathBuf};
 use zirael_utils::{
     ident_table::default_ident,
-    prelude::{Identifier, ReportBuilder, Span, get_or_intern},
+    prelude::{Identifier, ReportBuilder, Span, get_or_intern, resolve},
 };
 
 impl<'a> Parser<'a> {
@@ -25,7 +26,7 @@ impl<'a> Parser<'a> {
         } else if self.match_keyword(Keyword::Import) {
             self.parse_import()
         } else {
-            self.error_at_peek(format!("No valid item found for {:?}", self.peek()));
+            self.error_at_peek(format!("no valid item found for {:?}", self.peek()));
             self.synchronize(&[TokenKind::Semicolon, TokenKind::BraceClose]);
             return None;
         };
@@ -67,9 +68,10 @@ impl<'a> Parser<'a> {
         };
 
         let name = self.expect_identifier().unwrap_or_else(|| {
-            self.error_at_current("Function name is required");
+            self.error_at_current("function name is required");
             default_ident()
         });
+        self.validate_fn_name(&name);
 
         let generics = self.parse_generics();
         let parameters = self.parse_parameters();
@@ -102,6 +104,23 @@ impl<'a> Parser<'a> {
         };
 
         (ItemKind::Function(function), name)
+    }
+
+    pub fn validate_fn_name(&mut self, name: &Identifier) {
+        let name = resolve(name);
+        if name.is_empty() {
+            return;
+        }
+
+        let camel = name.to_case(Case::Camel);
+
+        if name != camel {
+            self.add_report(
+                ReportBuilder::builder("function names must be camel case", ReportKind::Warning)
+                    .label("here", self.prev_span())
+                    .note(&format!("Suggested name {}", camel.dimmed().bold())),
+            )
+        }
     }
 
     pub fn parse_parameters(&mut self) -> Vec<Parameter> {
@@ -158,7 +177,7 @@ impl<'a> Parser<'a> {
                 );
             }
 
-            self.add_error(report);
+            self.add_report(report);
         }
 
         self.validate_variadic(params, span);
@@ -173,11 +192,11 @@ impl<'a> Parser<'a> {
             1 => {
                 let (index, param) = variadic_params[0];
                 if index != params.len() - 1 {
-                    self.error_at("Variadic parameter must be last.", param.span.clone());
+                    self.error_at("variadic parameter must be last.", param.span.clone());
                 }
             }
             _ => {
-                self.error_at("Only one variadic parameter allowed per function.", span);
+                self.error_at("only one variadic parameter allowed per function.", span);
             }
         }
     }
@@ -187,11 +206,11 @@ impl<'a> Parser<'a> {
         let variadic = self.match_triple_dot();
 
         let name = self.expect_identifier()?;
-        self.expect_message(TokenKind::Colon, "Every parameter requires a type");
+        self.expect_message(TokenKind::Colon, "every parameter requires a type");
         let ty = self.parse_type();
 
         let Some(ty) = ty else {
-            self.error_at_current("Every parameter requires a type");
+            self.error_at_current("every parameter requires a type");
             return None;
         };
 

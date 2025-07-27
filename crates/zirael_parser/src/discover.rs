@@ -75,7 +75,7 @@ pub fn determine_lexed_modules<'a>(
                     discovered_modules.push(ModuleId::External(ext_module));
                 }
 
-                for report in parser.errors {
+                for report in parser.reports {
                     reports.add(file_id, report.clone());
                 }
 

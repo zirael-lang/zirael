@@ -45,8 +45,10 @@ impl<'a> Reports<'a> {
             }
         });
 
-        error!("exiting early due to compiler errors");
-        exit(1);
+        if self.has_errors() {
+            error!("exiting early due to compiler errors");
+            exit(1);
+        }
     }
 
     pub fn has_errors(&self) -> bool {
@@ -91,14 +93,23 @@ impl<'a> ReportBuilder<'a> {
         self
     }
 
-    pub fn note(mut self, note: String) -> Self {
-        self.notes.push(note);
+    pub fn note(mut self, note: &str) -> Self {
+        self.notes.push(note.to_string());
         self
     }
 
+    pub fn custom_kind(&self) -> ReportKind<'a> {
+        match self.kind {
+            ReportKind::Error => ReportKind::Custom("error", Color::BrightRed),
+            ReportKind::Warning => ReportKind::Custom("warning", Color::BrightYellow),
+            ReportKind::Advice => ReportKind::Custom("advice", Color::BrightGreen),
+            _ => self.kind,
+        }
+    }
+
     pub fn build(self, path: &str) -> Report<'a> {
-        let mut report =
-            Report::build(self.kind, (path.to_string(), 0usize..0usize)).with_message(self.message);
+        let mut report = Report::build(self.custom_kind(), (path.to_string(), 0usize..0usize))
+            .with_message(self.message);
 
         let labels = self
             .labels

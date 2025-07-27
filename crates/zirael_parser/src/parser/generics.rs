@@ -33,14 +33,14 @@ impl<'a> Parser<'a> {
             } else if self.match_token(TokenKind::GreaterThan) {
                 break;
             } else {
-                self.error_at_current("Expected ',' or '>' in generic parameter list");
+                self.error_at_current("expected ',' or '>' in generic parameter list");
 
                 self.synchronize(&[TokenKind::Comma, TokenKind::GreaterThan]);
 
                 if self.match_token(TokenKind::GreaterThan) {
                     break;
                 } else {
-                    self.error_at_current("Unable to recover from generic parsing error");
+                    self.error_at_current("unable to recover from generic parsing error");
                     break;
                 }
             }
@@ -60,7 +60,7 @@ impl<'a> Parser<'a> {
                 if let Some(constraint) = self.parse_trait_bound() {
                     constraints.push(constraint);
                 } else {
-                    self.error_at_current("Expected trait bound after ':'");
+                    self.error_at_current("expected trait bound after ':'");
                     self.synchronize(&[
                         TokenKind::Plus,
                         TokenKind::Comma,
@@ -76,7 +76,7 @@ impl<'a> Parser<'a> {
                         TokenKind::GreaterThan,
                         TokenKind::Equals,
                     ]) {
-                        self.error_at_current("Expected trait bound after '+'");
+                        self.error_at_current("expected trait bound after '+'");
                         break;
                     }
                 } else {
@@ -90,7 +90,7 @@ impl<'a> Parser<'a> {
             match self.parse_type() {
                 Some(ty) => default_type = Some(ty),
                 None => {
-                    self.error_at_current("Expected type after '=' in generic parameter default");
+                    self.error_at_current("expected type after '=' in generic parameter default");
                 }
             }
         }
@@ -113,10 +113,10 @@ impl<'a> Parser<'a> {
                     let name_span = parser.peek_span();
                     let name = parser.expect_identifier().ok_or_else(|| {
                         ReportBuilder::builder(
-                            "Expected identifier in named generic argument",
+                            "expected identifier in named generic argument",
                             ReportKind::Error,
                         )
-                            .label("here", name_span)
+                        .label("here", name_span)
                     })?;
 
                     parser.expect(TokenKind::Equals);
@@ -124,10 +124,10 @@ impl<'a> Parser<'a> {
                     let type_span = parser.peek_span();
                     let ty = parser.parse_type().ok_or_else(|| {
                         ReportBuilder::builder(
-                            "Expected type after '=' in named generic argument",
+                            "expected type after '=' in named generic argument",
                             ReportKind::Error,
                         )
-                            .label("here", type_span)
+                        .label("here", type_span)
                     })?;
 
                     Ok(GenericArg::Named { name, ty })
@@ -140,7 +140,7 @@ impl<'a> Parser<'a> {
                         generic_args.push(GenericArg::Type(ty));
                     } else {
                         self.error_at_current(
-                            "Expected type or named argument in generic parameter list",
+                            "expected type or named argument in generic parameter list",
                         );
                         self.synchronize(&[TokenKind::Comma, TokenKind::GreaterThan]);
                         if self.check(&TokenKind::GreaterThan) {
@@ -159,7 +159,7 @@ impl<'a> Parser<'a> {
                 } else if self.match_token(TokenKind::GreaterThan) {
                     break;
                 } else {
-                    self.error_at_current("Expected ',' or '>' in trait generic arguments");
+                    self.error_at_current("expected ',' or '>' in trait generic arguments");
 
                     self.synchronize(&[TokenKind::Comma, TokenKind::GreaterThan]);
                     if self.match_token(TokenKind::Comma) {
