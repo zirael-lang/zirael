@@ -1,5 +1,9 @@
 use crate::ast::Ast;
-use petgraph::{Directed, Graph};
+use petgraph::{
+    Directed, Graph,
+    algo::{is_cyclic_directed, toposort},
+    prelude::EdgeRef,
+};
 use zirael_utils::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

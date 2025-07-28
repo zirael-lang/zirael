@@ -1,4 +1,4 @@
-use zirael_parser::Dependency;
+use zirael_parser::{Dependency, SymbolTable};
 use zirael_utils::prelude::*;
 
 /// Main compiler struct. It holds data that is read and written throughout the whole compilation process.
@@ -7,6 +7,7 @@ pub struct Context<'reports> {
     sources: Sources,
     reports: Reports<'reports>,
     dependencies: Vec<Dependency>,
+    symbols: SymbolTable,
 }
 
 impl<'reports> Context<'reports> {
@@ -32,6 +33,10 @@ impl<'reports> Context<'reports> {
     pub fn dependencies(&self) -> &Vec<Dependency> {
         &self.dependencies
     }
+
+    pub fn symbols(&self) -> &SymbolTable {
+        &self.symbols
+    }
 }
 
 mod tests {
@@ -41,7 +46,7 @@ mod tests {
     #[test]
     fn test_context() {
         let ctx = Context::new();
-        let id = ctx.sources().add_static("test", Some(PathBuf::from("test.rs")));
+        let id = ctx.sources().add_static("test", PathBuf::from("test.rs"));
 
         assert!(ctx.sources().contains(id));
     }

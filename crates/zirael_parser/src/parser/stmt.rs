@@ -1,9 +1,10 @@
 use crate::{
-    TokenKind,
-    ast::{Stmt, StmtKind, Type, VarDecl, keyword::Keyword},
+    SymbolTableError, TokenKind,
+    ast::{Keyword, Stmt, StmtKind, Type, VarDecl},
     parser::Parser,
 };
-use zirael_utils::prelude::default_ident;
+use ariadne::ReportKind;
+use zirael_utils::prelude::{ReportBuilder, default_ident};
 
 impl<'a> Parser<'a> {
     pub fn parse_stmt(&mut self) -> Stmt {

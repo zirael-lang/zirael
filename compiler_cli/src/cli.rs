@@ -86,8 +86,8 @@ pub fn try_cli() -> Result<()> {
         let file = current_dir()?.join(file);
         let contents = fs::read_to_string(file.clone())?;
 
-        let file = context.sources().add_owned(contents, Some(file));
-        let unit = CompilationUnit::new(file, context.clone());
+        let file = context.sources().add_owned(contents, file);
+        let mut unit = CompilationUnit::new(file, context.clone());
         unit.compile();
     }
 

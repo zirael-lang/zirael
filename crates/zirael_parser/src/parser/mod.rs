@@ -6,8 +6,8 @@ mod stmt;
 mod ty;
 
 use crate::{
-    LexedModule, ModuleId, Token, TokenKind,
-    ast::{Ast, keyword::Keyword},
+    LexedModule, ModuleId, SymbolTable, Token, TokenKind,
+    ast::{Ast, Keyword},
     get_tokens,
 };
 use ariadne::{ReportKind, Span as _};
@@ -28,10 +28,11 @@ pub struct Parser<'a> {
     source: SourceFile,
     sync_tokens: Vec<TokenKind>,
     pub discover_queue: Vec<(PathBuf, Range<usize>)>,
+    pub symbol_table: SymbolTable,
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(input: SourceFile) -> Self {
+    pub fn new(input: SourceFile, symbol_table: SymbolTable) -> Self {
         let tokens = get_tokens(input.content());
         Self {
             tokens,
@@ -40,6 +41,7 @@ impl<'a> Parser<'a> {
             source: input,
             sync_tokens: vec![TokenKind::BraceClose],
             discover_queue: Vec::new(),
+            symbol_table,
         }
     }
 

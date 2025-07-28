@@ -1,8 +1,8 @@
 use crate::{
     TokenKind,
     ast::{
-        Abi, Function, FunctionModifiers, FunctionSignature, ImportKind, Item, ItemKind, Parameter,
-        ParameterKind, ReturnType, keyword::Keyword,
+        Abi, Function, FunctionModifiers, FunctionSignature, ImportKind, Item, ItemKind, Keyword,
+        Parameter, ParameterKind, ReturnType,
     },
     parser::Parser,
 };
@@ -37,7 +37,7 @@ impl<'a> Parser<'a> {
     pub fn parse_import(&mut self) -> (ItemKind, Identifier) {
         let string = self.expect_string().unwrap_or_default();
         let span = self.prev_span();
-        let current_file = self.source.path().expect("No source file");
+        let current_file = self.source.path();
         let path = current_file.parent().unwrap_or(&PathBuf::new()).join(string.clone());
 
         let kind = if path.is_file() && path.extension().is_some_and(|ext| ext == "zr") {

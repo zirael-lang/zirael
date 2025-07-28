@@ -36,7 +36,7 @@ impl<'a> Reports<'a> {
         self.read(|reports| {
             for (id, report) in &reports.reports {
                 let file = sources.get_unchecked(*id);
-                let path = file.path().unwrap_or(&PathBuf::new()).clone();
+                let path = file.path();
                 let path = &path.display().to_string();
                 let source = Source::from(file.content());
 

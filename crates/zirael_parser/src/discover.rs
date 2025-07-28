@@ -1,5 +1,5 @@
 use crate::{
-    ModuleDiscoveryResult, ModuleId,
+    ModuleDiscoveryResult, ModuleId, ScopeType, SymbolTable,
     ast::{Ast, ImportKind, ItemKind},
     parser::Parser,
 };
@@ -11,6 +11,7 @@ pub fn determine_lexed_modules<'a>(
     entrypoint: SourceFileId,
     sources: &Sources,
     reports: &Reports<'a>,
+    symbol_table: &SymbolTable,
 ) -> ModuleDiscoveryResult {
     debug!("starting module discovery from entrypoint: {:?}", entrypoint);
 
@@ -40,7 +41,7 @@ pub fn determine_lexed_modules<'a>(
                     proc.insert(module_id.clone());
                 }
 
-                let mut parser = Parser::new(sources.get_unchecked(file_id));
+                let mut parser = Parser::new(sources.get_unchecked(file_id), symbol_table.clone());
                 let result = parser.parse(file_id);
 
                 let mut discovered_modules = Vec::new();
@@ -64,7 +65,7 @@ pub fn determine_lexed_modules<'a>(
                         );
                         continue;
                     };
-                    let new_file_id = sources.add_owned(contents, Some(path.clone()));
+                    let new_file_id = sources.add_owned(contents, path.clone());
                     debug!("discovered file dependency: {} -> {:?}", path.display(), new_file_id);
                     discovered_modules.push(ModuleId::File(new_file_id));
                 }

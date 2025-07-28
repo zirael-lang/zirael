@@ -1,5 +1,5 @@
 use crate::{
-    TokenKind,
+    ScopeType, TokenKind,
     ast::{BinaryOp, Expr, ExprKind, Literal, UnaryOp},
     parser::Parser,
 };

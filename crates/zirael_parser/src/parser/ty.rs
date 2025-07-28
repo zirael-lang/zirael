@@ -1,6 +1,6 @@
 use crate::{
     Token, TokenKind,
-    ast::{ReturnType, Type, keyword::Keyword},
+    ast::{Keyword, ReturnType, Type},
     parser::Parser,
 };
 use ariadne::ReportKind;

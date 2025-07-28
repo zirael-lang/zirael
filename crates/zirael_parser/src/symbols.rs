@@ -1,0 +1,447 @@
+use crate::ast::{
+    ClassDeclaration, ClassField, EnumDeclaration, EnumVariant, Function, FunctionModifiers,
+    FunctionSignature, GenericParameter, Parameter, ReturnType, Type,
+};
+use id_arena::{Arena, Id};
+use std::{collections::HashMap, sync::Arc};
+use zirael_utils::prelude::*;
+
+pub type SymbolId = Id<Symbol>;
+pub type ScopeId = Id<Scope>;
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum SymbolKind {
+    Variable { ty: Type, is_mutable: bool, is_initialized: bool },
+    Constant { ty: Type, value: Option<String> },
+    Function { signature: FunctionSignature, modifiers: FunctionModifiers },
+    Parameter { ty: Type, is_variadic: bool, default_value: Option<String> },
+    Class { fields: Vec<ClassField>, generics: Vec<GenericParameter> },
+    Enum { generics: Option<Vec<GenericParameter>>, variants: Vec<EnumVariant> },
+    Temporary { ty: Type, lifetime: TemporaryLifetime },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum TemporaryLifetime {
+    Expression,
+    Statement,
+    Block,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Symbol {
+    pub name: Identifier,
+    pub kind: SymbolKind,
+    pub scope: ScopeId,
+    pub source_location: Option<Span>,
+    pub is_used: bool,
+    pub declaration_order: usize,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Scope {
+    pub parent: Option<ScopeId>,
+    pub children: Vec<ScopeId>,
+    pub symbols: HashMap<Identifier, SymbolId>,
+    pub scope_type: ScopeType,
+    pub depth: usize,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ScopeType {
+    Global,
+    Module(SourceFileId),
+    Function(Identifier),
+    Block,
+    Class(Identifier),
+    Enum(Identifier),
+    Loop,
+    Conditional,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum SymbolTableError {
+    SymbolAlreadyExists { name: Identifier, existing_id: SymbolId, scope: ScopeId },
+    SymbolNotFound { name: Identifier, scope: ScopeId },
+    InvalidScope(ScopeId),
+    ScopeNotFound(ScopeId),
+    CircularScopeReference,
+}
+
+#[derive(Debug)]
+struct SymbolTableImpl {
+    symbols: Arena<Symbol>,
+    scopes: Arena<Scope>,
+    current_scope: ScopeId,
+    global_scope: ScopeId,
+    declaration_counter: usize,
+    name_lookup: HashMap<(Identifier, ScopeId), SymbolId>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct SymbolTable(Arc<RwLock<SymbolTableImpl>>);
+
+impl Default for SymbolTableImpl {
+    fn default() -> Self {
+        let mut symbols = Arena::new();
+        let mut scopes = Arena::new();
+
+        let global_scope = Scope {
+            parent: None,
+            children: Vec::new(),
+            symbols: HashMap::new(),
+            scope_type: ScopeType::Global,
+            depth: 0,
+        };
+
+        let global_scope_id = scopes.alloc(global_scope);
+
+        Self {
+            symbols,
+            scopes,
+            current_scope: global_scope_id,
+            global_scope: global_scope_id,
+            declaration_counter: 0,
+            name_lookup: HashMap::new(),
+        }
+    }
+}
+
+impl SymbolTable {
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    fn read<R>(&self, reader: impl FnOnce(&SymbolTableImpl) -> R) -> R {
+        reader(&self.0.read())
+    }
+
+    fn write<R>(&self, writer: impl FnOnce(&mut SymbolTableImpl) -> R) -> R {
+        writer(&mut self.0.write())
+    }
+
+    pub fn insert(
+        &self,
+        name: Identifier,
+        kind: SymbolKind,
+        span: Option<Span>,
+    ) -> Result<SymbolId, SymbolTableError> {
+        self.write(|table| {
+            let current_scope = table.current_scope;
+
+            if let Some(&existing_id) = table.name_lookup.get(&(name, current_scope)) {
+                return Err(SymbolTableError::SymbolAlreadyExists {
+                    name,
+                    existing_id,
+                    scope: current_scope,
+                });
+            }
+
+            let symbol = Symbol {
+                name,
+                kind,
+                scope: current_scope,
+                source_location: span,
+                is_used: false,
+                declaration_order: table.declaration_counter,
+            };
+
+            table.declaration_counter += 1;
+            let symbol_id = table.symbols.alloc(symbol);
+
+            table.name_lookup.insert((name, current_scope), symbol_id);
+
+            if let Some(scope) = table.scopes.get_mut(current_scope) {
+                scope.symbols.insert(name, symbol_id);
+            }
+
+            Ok(symbol_id)
+        })
+    }
+
+    pub fn lookup(&self, name: Identifier) -> Option<SymbolId> {
+        self.read(|table| {
+            let mut current_scope = Some(table.current_scope);
+
+            while let Some(scope_id) = current_scope {
+                if let Some(&symbol_id) = table.name_lookup.get(&(name, scope_id)) {
+                    return Some(symbol_id);
+                }
+
+                current_scope = table.scopes.get(scope_id)?.parent;
+            }
+
+            None
+        })
+    }
+
+    pub fn lookup_in_scope(&self, name: Identifier, scope: ScopeId) -> Option<SymbolId> {
+        self.read(|table| table.name_lookup.get(&(name, scope)).copied())
+    }
+
+    pub fn get_symbol(&self, id: SymbolId) -> Option<Symbol> {
+        self.read(|table| table.symbols.get(id).cloned())
+    }
+
+    pub fn mark_used(&self, id: SymbolId) -> Result<(), SymbolTableError> {
+        self.write(|table| {
+            if let Some(symbol) = table.symbols.get_mut(id) {
+                symbol.is_used = true;
+                Ok(())
+            } else {
+                Err(SymbolTableError::SymbolNotFound {
+                    name: default_ident(),
+                    scope: table.current_scope,
+                })
+            }
+        })
+    }
+
+    pub fn push_scope(&self, scope_type: ScopeType) -> ScopeId {
+        self.write(|table| {
+            let parent_id = table.current_scope;
+            let parent_depth = table.scopes.get(parent_id).map(|s| s.depth).unwrap_or(0);
+
+            let new_scope = Scope {
+                parent: Some(parent_id),
+                children: Vec::new(),
+                symbols: HashMap::new(),
+                scope_type,
+                depth: parent_depth + 1,
+            };
+
+            let scope_id = table.scopes.alloc(new_scope);
+
+            if let Some(parent) = table.scopes.get_mut(parent_id) {
+                parent.children.push(scope_id);
+            }
+
+            table.current_scope = scope_id;
+            scope_id
+        })
+    }
+
+    pub fn pop_scope(&self) -> Result<ScopeId, SymbolTableError> {
+        self.write(|table| {
+            let current_scope = table.current_scope;
+
+            if let Some(scope) = table.scopes.get(current_scope) {
+                if let Some(parent_id) = scope.parent {
+                    table.current_scope = parent_id;
+                    Ok(current_scope)
+                } else {
+                    Err(SymbolTableError::InvalidScope(current_scope))
+                }
+            } else {
+                Err(SymbolTableError::ScopeNotFound(current_scope))
+            }
+        })
+    }
+
+    pub fn current_scope(&self) -> ScopeId {
+        self.read(|table| table.current_scope)
+    }
+
+    pub fn global_scope(&self) -> ScopeId {
+        self.read(|table| table.global_scope)
+    }
+
+    pub fn get_scope(&self, id: ScopeId) -> Option<Scope> {
+        self.read(|table| table.scopes.get(id).cloned())
+    }
+
+    pub fn get_symbols_in_scope(&self, scope_id: ScopeId) -> Vec<(Identifier, SymbolId)> {
+        self.read(|table| {
+            table
+                .scopes
+                .get(scope_id)
+                .map(|scope| scope.symbols.iter().map(|(&name, &id)| (name, id)).collect())
+                .unwrap_or_default()
+        })
+    }
+
+    pub fn get_unused_symbols(&self) -> Vec<(SymbolId, Symbol)> {
+        self.read(|table| {
+            table
+                .symbols
+                .iter()
+                .filter(|(_, symbol)| !symbol.is_used)
+                .map(|(id, symbol)| (id, symbol.clone()))
+                .collect()
+        })
+    }
+
+    pub fn update_symbol_kind(
+        &self,
+        id: SymbolId,
+        new_kind: SymbolKind,
+    ) -> Result<(), SymbolTableError> {
+        self.write(|table| {
+            if let Some(symbol) = table.symbols.get_mut(id) {
+                symbol.kind = new_kind;
+                Ok(())
+            } else {
+                Err(SymbolTableError::SymbolNotFound {
+                    name: default_ident(),
+                    scope: table.current_scope,
+                })
+            }
+        })
+    }
+
+    pub fn is_ancestor_scope(&self, ancestor: ScopeId, descendant: ScopeId) -> bool {
+        self.read(|table| {
+            let mut current = Some(descendant);
+
+            while let Some(scope_id) = current {
+                if scope_id == ancestor {
+                    return true;
+                }
+                current = table.scopes.get(scope_id).expect("missing").parent;
+            }
+
+            false
+        })
+    }
+
+    pub fn get_accessible_symbols(&self) -> Vec<(Identifier, SymbolId, ScopeId)> {
+        self.read(|table| {
+            let mut symbols = Vec::new();
+            let mut current_scope = Some(table.current_scope);
+
+            while let Some(scope_id) = current_scope {
+                if let Some(scope) = table.scopes.get(scope_id) {
+                    for (&name, &symbol_id) in &scope.symbols {
+                        symbols.push((name, symbol_id, scope_id));
+                    }
+                    current_scope = scope.parent;
+                } else {
+                    break;
+                }
+            }
+
+            symbols
+        })
+    }
+
+    pub fn get_c_identifier(&self, id: SymbolId) -> Option<String> {
+        self.read(|table| {
+            table.symbols.get(id).map(|symbol| match &symbol.kind {
+                SymbolKind::Temporary { .. } => {
+                    format!("__zirael_temp_{}", id.index())
+                }
+                _ => {
+                    let base_name = resolve(&symbol.name);
+                    if table.needs_mangling(id) {
+                        format!("__zirael_{}_{}", base_name, symbol.scope.index())
+                    } else {
+                        base_name
+                    }
+                }
+            })
+        })
+    }
+
+    pub fn get_temporaries_by_lifetime(
+        &self,
+        lifetime: TemporaryLifetime,
+    ) -> Vec<(SymbolId, Symbol)> {
+        self.read(|table| {
+            table
+                .symbols
+                .iter()
+                .filter(|(_, symbol)| {
+                    matches!(&symbol.kind, SymbolKind::Temporary { lifetime: temp_lifetime, .. }
+                            if temp_lifetime == &lifetime)
+                })
+                .map(|(id, symbol)| (id, symbol.clone()))
+                .collect()
+        })
+    }
+
+    pub fn clear(&self) {
+        self.write(|table| {
+            *table = SymbolTableImpl::default();
+        })
+    }
+}
+
+impl SymbolTableImpl {
+    fn needs_mangling(&self, id: SymbolId) -> bool {
+        if let Some(symbol) = self.symbols.get(id) {
+            let name = symbol.name;
+            self.symbols.iter().any(|(other_id, other_symbol)| {
+                other_id != id
+                    && other_symbol.name == name
+                    && self.scopes_would_conflict_in_c(symbol.scope, other_symbol.scope)
+            })
+        } else {
+            false
+        }
+    }
+
+    fn scopes_would_conflict_in_c(&self, scope1: ScopeId, scope2: ScopeId) -> bool {
+        if let (Some(s1), Some(s2)) = (self.scopes.get(scope1), self.scopes.get(scope2)) {
+            match (&s1.scope_type, &s2.scope_type) {
+                (ScopeType::Global, _) | (_, ScopeType::Global) => true,
+                (ScopeType::Function(f1), ScopeType::Function(f2)) => f1 == f2,
+                _ => false,
+            }
+        } else {
+            false
+        }
+    }
+}
+
+impl SymbolTable {
+    pub fn insert_variable(
+        &self,
+        name: Identifier,
+        ty: Type,
+        is_mutable: bool,
+        span: Option<Span>,
+    ) -> Result<SymbolId, SymbolTableError> {
+        let kind = SymbolKind::Variable { ty, is_mutable, is_initialized: false };
+        self.insert(name, kind, span)
+    }
+
+    pub fn insert_function(
+        &self,
+        name: Identifier,
+        signature: FunctionSignature,
+        modifiers: FunctionModifiers,
+        span: Option<Span>,
+    ) -> Result<SymbolId, SymbolTableError> {
+        let kind = SymbolKind::Function { signature, modifiers };
+        self.insert(name, kind, span)
+    }
+
+    pub fn insert_parameter(
+        &self,
+        name: Identifier,
+        ty: Type,
+        is_variadic: bool,
+        span: Option<Span>,
+    ) -> Result<SymbolId, SymbolTableError> {
+        let kind = SymbolKind::Parameter { ty, is_variadic, default_value: None };
+        self.insert(name, kind, span)
+    }
+
+    pub fn insert_temporary(
+        &self,
+        ty: Type,
+        lifetime: TemporaryLifetime,
+        span: Option<Span>,
+    ) -> Result<SymbolId, SymbolTableError> {
+        let temp_name = self.write(|table| {
+            let temp_count = table
+                .symbols
+                .iter()
+                .filter(|(_, s)| matches!(s.kind, SymbolKind::Temporary { .. }))
+                .count();
+            get_or_intern(&format!("__temp_{}", temp_count))
+        });
+
+        let kind = SymbolKind::Temporary { ty, lifetime };
+        self.insert(temp_name, kind, span)
+    }
+}

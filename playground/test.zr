@@ -1,5 +1,5 @@
 import "div.zr"
 
 fn main() {
-    var x: string = ""
+    var x: string = "";
 }

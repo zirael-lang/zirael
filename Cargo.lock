@@ -1318,6 +1318,7 @@ dependencies = [
  "colored",
  "convert_case",
  "fs-err",
+ "id-arena",
  "itertools",
  "logos",
  "ordinal",
