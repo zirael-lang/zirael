@@ -10,7 +10,7 @@ pub struct Reports<'a>(Arc<RwLock<ReportsImpl<'a>>>);
 pub type Report<'a> = ariadne::Report<'a, (String, Range<usize>)>;
 #[derive(Debug, Default)]
 pub struct ReportsImpl<'a> {
-    pub reports: HashMap<SourceFileId, ReportBuilder<'a>>,
+    pub reports: HashMap<SourceFileId, Vec<ReportBuilder<'a>>>,
 }
 
 impl<'a> Reports<'a> {
@@ -28,7 +28,7 @@ impl<'a> Reports<'a> {
 
     pub fn add(&self, source_id: SourceFileId, report: ReportBuilder<'a>) {
         self.write(|reports| {
-            reports.reports.insert(source_id, report);
+            reports.reports.entry(source_id).or_insert_with(Vec::new).push(report);
         });
     }
 
@@ -40,8 +40,10 @@ impl<'a> Reports<'a> {
                 let path = &path.display().to_string();
                 let source = Source::from(file.content());
 
-                let report = report.clone().build(path);
-                report.eprint((path.to_string(), source)).unwrap();
+                for report in report {
+                    let report = report.clone().build(path);
+                    report.eprint((path.to_string(), source.clone())).unwrap();
+                }
             }
         });
 
@@ -53,7 +55,10 @@ impl<'a> Reports<'a> {
 
     pub fn has_errors(&self) -> bool {
         self.read(|reports| {
-            reports.reports.iter().any(|(_, report)| report.kind == ReportKind::Error)
+            reports
+                .reports
+                .iter()
+                .any(|(_, report)| report.iter().any(|r| r.kind == ReportKind::Error))
         })
     }
 }

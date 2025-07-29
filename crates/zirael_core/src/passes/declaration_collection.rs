@@ -185,6 +185,7 @@ impl<'reports> DeclarationCollection<'reports> {
         match self.symbol_table.insert(name, kind.clone(), Some(span.clone())) {
             Ok(_) => {}
             Err(SymbolTableError::SymbolAlreadyExists { existing_id, .. }) => {
+                println!("{:?}", self.symbol_table.get_symbol(existing_id).unwrap());
                 if let Some(existing_symbol) = self.symbol_table.get_symbol(existing_id) {
                     self.reports.add(
                         file_id,
