@@ -6,7 +6,6 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-ariadne = { workspace = true }
 colored = { workspace = true }
 logos = { workspace = true }
 zirael_utils = { workspace = true }

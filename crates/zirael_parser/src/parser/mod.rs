@@ -10,9 +10,8 @@ use crate::{
     ast::{Ast, Keyword},
     get_tokens,
 };
-use ariadne::{ReportKind, Span as _};
 use std::{ops::Range, path::PathBuf};
-use zirael_utils::prelude::{Identifier, ReportBuilder, SourceFile, SourceFileId, get_or_intern};
+use zirael_utils::prelude::*;
 
 pub type ParseResult<'report, T> = Result<T, ReportBuilder<'report>>;
 
@@ -28,11 +27,10 @@ pub struct Parser<'a> {
     source: SourceFile,
     sync_tokens: Vec<TokenKind>,
     pub discover_queue: Vec<(PathBuf, Range<usize>)>,
-    pub symbol_table: SymbolTable,
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(input: SourceFile, symbol_table: SymbolTable) -> Self {
+    pub fn new(input: SourceFile) -> Self {
         let tokens = get_tokens(input.content());
         Self {
             tokens,
@@ -41,7 +39,6 @@ impl<'a> Parser<'a> {
             source: input,
             sync_tokens: vec![TokenKind::BraceClose],
             discover_queue: Vec::new(),
-            symbol_table,
         }
     }
 

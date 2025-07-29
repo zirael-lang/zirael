@@ -16,4 +16,5 @@ pub struct VarDecl {
     /// Defaults to [`Type::Inferred`]
     pub ty: Type,
     pub value: Expr,
+    pub span: Span,
 }

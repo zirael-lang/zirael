@@ -3,8 +3,7 @@ use crate::{
     ast::{GenericArg, GenericParameter, TraitBound},
     parser::Parser,
 };
-use ariadne::ReportKind;
-use zirael_utils::prelude::ReportBuilder;
+use zirael_utils::prelude::*;
 
 impl<'a> Parser<'a> {
     pub fn parse_generics(&mut self) -> Vec<GenericParameter> {

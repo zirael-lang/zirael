@@ -32,6 +32,7 @@ pub struct Function {
     pub modifiers: FunctionModifiers,
     pub signature: FunctionSignature,
     pub body: Option<Expr>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

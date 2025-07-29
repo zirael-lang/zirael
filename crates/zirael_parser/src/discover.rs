@@ -3,7 +3,6 @@ use crate::{
     ast::{Ast, ImportKind, ItemKind},
     parser::Parser,
 };
-use ariadne::ReportKind;
 use petgraph::Graph;
 use zirael_utils::prelude::*;
 
@@ -11,7 +10,6 @@ pub fn determine_lexed_modules<'a>(
     entrypoint: SourceFileId,
     sources: &Sources,
     reports: &Reports<'a>,
-    symbol_table: &SymbolTable,
 ) -> ModuleDiscoveryResult {
     debug!("starting module discovery from entrypoint: {:?}", entrypoint);
 
@@ -41,7 +39,7 @@ pub fn determine_lexed_modules<'a>(
                     proc.insert(module_id.clone());
                 }
 
-                let mut parser = Parser::new(sources.get_unchecked(file_id), symbol_table.clone());
+                let mut parser = Parser::new(sources.get_unchecked(file_id));
                 let result = parser.parse(file_id);
 
                 let mut discovered_modules = Vec::new();

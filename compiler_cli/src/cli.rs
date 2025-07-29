@@ -7,7 +7,7 @@ use zirael_core::prelude::*;
 #[command(name = "zirael")]
 #[command(bin_name = "zr")]
 #[command(styles = CLAP_STYLING)]
-struct Cli {
+pub struct Cli {
     #[arg(value_name = "input", help = "Each input file is compiled as its own project.")]
     files: Vec<PathBuf>,
     #[arg(

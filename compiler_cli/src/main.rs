@@ -1,4 +1,7 @@
-use crate::{cli::try_cli, logger::setup_logger};
+use crate::{
+    cli::{Cli, try_cli},
+    logger::setup_logger,
+};
 use std::process::exit;
 use zirael_core::prelude::*;
 

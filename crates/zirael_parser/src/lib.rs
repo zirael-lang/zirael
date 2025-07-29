@@ -12,3 +12,5 @@ pub use discover::*;
 pub use lexer::*;
 pub use module::*;
 pub use symbols::*;
+pub use walker::*;
+pub use ast::*;

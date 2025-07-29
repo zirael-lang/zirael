@@ -3,8 +3,7 @@ use crate::{
     ast::{Keyword, ReturnType, Type},
     parser::Parser,
 };
-use ariadne::ReportKind;
-use zirael_utils::prelude::ReportBuilder;
+use zirael_utils::prelude::*;
 
 impl<'a> Parser<'a> {
     pub fn parse_type(&mut self) -> Option<Type> {

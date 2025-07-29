@@ -1,6 +1,9 @@
-use crate::ast::{
-    ClassDeclaration, ClassField, EnumDeclaration, EnumVariant, Function, FunctionModifiers,
-    FunctionSignature, GenericParameter, Parameter, ReturnType, Type,
+use crate::{
+    Expr,
+    ast::{
+        ClassDeclaration, ClassField, EnumDeclaration, EnumVariant, Function, FunctionModifiers,
+        FunctionSignature, GenericParameter, Parameter, ReturnType, Type,
+    },
 };
 use id_arena::{Arena, Id};
 use std::{collections::HashMap, sync::Arc};
@@ -11,13 +14,27 @@ pub type ScopeId = Id<Scope>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum SymbolKind {
-    Variable { ty: Type, is_mutable: bool, is_initialized: bool },
-    Constant { ty: Type, value: Option<String> },
+    Variable { ty: Type },
+    Constant { ty: Type, value: Option<Expr> },
     Function { signature: FunctionSignature, modifiers: FunctionModifiers },
-    Parameter { ty: Type, is_variadic: bool, default_value: Option<String> },
+    Parameter { ty: Type, is_variadic: bool, default_value: Option<Expr> },
     Class { fields: Vec<ClassField>, generics: Vec<GenericParameter> },
     Enum { generics: Option<Vec<GenericParameter>>, variants: Vec<EnumVariant> },
     Temporary { ty: Type, lifetime: TemporaryLifetime },
+}
+
+impl SymbolKind {
+    pub fn name(&self) -> &str {
+        match self {
+            SymbolKind::Variable { .. } => "variable",
+            SymbolKind::Constant { .. } => "constant",
+            SymbolKind::Function { .. } => "function",
+            SymbolKind::Parameter { .. } => "parameter",
+            SymbolKind::Class { .. } => "class",
+            SymbolKind::Enum { .. } => "enum",
+            SymbolKind::Temporary { .. } => "temporary",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -397,10 +414,9 @@ impl SymbolTable {
         &self,
         name: Identifier,
         ty: Type,
-        is_mutable: bool,
         span: Option<Span>,
     ) -> Result<SymbolId, SymbolTableError> {
-        let kind = SymbolKind::Variable { ty, is_mutable, is_initialized: false };
+        let kind = SymbolKind::Variable { ty };
         self.insert(name, kind, span)
     }
 

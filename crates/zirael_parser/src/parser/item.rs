@@ -6,16 +6,11 @@ use crate::{
     },
     parser::Parser,
 };
-use ariadne::ReportKind;
 use colored::Colorize;
 use convert_case::{Case, Casing};
-use itertools::Itertools;
 use ordinal::ToOrdinal;
 use std::{collections::HashSet, path::PathBuf};
-use zirael_utils::{
-    ident_table::default_ident,
-    prelude::{Identifier, ReportBuilder, Span, get_or_intern, resolve},
-};
+use zirael_utils::prelude::*;
 
 impl<'a> Parser<'a> {
     pub fn parse_item(&mut self) -> Option<Item> {
@@ -52,6 +47,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_fn(&mut self) -> (ItemKind, Identifier) {
+        let span = self.prev_span();
         let async_ = self.match_keyword(Keyword::Async);
         let const_ = self.match_keyword(Keyword::Const);
         let extern_ = self.match_keyword(Keyword::Extern);
@@ -101,6 +97,7 @@ impl<'a> Parser<'a> {
             },
             signature,
             body,
+            span: span.start..self.prev_span().end,
         };
 
         (ItemKind::Function(function), name)
