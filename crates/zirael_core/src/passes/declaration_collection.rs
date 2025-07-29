@@ -1,11 +1,12 @@
-use crate::prelude::ReportKind;
-use std::{any::Any, env::var, fmt::format};
+use crate::prelude::{ReportKind, debug};
+use std::{any::Any, env::var, fmt::format, path::PathBuf};
 use zirael_parser::{
-    AstWalker, Dependency, DependencyGraph, Function, LexedModule, ModuleId, Parameter,
-    ParameterKind, ScopeType, SymbolKind, SymbolTable, SymbolTableError, VarDecl,
+    Ast, AstWalker, Dependency, DependencyGraph, Function, ImportConflict, ImportKind, ItemKind,
+    LexedModule, ModuleId, Parameter, ParameterKind, ScopeType, Symbol, SymbolKind, SymbolTable,
+    SymbolTableError, VarDecl,
 };
 use zirael_utils::{
-    prelude::{Colorize, Identifier, ReportBuilder, Reports, Span, resolve},
+    prelude::{Colorize, Identifier, ReportBuilder, Reports, Sources, Span, resolve},
     sources::SourceFileId,
 };
 
@@ -13,23 +14,152 @@ pub struct DeclarationCollection<'reports> {
     pub symbol_table: SymbolTable,
     pub reports: Reports<'reports>,
     pub processed_file: Option<SourceFileId>,
+    pub sources: Sources,
 }
 
 impl<'reports> DeclarationCollection<'reports> {
-    pub fn new(table: &SymbolTable, reports: &Reports<'reports>) -> Self {
-        Self { symbol_table: table.clone(), reports: reports.clone(), processed_file: None }
+    pub fn new(table: &SymbolTable, reports: &Reports<'reports>, sources: &Sources) -> Self {
+        Self {
+            symbol_table: table.clone(),
+            reports: reports.clone(),
+            processed_file: None,
+            sources: sources.clone(),
+        }
     }
 
     pub fn collect(&mut self, modules: Vec<LexedModule>) {
-        for module in modules {
+        for module in &modules {
             let ModuleId::File(file_id) = module.id else {
                 continue;
             };
+
             self.symbol_table.push_scope(ScopeType::Module(file_id));
             self.processed_file = Some(file_id);
             self.walk_ast(&module.ast);
             self.pop_scope();
         }
+
+        for module in modules {
+            let ModuleId::File(file_id) = module.id else {
+                continue;
+            };
+
+            self.symbol_table.push_scope(ScopeType::Module(file_id));
+            self.processed_file = Some(file_id);
+
+            let import_items = self.extract_import_items(&module.ast);
+            for (import_kind, span) in import_items {
+                self.handle_import(import_kind, span, file_id);
+            }
+
+            self.pop_scope();
+        }
+    }
+
+    fn extract_import_items<'imports>(
+        &self,
+        ast: &'imports Ast,
+    ) -> Vec<(&'imports ImportKind, &'imports Span)> {
+        ast.items
+            .iter()
+            .filter_map(|item| match &item.kind {
+                ItemKind::Import(import_kind, span) => Some((import_kind, span)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn handle_import(
+        &mut self,
+        import_kind: &ImportKind,
+        span: &Span,
+        current_file_id: SourceFileId,
+    ) {
+        match import_kind {
+            ImportKind::Path(path) => {
+                self.process_path_import(path, span, current_file_id);
+            }
+            ImportKind::ExternalModule(_) => {
+                todo!("importing from external modules is not supported yet")
+            }
+        }
+    }
+
+    fn process_path_import(&mut self, path: &PathBuf, span: &Span, current_file_id: SourceFileId) {
+        let source_module = self
+            .sources
+            .get_by_path(path)
+            .expect("this should be checked before collection of declarations");
+
+        let import_result =
+            self.symbol_table.import_all_from_module(source_module, current_file_id);
+
+        match import_result {
+            Ok(symbols) => {
+                debug!("Successfully imported symbols from module {:?}: {:?}", path, symbols);
+            }
+            Err(error) => {
+                self.handle_import_error(error, path, span, current_file_id);
+            }
+        }
+    }
+
+    fn handle_import_error(
+        &mut self,
+        error: SymbolTableError,
+        path: &PathBuf,
+        span: &Span,
+        file_id: SourceFileId,
+    ) {
+        let base_report = ReportBuilder::builder(
+            &format!("failed to import symbols from module: {:?}", error),
+            ReportKind::Error,
+        )
+        .label("while processing this import", span.clone());
+
+        match error {
+            SymbolTableError::ImportConflict(conflicts) => {
+                self.handle_import_conflicts(conflicts, path, base_report, file_id);
+            }
+            _ => {
+                self.reports.add(file_id, base_report);
+            }
+        }
+    }
+
+    fn handle_import_conflicts(
+        &mut self,
+        conflicts: Vec<ImportConflict>,
+        path: &PathBuf,
+        base_report: ReportBuilder<'reports>,
+        file_id: SourceFileId,
+    ) {
+        for conflict in conflicts {
+            let existing_symbol = self.symbol_table.get_symbol_unchecked(conflict.existing_id);
+            let new_symbol = self.symbol_table.get_symbol_unchecked(conflict.new_id);
+
+            let conflict_message = format!(
+                "import conflict while importing module {}",
+                path.display().to_string().dimmed().bold()
+            );
+
+            let conflict_details = format!(
+                "imported {} conflicts with local {}",
+                self.format_symbol_description(&new_symbol),
+                self.format_symbol_description(&existing_symbol)
+            );
+
+            let conflict_report = base_report
+                .clone()
+                .message(&conflict_message)
+                .label(&conflict_details, existing_symbol.source_location.unwrap_or(0..0));
+
+            self.reports.add(file_id, conflict_report);
+        }
+    }
+
+    fn format_symbol_description(&self, symbol: &Symbol) -> String {
+        format!("{} {}", symbol.kind.name(), resolve(&symbol.name)).dimmed().bold().to_string()
     }
 
     pub fn pop_scope(&mut self) {

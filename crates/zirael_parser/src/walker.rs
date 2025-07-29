@@ -29,7 +29,7 @@ pub trait AstWalker {
             ItemKind::Function(func) => self.walk_function(func),
             ItemKind::Class(class) => self.walk_class_declaration(class),
             ItemKind::Enum(enum_decl) => self.walk_enum_declaration(enum_decl),
-            ItemKind::Import(import) => self.walk_import_kind(import),
+            ItemKind::Import(import, _) => self.walk_import_kind(import),
         }
     }
 

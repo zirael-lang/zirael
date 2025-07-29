@@ -17,7 +17,7 @@ pub enum ItemKind {
     Function(Function),
     Class(ClassDeclaration),
     Enum(EnumDeclaration),
-    Import(ImportKind),
+    Import(ImportKind, Span),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

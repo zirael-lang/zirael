@@ -36,14 +36,15 @@ impl<'a> Parser<'a> {
         let path = current_file.parent().unwrap_or(&PathBuf::new()).join(string.clone());
 
         let kind = if path.is_file() && path.extension().is_some_and(|ext| ext == "zr") {
-            self.discover_queue.push((path.clone(), span));
+            self.discover_queue.push((path.clone(), span.clone()));
             ImportKind::Path(path)
         } else {
             let parts = string.split('/').map(get_or_intern).collect::<Vec<_>>();
             ImportKind::ExternalModule(parts)
         };
+        let span = span.start..self.prev_span().end;
 
-        (ItemKind::Import(kind), default_ident())
+        (ItemKind::Import(kind, span), default_ident())
     }
 
     pub fn parse_fn(&mut self) -> (ItemKind, Identifier) {

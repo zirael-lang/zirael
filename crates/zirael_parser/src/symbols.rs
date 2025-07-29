@@ -52,6 +52,7 @@ pub struct Symbol {
     pub source_location: Option<Span>,
     pub is_used: bool,
     pub declaration_order: usize,
+    pub imported_from: Option<ScopeId>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -61,6 +62,7 @@ pub struct Scope {
     pub symbols: HashMap<Identifier, SymbolId>,
     pub scope_type: ScopeType,
     pub depth: usize,
+    pub imported_modules: Vec<ScopeId>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -82,6 +84,17 @@ pub enum SymbolTableError {
     InvalidScope(ScopeId),
     ScopeNotFound(ScopeId),
     CircularScopeReference,
+    ImportConflict(Vec<ImportConflict>),
+    InvalidImportTarget(ScopeId),
+    CannotImportFromSelf,
+    ModuleNotFound(SourceFileId),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ImportConflict {
+    pub name: Identifier,
+    pub existing_id: SymbolId,
+    pub new_id: SymbolId,
 }
 
 #[derive(Debug)]
@@ -108,6 +121,7 @@ impl Default for SymbolTableImpl {
             symbols: HashMap::new(),
             scope_type: ScopeType::Global,
             depth: 0,
+            imported_modules: Vec::new(),
         };
 
         let global_scope_id = scopes.alloc(global_scope);
@@ -160,6 +174,7 @@ impl SymbolTable {
                 source_location: span,
                 is_used: false,
                 declaration_order: table.declaration_counter,
+                imported_from: None,
             };
 
             table.declaration_counter += 1;
@@ -172,6 +187,92 @@ impl SymbolTable {
             }
 
             Ok(symbol_id)
+        })
+    }
+
+    pub fn import_all_from_module(
+        &self,
+        source_file: SourceFileId,
+        target_file: SourceFileId,
+    ) -> Result<Vec<SymbolId>, SymbolTableError> {
+        self.write(|table| {
+            let source_module = table
+                .find_module_by_source_id(source_file)
+                .ok_or(SymbolTableError::ModuleNotFound(source_file))?;
+            let target_module = table
+                .find_module_by_source_id(target_file)
+                .ok_or(SymbolTableError::ModuleNotFound(target_file))?;
+
+            if source_file == target_file {
+                return Err(SymbolTableError::CannotImportFromSelf);
+            }
+
+            let mut imported_symbols = Vec::new();
+            let mut conflicts = Vec::new();
+
+            let source_symbols = table.get_originally_declared_symbols(source_module);
+
+            for (symbol_name, new_id) in source_symbols {
+                if let Some(&existing_id) = table.name_lookup.get(&(symbol_name, target_module)) {
+                    conflicts.push(ImportConflict { name: symbol_name, existing_id, new_id });
+                    continue;
+                }
+
+                let imported_symbol_id = table.create_imported_symbol(
+                    new_id,
+                    symbol_name,
+                    target_module,
+                    source_module,
+                )?;
+
+                imported_symbols.push(imported_symbol_id);
+            }
+
+            table.record_module_import(target_module, source_module);
+
+            if !conflicts.is_empty() {
+                return Err(SymbolTableError::ImportConflict(conflicts));
+            }
+
+            Ok(imported_symbols)
+        })
+    }
+
+    pub fn get_imported_modules(&self, scope: ScopeId) -> Vec<ScopeId> {
+        self.read(|table| {
+            table.scopes.get(scope).map(|s| s.imported_modules.clone()).unwrap_or_default()
+        })
+    }
+
+    pub fn get_import_source(&self, symbol_id: SymbolId) -> Option<ScopeId> {
+        self.read(|table| table.symbols.get(symbol_id).and_then(|symbol| symbol.imported_from))
+    }
+
+    pub fn get_imported_symbols(&self, scope: ScopeId) -> Vec<(SymbolId, ScopeId)> {
+        self.read(|table| {
+            table
+                .scopes
+                .get(scope)
+                .map(|scope| {
+                    scope
+                        .symbols
+                        .values()
+                        .filter_map(|&symbol_id| {
+                            table.symbols.get(symbol_id).and_then(|symbol| {
+                                symbol.imported_from.map(|source| (symbol_id, source))
+                            })
+                        })
+                        .collect()
+                })
+                .unwrap_or_default()
+        })
+    }
+
+    pub fn find_module_by_source(&self, source_file: SourceFileId) -> Option<ScopeId> {
+        self.read(|table| {
+            table.scopes.iter()
+                .find(|(_, scope)| matches!(scope.scope_type, ScopeType::Module(id) if id == source_file))
+                .map(|(id, _)| id)
         })
     }
 
@@ -199,6 +300,10 @@ impl SymbolTable {
         self.read(|table| table.symbols.get(id).cloned())
     }
 
+    pub fn get_symbol_unchecked(&self, id: SymbolId) -> Symbol {
+        self.read(|table| table.symbols.get(id).cloned().unwrap())
+    }
+
     pub fn mark_used(&self, id: SymbolId) -> Result<(), SymbolTableError> {
         self.write(|table| {
             if let Some(symbol) = table.symbols.get_mut(id) {
@@ -224,6 +329,7 @@ impl SymbolTable {
                 symbols: HashMap::new(),
                 scope_type,
                 depth: parent_depth + 1,
+                imported_modules: Vec::new(),
             };
 
             let scope_id = table.scopes.alloc(new_scope);
@@ -380,9 +486,95 @@ impl SymbolTable {
             *table = SymbolTableImpl::default();
         })
     }
+
+    pub fn insert_temporary(
+        &self,
+        ty: Type,
+        lifetime: TemporaryLifetime,
+        span: Option<Span>,
+    ) -> Result<SymbolId, SymbolTableError> {
+        let temp_name = self.write(|table| {
+            let temp_count = table
+                .symbols
+                .iter()
+                .filter(|(_, s)| matches!(s.kind, SymbolKind::Temporary { .. }))
+                .count();
+            get_or_intern(&format!("__temp_{}", temp_count))
+        });
+
+        let kind = SymbolKind::Temporary { ty, lifetime };
+        self.insert(temp_name, kind, span)
+    }
 }
 
 impl SymbolTableImpl {
+    fn find_module_by_source_id(&self, source_file: SourceFileId) -> Option<ScopeId> {
+        self.scopes
+            .iter()
+            .find(
+                |(_, scope)| matches!(scope.scope_type, ScopeType::Module(id) if id == source_file),
+            )
+            .map(|(id, _)| id)
+    }
+
+    fn get_originally_declared_symbols(&self, module_id: ScopeId) -> Vec<(Identifier, SymbolId)> {
+        let Some(module_scope) = self.scopes.get(module_id) else {
+            return Vec::new();
+        };
+
+        module_scope
+            .symbols
+            .iter()
+            .filter_map(|(&name, &symbol_id)| {
+                let symbol = self.symbols.get(symbol_id)?;
+                if symbol.imported_from.is_none() { Some((name, symbol_id)) } else { None }
+            })
+            .collect()
+    }
+
+    fn create_imported_symbol(
+        &mut self,
+        source_symbol_id: SymbolId,
+        symbol_name: Identifier,
+        target_module: ScopeId,
+        source_module: ScopeId,
+    ) -> Result<SymbolId, SymbolTableError> {
+        let source_symbol = self
+            .symbols
+            .get(source_symbol_id)
+            .ok_or(SymbolTableError::SymbolNotFound { name: symbol_name, scope: source_module })?
+            .clone();
+
+        let imported_symbol = Symbol {
+            name: symbol_name,
+            kind: source_symbol.kind,
+            scope: target_module,
+            source_location: source_symbol.source_location,
+            is_used: false,
+            declaration_order: self.declaration_counter,
+            imported_from: Some(source_module),
+        };
+
+        self.declaration_counter += 1;
+        let imported_symbol_id = self.symbols.alloc(imported_symbol);
+
+        self.name_lookup.insert((symbol_name, target_module), imported_symbol_id);
+
+        if let Some(target_scope) = self.scopes.get_mut(target_module) {
+            target_scope.symbols.insert(symbol_name, imported_symbol_id);
+        }
+
+        Ok(imported_symbol_id)
+    }
+
+    fn record_module_import(&mut self, target_module: ScopeId, source_module: ScopeId) {
+        if let Some(target_scope) = self.scopes.get_mut(target_module) {
+            if !target_scope.imported_modules.contains(&source_module) {
+                target_scope.imported_modules.push(source_module);
+            }
+        }
+    }
+
     fn needs_mangling(&self, id: SymbolId) -> bool {
         if let Some(symbol) = self.symbols.get(id) {
             let name = symbol.name;
@@ -406,58 +598,5 @@ impl SymbolTableImpl {
         } else {
             false
         }
-    }
-}
-
-impl SymbolTable {
-    pub fn insert_variable(
-        &self,
-        name: Identifier,
-        ty: Type,
-        span: Option<Span>,
-    ) -> Result<SymbolId, SymbolTableError> {
-        let kind = SymbolKind::Variable { ty };
-        self.insert(name, kind, span)
-    }
-
-    pub fn insert_function(
-        &self,
-        name: Identifier,
-        signature: FunctionSignature,
-        modifiers: FunctionModifiers,
-        span: Option<Span>,
-    ) -> Result<SymbolId, SymbolTableError> {
-        let kind = SymbolKind::Function { signature, modifiers };
-        self.insert(name, kind, span)
-    }
-
-    pub fn insert_parameter(
-        &self,
-        name: Identifier,
-        ty: Type,
-        is_variadic: bool,
-        span: Option<Span>,
-    ) -> Result<SymbolId, SymbolTableError> {
-        let kind = SymbolKind::Parameter { ty, is_variadic, default_value: None };
-        self.insert(name, kind, span)
-    }
-
-    pub fn insert_temporary(
-        &self,
-        ty: Type,
-        lifetime: TemporaryLifetime,
-        span: Option<Span>,
-    ) -> Result<SymbolId, SymbolTableError> {
-        let temp_name = self.write(|table| {
-            let temp_count = table
-                .symbols
-                .iter()
-                .filter(|(_, s)| matches!(s.kind, SymbolKind::Temporary { .. }))
-                .count();
-            get_or_intern(&format!("__temp_{}", temp_count))
-        });
-
-        let kind = SymbolKind::Temporary { ty, lifetime };
-        self.insert(temp_name, kind, span)
     }
 }

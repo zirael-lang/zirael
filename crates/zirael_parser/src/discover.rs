@@ -131,7 +131,7 @@ fn extract_external_dependencies(ast: &Ast) -> Vec<Vec<Identifier>> {
     let mut external_deps = Vec::new();
 
     for item in &ast.items {
-        if let ItemKind::Import(ImportKind::ExternalModule(parts)) = &item.kind {
+        if let ItemKind::Import(ImportKind::ExternalModule(parts), _) = &item.kind {
             external_deps.push(parts.clone());
         }
     }

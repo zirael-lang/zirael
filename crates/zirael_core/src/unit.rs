@@ -20,8 +20,7 @@ impl<'ctx> CompilationUnit<'ctx> {
         let result = determine_lexed_modules(self.entry_point, sources, reports);
         self.module_graph = result.dependency_graph;
 
-        DeclarationCollection::new(symbols, reports).collect(result.modules);
-        println!("{:#?}", symbols);
+        DeclarationCollection::new(symbols, reports, sources).collect(result.modules);
 
         reports.print(sources);
     }

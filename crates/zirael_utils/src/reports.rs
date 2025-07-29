@@ -107,6 +107,11 @@ impl<'a> ReportBuilder<'a> {
         }
     }
 
+    pub fn message(mut self, message: impl Into<String>) -> Self {
+        self.message = message.into();
+        self
+    }
+
     pub fn build(self, path: &str) -> Report<'a> {
         let mut report = Report::build(self.custom_kind(), (path.to_string(), 0usize..0usize))
             .with_message(self.message);
