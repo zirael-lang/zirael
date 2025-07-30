@@ -533,7 +533,7 @@ impl SymbolTable {
     pub fn find_similar_symbol(
         &self,
         name: &Identifier,
-        predicate: fn(&Symbol) -> bool,
+        predicate: impl Fn(&Symbol) -> bool,
     ) -> Option<SymbolId> {
         self.read(|table| {
             let mut current_scope = Some(table.current_scope);
