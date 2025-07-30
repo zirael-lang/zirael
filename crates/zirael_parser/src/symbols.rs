@@ -1,12 +1,13 @@
 use crate::{
-    Expr,
+    AstWalker, Expr, LexedModule, ModuleId,
     ast::{
         ClassDeclaration, ClassField, EnumDeclaration, EnumVariant, Function, FunctionModifiers,
         FunctionSignature, GenericParameter, Parameter, ReturnType, Type,
     },
 };
 use id_arena::{Arena, Id};
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, ops::Range, sync::Arc};
+use strsim::levenshtein;
 use zirael_utils::prelude::*;
 
 pub type SymbolId = Id<Symbol>;
@@ -276,12 +277,12 @@ impl SymbolTable {
         })
     }
 
-    pub fn lookup(&self, name: Identifier) -> Option<SymbolId> {
+    pub fn lookup(&self, name: &Identifier) -> Option<SymbolId> {
         self.read(|table| {
             let mut current_scope = Some(table.current_scope);
 
             while let Some(scope_id) = current_scope {
-                if let Some(&symbol_id) = table.name_lookup.get(&(name, scope_id)) {
+                if let Some(&symbol_id) = table.name_lookup.get(&(*name, scope_id)) {
                     return Some(symbol_id);
                 }
 
@@ -292,6 +293,11 @@ impl SymbolTable {
         })
     }
 
+    pub fn lookup_symbol(&self, name: &Identifier) -> Option<Symbol> {
+        let symbol_id = self.lookup(name)?;
+        self.get_symbol(symbol_id)
+    }
+
     pub fn lookup_in_scope(&self, name: Identifier, scope: ScopeId) -> Option<SymbolId> {
         self.read(|table| table.name_lookup.get(&(name, scope)).copied())
     }
@@ -300,8 +306,8 @@ impl SymbolTable {
         self.read(|table| table.symbols.get(id).cloned())
     }
 
-    pub fn get_symbol_unchecked(&self, id: SymbolId) -> Symbol {
-        self.read(|table| table.symbols.get(id).cloned().unwrap())
+    pub fn get_symbol_unchecked(&self, id: &SymbolId) -> Symbol {
+        self.read(|table| table.symbols.get(*id).cloned().unwrap())
     }
 
     pub fn mark_used(&self, id: SymbolId) -> Result<(), SymbolTableError> {
@@ -320,6 +326,20 @@ impl SymbolTable {
 
     pub fn push_scope(&self, scope_type: ScopeType) -> ScopeId {
         self.write(|table| {
+            let current_scope = table.current_scope;
+            if let Some(existing_child) = table.scopes.get(current_scope).and_then(|scope| {
+                scope.children.iter().find(|&&child_id| {
+                    table
+                        .scopes
+                        .get(child_id)
+                        .map(|child| child.scope_type == scope_type)
+                        .unwrap_or(false)
+                })
+            }) {
+                table.current_scope = *existing_child;
+                return *existing_child;
+            }
+
             let parent_id = table.current_scope;
             let parent_depth = table.scopes.get(parent_id).map(|s| s.depth).unwrap_or(0);
 
@@ -370,6 +390,10 @@ impl SymbolTable {
 
     pub fn get_scope(&self, id: ScopeId) -> Option<Scope> {
         self.read(|table| table.scopes.get(id).cloned())
+    }
+
+    pub fn get_scope_unchecked(&self, id: ScopeId) -> Scope {
+        self.read(|table| table.scopes.get(id).cloned().unwrap())
     }
 
     pub fn get_symbols_in_scope(&self, scope_id: ScopeId) -> Vec<(Identifier, SymbolId)> {
@@ -505,6 +529,37 @@ impl SymbolTable {
         let kind = SymbolKind::Temporary { ty, lifetime };
         self.insert(temp_name, kind, span)
     }
+
+    pub fn find_similar_symbol(
+        &self,
+        name: &Identifier,
+        predicate: fn(&Symbol) -> bool,
+    ) -> Option<SymbolId> {
+        self.read(|table| {
+            let mut current_scope = Some(table.current_scope);
+
+            while let Some(scope_id) = current_scope {
+                let symbols_in_scope = self.get_symbols_in_scope(scope_id);
+
+                if let Some(symbol_id) =
+                    symbols_in_scope.iter().find_map(|(symbol_name, symbol_id)| {
+                        let sym = self.get_symbol_unchecked(symbol_id);
+
+                        let is_similar = levenshtein(&resolve(name), &resolve(symbol_name)) <= 2
+                            && predicate(&sym);
+
+                        if is_similar { Some(*symbol_id) } else { None }
+                    })
+                {
+                    return Some(symbol_id);
+                }
+
+                current_scope = table.scopes.get(scope_id)?.parent;
+            }
+
+            None
+        })
+    }
 }
 
 impl SymbolTableImpl {
@@ -599,4 +654,76 @@ impl SymbolTableImpl {
             false
         }
     }
+}
+
+pub trait WalkerWithAst<'reports>: AstWalker {
+    fn symbol_table(&self) -> &SymbolTable;
+    fn reports(&self) -> &Reports<'reports>;
+    fn processed_file(&self) -> Option<SourceFileId>;
+    fn set_processed_file(&mut self, file_id: SourceFileId);
+
+    fn pop_scope(&mut self) {
+        if let Err(err) = self.symbol_table().pop_scope()
+            && let Some(file_id) = self.processed_file()
+        {
+            self.reports().add(
+                file_id,
+                ReportBuilder::builder(
+                    &format!("failed to pop a scope: {:?}", err),
+                    ReportKind::Error,
+                ),
+            )
+        }
+    }
+
+    fn walk(&mut self, modules: &mut Vec<LexedModule>) {
+        for module in modules {
+            let ModuleId::File(file_id) = module.id else {
+                continue;
+            };
+
+            self.symbol_table().push_scope(ScopeType::Module(file_id));
+            self.set_processed_file(file_id);
+            self.walk_ast(&mut module.ast);
+            self.pop_scope();
+        }
+    }
+
+    fn error(&mut self, message: &str, labels: Vec<(String, Range<usize>)>, notes: Vec<String>) {
+        if let Some(file_id) = self.processed_file() {
+            let mut report = ReportBuilder::builder(message, ReportKind::Error);
+            for note in notes {
+                report = report.note(&note);
+            }
+            for (msg, span) in labels {
+                report = report.label(&msg, span);
+            }
+            self.reports().add(file_id, report);
+        } else {
+            warn!("report outside of a file: {}", message);
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! impl_walker_with_ast {
+    ($struct_name:ident) => {
+        impl<'reports> WalkerWithAst<'reports> for $struct_name<'reports> {
+            fn symbol_table(&self) -> &SymbolTable {
+                &self.symbol_table
+            }
+
+            fn reports(&self) -> &Reports<'reports> {
+                &self.reports
+            }
+
+            fn processed_file(&self) -> Option<SourceFileId> {
+                self.processed_file
+            }
+
+            fn set_processed_file(&mut self, file_id: SourceFileId) {
+                self.processed_file = Some(file_id);
+            }
+        }
+    };
 }

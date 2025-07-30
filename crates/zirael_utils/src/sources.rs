@@ -23,8 +23,8 @@ impl SourceFile {
         &self.content
     }
 
-    pub fn path(&self) -> &PathBuf {
-        &self.path
+    pub fn path(&self) -> PathBuf {
+        self.path.clone()
     }
 }
 

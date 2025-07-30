@@ -1,9 +1,2 @@
-import "math.zr"
-
 fn divSafe(a: int, b: int): int {
-    var b = "dwa";
-}
-
-fn math(): int {
-
 }

@@ -1,4 +1,7 @@
-use crate::{passes::DeclarationCollection, prelude::*};
+use crate::{
+    passes::{DeclarationCollection, NameResolution},
+    prelude::*,
+};
 
 #[derive(Debug)]
 pub struct CompilationUnit<'ctx> {
@@ -17,10 +20,13 @@ impl<'ctx> CompilationUnit<'ctx> {
         let sources = self.context.sources();
         let symbols = self.context.symbols();
 
-        let result = determine_lexed_modules(self.entry_point, sources, reports);
+        let mut result = determine_lexed_modules(self.entry_point, sources, reports);
         self.module_graph = result.dependency_graph;
 
-        DeclarationCollection::new(symbols, reports, sources).collect(result.modules);
+        DeclarationCollection::new(symbols, reports, sources).collect(&mut result.modules);
+        NameResolution::new(symbols, reports, sources).walk(&mut result.modules);
+
+        println!("{:#?}", result.modules);
 
         reports.print(sources);
     }

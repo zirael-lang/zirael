@@ -2,6 +2,7 @@ use crate::{
     ScopeType, TokenKind,
     ast::{BinaryOp, Expr, ExprKind, Literal, UnaryOp},
     parser::Parser,
+    span::SpanUtils,
 };
 
 impl<'a> Parser<'a> {
@@ -10,6 +11,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_assignment(&mut self) -> Expr {
+        let start_span = self.peek_span();
         let expr = self.parse_logical_or();
 
         if let Some(token) = self.peek() {
@@ -17,7 +19,11 @@ impl<'a> Parser<'a> {
                 TokenKind::Equals => {
                     self.advance();
                     let right = self.parse_assignment();
-                    return Expr(ExprKind::Assign(Box::new(expr), Box::new(right)));
+                    let end_span = self.prev_span();
+                    return Expr::new(
+                        ExprKind::Assign(Box::new(expr), Box::new(right)),
+                        start_span.to(end_span),
+                    );
                 }
                 TokenKind::PlusEquals => Some(BinaryOp::Add),
                 TokenKind::MinusEquals => Some(BinaryOp::Subtract),
@@ -30,7 +36,11 @@ impl<'a> Parser<'a> {
             if let Some(op) = op {
                 self.advance();
                 let right = self.parse_assignment();
-                return Expr(ExprKind::AssignOp(Box::new(expr), op, Box::new(right)));
+                let end_span = self.prev_span();
+                return Expr::new(
+                    ExprKind::AssignOp(Box::new(expr), op, Box::new(right)),
+                    start_span.to(end_span),
+                );
             }
         }
 
@@ -86,6 +96,8 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_binary_expr(&mut self, min_precedence: u8) -> Expr {
+        let start_span = self.peek_span();
+
         let mut left = if min_precedence == 0 {
             self.parse_unary()
         } else {
@@ -100,7 +112,11 @@ impl<'a> Parser<'a> {
 
             self.advance();
             let right = self.parse_binary_expr(min_precedence);
-            left = Expr(ExprKind::Binary { left: Box::new(left), op, right: Box::new(right) });
+            let end_span = self.prev_span();
+            left = Expr::new(
+                ExprKind::Binary { left: Box::new(left), op, right: Box::new(right) },
+                start_span.to(end_span),
+            );
         }
 
         left
@@ -108,6 +124,7 @@ impl<'a> Parser<'a> {
 
     fn parse_unary(&mut self) -> Expr {
         if let Some(token) = self.peek() {
+            let start_span = self.peek_span();
             let unary_op = match &token.kind {
                 TokenKind::Minus => Some(UnaryOp::Minus),
                 TokenKind::LogicalNot => Some(UnaryOp::Not),
@@ -120,7 +137,11 @@ impl<'a> Parser<'a> {
             if let Some(op) = unary_op {
                 self.advance();
                 let expr = self.parse_unary();
-                return Expr(ExprKind::Unary(Box::new(op), Box::new(expr)));
+                let end_span = expr.span.clone();
+                return Expr::new(
+                    ExprKind::Unary(Box::new(op), Box::new(expr)),
+                    start_span.to(end_span),
+                );
             }
         }
 
@@ -128,6 +149,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_function_call(&mut self, callee: Expr) -> Expr {
+        let start_span = callee.span.clone();
         self.advance();
         let mut args = Vec::new();
 
@@ -147,10 +169,12 @@ impl<'a> Parser<'a> {
             self.error_at_current("expected ')' after function arguments");
         }
 
-        Expr(ExprKind::Call { callee: Box::new(callee), args })
+        let end_span = self.prev_span();
+        Expr::new(ExprKind::Call { callee: Box::new(callee), args }, start_span.to(end_span))
     }
 
     fn parse_field_access(&mut self, base: Expr) -> Expr {
+        let start_span = base.span.clone();
         let mut field_chain = vec![base];
 
         while self.match_token(TokenKind::Dot) {
@@ -159,7 +183,8 @@ impl<'a> Parser<'a> {
         }
 
         if field_chain.len() > 1 {
-            Expr(ExprKind::FieldAccess(field_chain))
+            let end_span = field_chain.last().unwrap().span.clone();
+            Expr::new(ExprKind::FieldAccess(field_chain), start_span.to(end_span))
         } else {
             field_chain.into_iter().next().unwrap()
         }
@@ -189,36 +214,44 @@ impl<'a> Parser<'a> {
 
     fn parse_primary(&mut self) -> Expr {
         if let Some(token) = self.peek() {
+            let span = self.peek_span();
+
             match &token.kind {
                 TokenKind::Integer(value) => {
                     let value = *value;
                     self.advance();
-                    Expr(ExprKind::Literal(Literal::Integer(value)))
+                    let span = self.prev_span();
+                    Expr::new(ExprKind::Literal(Literal::Integer(value)), span)
                 }
                 TokenKind::Float(value) => {
                     let value = *value;
                     self.advance();
-                    Expr(ExprKind::Literal(Literal::Float(value)))
+                    let span = self.prev_span();
+                    Expr::new(ExprKind::Literal(Literal::Float(value)), span)
                 }
                 TokenKind::String(value) => {
                     let value = value.clone();
                     self.advance();
-                    Expr(ExprKind::Literal(Literal::String(value)))
+                    let span = self.prev_span();
+                    Expr::new(ExprKind::Literal(Literal::String(value)), span)
                 }
                 TokenKind::Bool(value) => {
                     let value = *value;
                     self.advance();
-                    Expr(ExprKind::Literal(Literal::Bool(value)))
+                    let span = self.prev_span();
+                    Expr::new(ExprKind::Literal(Literal::Bool(value)), span)
                 }
 
                 TokenKind::Identifier(name) => {
                     let name = name.clone();
                     self.advance();
+                    let span = self.prev_span();
                     let identifier = zirael_utils::prelude::get_or_intern(&name);
-                    Expr(ExprKind::Identifier(identifier))
+                    Expr::new(ExprKind::Identifier(identifier, None), span)
                 }
 
                 TokenKind::ParenOpen => {
+                    let start_span = span;
                     self.advance();
                     let expr = self.parse_expr();
 
@@ -226,7 +259,8 @@ impl<'a> Parser<'a> {
                         self.error_at_current("expected ')' after expression");
                     }
 
-                    Expr(ExprKind::Paren(Box::new(expr)))
+                    let end_span = self.prev_span();
+                    Expr::new(ExprKind::Paren(Box::new(expr)), start_span.to(end_span))
                 }
 
                 TokenKind::BraceOpen => {
@@ -237,17 +271,20 @@ impl<'a> Parser<'a> {
                 _ => {
                     self.error_at_peek(format!("unexpected token in expression: {:?}", token.kind));
                     self.advance();
-                    Expr(ExprKind::couldnt_parse())
+                    let span = self.prev_span();
+                    Expr::new(ExprKind::couldnt_parse(), span)
                 }
             }
         } else {
             self.error_at_current("unexpected end of input in expression");
-            Expr(ExprKind::couldnt_parse())
+            let span = self.peek_span();
+            Expr::new(ExprKind::couldnt_parse(), span)
         }
     }
 
     /// The caller should have consumed the opening brace
     pub fn parse_block(&mut self) -> Expr {
+        let start_span = self.prev_span();
         let mut stmts = vec![];
 
         while !self.check(&TokenKind::BraceClose) && !self.is_at_end() {
@@ -258,6 +295,7 @@ impl<'a> Parser<'a> {
             self.error_at_current("expected '}' to close block");
         }
 
-        Expr(ExprKind::Block(stmts))
+        let end_span = self.prev_span();
+        Expr::new(ExprKind::Block(stmts), start_span.to(end_span))
     }
 }

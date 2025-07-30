@@ -5,6 +5,7 @@ use crate::{
         Parameter, ParameterKind, ReturnType,
     },
     parser::Parser,
+    span::SpanUtils,
 };
 use colored::Colorize;
 use convert_case::{Case, Casing};
@@ -42,7 +43,7 @@ impl<'a> Parser<'a> {
             let parts = string.split('/').map(get_or_intern).collect::<Vec<_>>();
             ImportKind::ExternalModule(parts)
         };
-        let span = span.start..self.prev_span().end;
+        let span = span.to(self.prev_span());
 
         (ItemKind::Import(kind, span), default_ident())
     }
@@ -82,6 +83,7 @@ impl<'a> Parser<'a> {
         } else {
             ReturnType::Default
         };
+        let span = span.to(self.prev_span());
 
         let body =
             if self.match_token(TokenKind::BraceOpen) { Some(self.parse_block()) } else { None };
@@ -98,7 +100,7 @@ impl<'a> Parser<'a> {
             },
             signature,
             body,
-            span: span.start..self.prev_span().end,
+            span,
         };
 
         (ItemKind::Function(function), name)
@@ -122,7 +124,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_parameters(&mut self) -> Vec<Parameter> {
-        let span_start = self.peek_span().end;
+        let span_start = self.peek_span();
         self.expect(TokenKind::ParenOpen);
         let mut params = vec![];
 
@@ -146,8 +148,7 @@ impl<'a> Parser<'a> {
             }
         }
         self.expect(TokenKind::ParenClose);
-        let span = span_start..self.prev_span().start;
-        self.validate_parameters(&params, span);
+        self.validate_parameters(&params, span_start.to(self.prev_span()));
 
         params
     }
@@ -215,13 +216,12 @@ impl<'a> Parser<'a> {
         let default_value =
             if self.match_token(TokenKind::Equals) { Some(self.parse_expr()) } else { None };
 
-        let span = span.start..self.prev_span().end;
         Some(Parameter {
             name,
             kind: if variadic { ParameterKind::Variadic } else { ParameterKind::Plain },
             ty,
             default_value,
-            span,
+            span: span.to(self.prev_span()),
         })
     }
 }

@@ -1,5 +1,5 @@
 use crate::prelude::{SourceFileId, Sources};
-use ariadne::{Color, Label, ReportKind, Source};
+use ariadne::{Color, Label, ReportKind, Source, sources};
 use log::error;
 use parking_lot::RwLock;
 use std::{collections::HashMap, ops::Range, path::PathBuf, process::exit, sync::Arc};
@@ -32,17 +32,24 @@ impl<'a> Reports<'a> {
         });
     }
 
-    pub fn print(&self, sources: &Sources) {
+    pub fn print(&self, srcs: &Sources) {
         self.read(|reports| {
+            let mut collected_sources = vec![];
+
+            for (_, source) in srcs.iter() {
+                collected_sources
+                    .push((source.path().display().to_string(), source.content().to_owned()));
+            }
+
             for (id, report) in &reports.reports {
-                let file = sources.get_unchecked(*id);
+                let file = srcs.get_unchecked(*id);
                 let path = file.path();
                 let path = &path.display().to_string();
                 let source = Source::from(file.content());
 
                 for report in report {
                     let report = report.clone().build(path);
-                    report.eprint((path.to_string(), source.clone())).unwrap();
+                    report.eprint(sources(collected_sources.clone())).unwrap();
                 }
             }
         });
@@ -50,6 +57,10 @@ impl<'a> Reports<'a> {
         if self.has_errors() {
             error!("exiting early due to compiler errors");
             exit(1);
+        } else {
+            self.write(|reports| {
+                reports.reports.clear();
+            })
         }
     }
 
@@ -68,6 +79,7 @@ pub struct LocalLabel {
     msg: String,
     span: Range<usize>,
     color: Color,
+    custom_file: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone)]
@@ -93,7 +105,21 @@ impl<'a> ReportBuilder<'a> {
     }
 
     pub fn label(mut self, msg: &str, span: Range<usize>) -> Self {
-        let label = LocalLabel { msg: msg.to_owned(), span, color: self.label_color() };
+        let label =
+            LocalLabel { msg: msg.to_owned(), span, color: self.label_color(), custom_file: None };
+        self.labels.push(label);
+        self
+    }
+
+    pub fn label_custom(
+        mut self,
+        msg: &str,
+        span: Range<usize>,
+        file: &PathBuf,
+        color: Color,
+    ) -> Self {
+        let label =
+            LocalLabel { msg: msg.to_owned(), span, color, custom_file: Some(file.to_owned()) };
         self.labels.push(label);
         self
     }
@@ -124,7 +150,14 @@ impl<'a> ReportBuilder<'a> {
         let labels = self
             .labels
             .into_iter()
-            .map(|l| Label::new((path.to_string(), l.span)).with_message(l.msg).with_color(l.color))
+            .map(|l| {
+                let path = l
+                    .custom_file
+                    .map(|p| p.display().to_string())
+                    .unwrap_or_else(|| path.to_string());
+
+                Label::new((path, l.span)).with_message(l.msg).with_color(l.color)
+            })
             .collect::<Vec<_>>();
 
         report = report.with_labels(labels);

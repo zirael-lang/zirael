@@ -1,9 +1,9 @@
-use crate::prelude::{ReportKind, debug};
+use crate::prelude::{ReportKind, WalkerWithAst, debug};
 use std::{any::Any, env::var, fmt::format, path::PathBuf};
 use zirael_parser::{
     Ast, AstWalker, Dependency, DependencyGraph, Function, ImportConflict, ImportKind, ItemKind,
     LexedModule, ModuleId, Parameter, ParameterKind, ScopeType, Symbol, SymbolKind, SymbolTable,
-    SymbolTableError, VarDecl,
+    SymbolTableError, VarDecl, impl_walker_with_ast,
 };
 use zirael_utils::{
     prelude::{Colorize, Identifier, ReportBuilder, Reports, Sources, Span, resolve},
@@ -27,18 +27,8 @@ impl<'reports> DeclarationCollection<'reports> {
         }
     }
 
-    pub fn collect(&mut self, modules: Vec<LexedModule>) {
-        for module in &modules {
-            let ModuleId::File(file_id) = module.id else {
-                continue;
-            };
-
-            self.symbol_table.push_scope(ScopeType::Module(file_id));
-            self.processed_file = Some(file_id);
-            self.walk_ast(&module.ast);
-            self.pop_scope();
-        }
-
+    pub fn collect(&mut self, modules: &mut Vec<LexedModule>) {
+        self.walk(modules);
         for module in modules {
             let ModuleId::File(file_id) = module.id else {
                 continue;
@@ -135,8 +125,8 @@ impl<'reports> DeclarationCollection<'reports> {
         file_id: SourceFileId,
     ) {
         for conflict in conflicts {
-            let existing_symbol = self.symbol_table.get_symbol_unchecked(conflict.existing_id);
-            let new_symbol = self.symbol_table.get_symbol_unchecked(conflict.new_id);
+            let existing_symbol = self.symbol_table.get_symbol_unchecked(&conflict.existing_id);
+            let new_symbol = self.symbol_table.get_symbol_unchecked(&conflict.new_id);
 
             let conflict_message = format!(
                 "import conflict while importing module {}",
@@ -160,20 +150,6 @@ impl<'reports> DeclarationCollection<'reports> {
 
     fn format_symbol_description(&self, symbol: &Symbol) -> String {
         format!("{} {}", symbol.kind.name(), resolve(&symbol.name)).dimmed().bold().to_string()
-    }
-
-    pub fn pop_scope(&mut self) {
-        if let Err(err) = self.symbol_table.pop_scope()
-            && let Some(file_id) = self.processed_file
-        {
-            self.reports.add(
-                file_id,
-                ReportBuilder::builder(
-                    &format!("failed to pop a scope: {:?}", err),
-                    ReportKind::Error,
-                ),
-            )
-        }
     }
 
     pub fn register_symbol(&mut self, name: Identifier, kind: SymbolKind, span: Span) {
@@ -224,9 +200,10 @@ impl<'reports> DeclarationCollection<'reports> {
         }
     }
 }
+impl_walker_with_ast!(DeclarationCollection);
 
 impl AstWalker for DeclarationCollection<'_> {
-    fn walk_function(&mut self, func: &Function) {
+    fn walk_function(&mut self, func: &mut Function) {
         self.register_symbol(
             func.name,
             SymbolKind::Function {
@@ -238,18 +215,18 @@ impl AstWalker for DeclarationCollection<'_> {
 
         self.symbol_table.push_scope(ScopeType::Function(func.name));
 
-        self.walk_identifier(&func.name);
-        self.walk_function_modifiers(&func.modifiers);
-        self.walk_function_signature(&func.signature);
+        self.walk_identifier(&mut func.name);
+        self.walk_function_modifiers(&mut func.modifiers);
+        self.walk_function_signature(&mut func.signature);
 
-        if let Some(body) = &func.body {
+        if let Some(body) = &mut func.body {
             self.walk_expr(body);
         }
 
         self.pop_scope();
     }
 
-    fn visit_parameter(&mut self, param: &Parameter) {
+    fn visit_parameter(&mut self, param: &mut Parameter) {
         let param = param.clone();
         self.register_symbol(
             param.name,
@@ -262,7 +239,7 @@ impl AstWalker for DeclarationCollection<'_> {
         );
     }
 
-    fn visit_var_decl(&mut self, var_decl: &VarDecl) {
+    fn visit_var_decl(&mut self, var_decl: &mut VarDecl) {
         let var = var_decl.clone();
         self.register_symbol(var.name, SymbolKind::Variable { ty: var.ty }, var.span)
     }

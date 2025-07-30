@@ -4,6 +4,7 @@ use crate::{
     parser::Parser,
 };
 use zirael_utils::prelude::*;
+use crate::span::SpanUtils;
 
 impl<'a> Parser<'a> {
     pub fn parse_stmt(&mut self) -> Stmt {
@@ -26,7 +27,7 @@ impl<'a> Parser<'a> {
                 name: identifier,
                 value,
                 ty,
-                span: span_start.start..span_end.end,
+                span: span_start.to(span_end),
             }))
         } else {
             Stmt(StmtKind::Expr(self.parse_expr()))
