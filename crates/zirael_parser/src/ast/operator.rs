@@ -10,6 +10,8 @@ pub enum UnaryOp {
     Deref,
     /// `&x`
     Ref,
+    /// `box x`
+    Box,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

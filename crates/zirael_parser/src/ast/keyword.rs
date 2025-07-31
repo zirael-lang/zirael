@@ -11,6 +11,7 @@ pub enum Keyword {
     Enum,
     Import,
     Var,
+    Box,
 
     Extern,
     Const,
@@ -39,6 +40,7 @@ impl Keyword {
         Self::Enum,
         Self::Import,
         Self::Var,
+        Self::Box,
         Self::Extern,
         Self::Const,
         Self::Async,
@@ -58,6 +60,7 @@ impl Keyword {
             Self::Enum => "enum",
             Self::Import => "import",
             Self::Var => "var",
+            Self::Box => "box",
             Self::Extern => "extern",
             Self::Const => "const",
             Self::Async => "async",

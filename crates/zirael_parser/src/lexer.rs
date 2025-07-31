@@ -30,6 +30,7 @@ pub enum TokenKind {
     #[token("char", |_| Keyword::Char)]
     #[token("void", |_| Keyword::Void)]
     #[token("mut", |_| Keyword::Mut)]
+    #[token("box", |_| Keyword::Box)]
     Keyword(Keyword),
 
     // Brackets and braces

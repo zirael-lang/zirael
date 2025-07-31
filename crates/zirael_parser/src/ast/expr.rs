@@ -21,6 +21,7 @@ pub enum ExprKind {
     Paren(Box<Expr>),
     Call { callee: Box<Expr>, args: Vec<Expr> },
     FieldAccess(Vec<Expr>),
+    Box(Box<Expr>),
     CouldntParse(CouldntParse),
 }
 

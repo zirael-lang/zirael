@@ -154,7 +154,6 @@ impl AstWalker for NameResolution<'_> {
     fn walk_function(&mut self, func: &mut Function) {
         self.symbol_table.push_scope(ScopeType::Function(func.name));
 
-        self.walk_identifier(&mut func.name);
         self.walk_function_modifiers(&mut func.modifiers);
         self.walk_function_signature(&mut func.signature);
 
@@ -174,6 +173,12 @@ impl AstWalker for NameResolution<'_> {
 
         if let Some(id) = self.resolve_identifier(ident, span, ExpectedSymbol::Function) {
             *ident_sym_id = Some(id);
+        }
+    }
+
+    fn visit_identifier(&mut self, id: &mut Identifier, sym_id: &mut Option<SymbolId>, span: Span) {
+        if let Some(id) = self.resolve_identifier(id, span, ExpectedSymbol::Value) {
+            *sym_id = Some(id);
         }
     }
 }

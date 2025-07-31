@@ -215,7 +215,6 @@ impl AstWalker for DeclarationCollection<'_> {
 
         self.symbol_table.push_scope(ScopeType::Function(func.name));
 
-        self.walk_identifier(&mut func.name);
         self.walk_function_modifiers(&mut func.modifiers);
         self.walk_function_signature(&mut func.signature);
 

@@ -2,9 +2,9 @@ use crate::{
     SymbolTableError, TokenKind,
     ast::{Keyword, Stmt, StmtKind, Type, VarDecl},
     parser::Parser,
+    span::SpanUtils,
 };
 use zirael_utils::prelude::*;
-use crate::span::SpanUtils;
 
 impl<'a> Parser<'a> {
     pub fn parse_stmt(&mut self) -> Stmt {
@@ -30,7 +30,9 @@ impl<'a> Parser<'a> {
                 span: span_start.to(span_end),
             }))
         } else {
-            Stmt(StmtKind::Expr(self.parse_expr()))
+            let expr = self.parse_expr();
+            self.match_token(TokenKind::Semicolon);
+            Stmt(StmtKind::Expr(expr))
         }
     }
 }

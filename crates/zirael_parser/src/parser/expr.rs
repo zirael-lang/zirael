@@ -1,5 +1,5 @@
 use crate::{
-    ScopeType, TokenKind,
+    Keyword, ScopeType, TokenKind,
     ast::{BinaryOp, Expr, ExprKind, Literal, UnaryOp},
     parser::Parser,
     span::SpanUtils,
@@ -53,66 +53,45 @@ impl<'a> Parser<'a> {
 
     fn get_binary_op_precedence(&self, token: &TokenKind) -> Option<(BinaryOp, u8)> {
         match token {
-            // Precedence 1: Logical OR
             TokenKind::LogicalOr => Some((BinaryOp::LogicalOr, 1)),
-
-            // Precedence 2: Logical AND
             TokenKind::LogicalAnd => Some((BinaryOp::LogicalAnd, 2)),
-
-            // Precedence 3: Bitwise OR
             TokenKind::BitwiseOr => Some((BinaryOp::BitwiseOr, 3)),
-
-            // Precedence 4: Bitwise XOR
             TokenKind::BitwiseXor => Some((BinaryOp::BitwiseXor, 4)),
-
-            // Precedence 5: Bitwise AND
             TokenKind::BitwiseAnd => Some((BinaryOp::BitwiseAnd, 5)),
-
-            // Precedence 6: Equality
             TokenKind::EqualsEquals => Some((BinaryOp::Equal, 6)),
             TokenKind::NotEquals => Some((BinaryOp::NotEqual, 6)),
-
-            // Precedence 7: Comparison
             TokenKind::LessThan => Some((BinaryOp::LessThan, 7)),
             TokenKind::LessThanOrEqual => Some((BinaryOp::LessThanOrEqual, 7)),
             TokenKind::GreaterThan => Some((BinaryOp::GreaterThan, 7)),
             TokenKind::GreaterThanOrEqual => Some((BinaryOp::GreaterThanOrEqual, 7)),
-
-            // Precedence 8: Shift
             TokenKind::LeftShift => Some((BinaryOp::LeftShift, 8)),
             TokenKind::RightShift => Some((BinaryOp::RightShift, 8)),
-
-            // Precedence 9: Term
             TokenKind::Plus => Some((BinaryOp::Add, 9)),
             TokenKind::Minus => Some((BinaryOp::Subtract, 9)),
-
-            // Precedence 10: Factor
             TokenKind::Multiply => Some((BinaryOp::Multiply, 10)),
             TokenKind::Divide => Some((BinaryOp::Divide, 10)),
             TokenKind::Modulo => Some((BinaryOp::Modulo, 10)),
-
             _ => None,
         }
     }
 
     fn parse_binary_expr(&mut self, min_precedence: u8) -> Expr {
-        let start_span = self.peek_span();
-
-        let mut left = if min_precedence == 0 {
+        let mut left = if min_precedence <= 10 {
             self.parse_unary()
         } else {
-            self.parse_binary_expr(min_precedence - 1)
+            return self.parse_unary();
         };
 
         while let Some(token) = self.peek() {
             let (op, precedence) = match self.get_binary_op_precedence(&token.kind) {
-                Some((op, prec)) if prec == min_precedence => (op, prec),
+                Some((op, prec)) if prec >= min_precedence => (op, prec),
                 _ => break,
             };
 
+            let start_span = left.span.clone();
             self.advance();
-            let right = self.parse_binary_expr(min_precedence);
-            let end_span = self.prev_span();
+            let right = self.parse_binary_expr(precedence + 1);
+            let end_span = right.span.clone();
             left = Expr::new(
                 ExprKind::Binary { left: Box::new(left), op, right: Box::new(right) },
                 start_span.to(end_span),
@@ -131,6 +110,7 @@ impl<'a> Parser<'a> {
                 TokenKind::BitwiseNot => Some(UnaryOp::BitwiseNot),
                 TokenKind::Multiply => Some(UnaryOp::Deref),
                 TokenKind::BitwiseAnd => Some(UnaryOp::Ref),
+                TokenKind::Keyword(Keyword::Box) => Some(UnaryOp::Box),
                 _ => None,
             };
 
@@ -282,13 +262,13 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// The caller should have consumed the opening brace
     pub fn parse_block(&mut self) -> Expr {
         let start_span = self.prev_span();
         let mut stmts = vec![];
 
         while !self.check(&TokenKind::BraceClose) && !self.is_at_end() {
-            stmts.push(self.parse_stmt());
+            let stmt = self.parse_stmt();
+            stmts.push(stmt);
         }
 
         if !self.match_token(TokenKind::BraceClose) {

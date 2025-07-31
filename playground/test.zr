@@ -1,6 +1,30 @@
 import "div.zr"
 
+fn print() {}
+
 fn main() {
-    var x = "";
-    var result = divSafe(10, 2);
+    // Stack value
+    var x = 5;
+
+    // Heap-allocated value
+    var y = box 10;
+
+    // Move ownership
+    var z = y;
+    // y is now invalid
+
+    // Reference to a heap variable
+    var a = box 100;
+    var r = &a;
+    *r = 200;
+
+    // Can't use 'a' directly now (would be compile error)
+    print(*r);
+
+    // 'r' goes out of scope → 'a' usable again (optional)
+
+    // Mixing stack + heap
+    var n = 3;
+    var boxedN = box (n * 2);
+    print(*boxedN);
 }

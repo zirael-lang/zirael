@@ -1,8 +1,11 @@
-use crate::ast::{
-    Abi, Ast, Attribute, BinaryOp, ClassDeclaration, ClassField, EnumDeclaration, EnumVariant,
-    EnumVariantData, Expr, ExprKind, Function, FunctionModifiers, FunctionSignature, GenericArg,
-    GenericParameter, ImportKind, Item, ItemKind, Literal, Parameter, ParameterKind, ReturnType,
-    Stmt, StmtKind, TraitBound, Type, UnaryOp, VarDecl,
+use crate::{
+    SymbolId,
+    ast::{
+        Abi, Ast, Attribute, BinaryOp, ClassDeclaration, ClassField, EnumDeclaration, EnumVariant,
+        EnumVariantData, Expr, ExprKind, Function, FunctionModifiers, FunctionSignature,
+        GenericArg, GenericParameter, ImportKind, Item, ItemKind, Literal, Parameter,
+        ParameterKind, ReturnType, Stmt, StmtKind, TraitBound, Type, UnaryOp, VarDecl,
+    },
 };
 use zirael_utils::prelude::*;
 
@@ -20,7 +23,6 @@ pub trait AstWalker {
             self.walk_attribute(attr);
         }
 
-        self.walk_identifier(&mut item.name);
         self.walk_item_kind(&mut item.kind);
     }
 
@@ -37,17 +39,12 @@ pub trait AstWalker {
         self.visit_import_kind(import);
         match import {
             ImportKind::Path(_) => {}
-            ImportKind::ExternalModule(identifiers) => {
-                for id in identifiers {
-                    self.walk_identifier(id);
-                }
-            }
+            ImportKind::ExternalModule(identifiers) => {}
         }
     }
 
     fn walk_function(&mut self, func: &mut Function) {
         self.visit_function(func);
-        self.walk_identifier(&mut func.name);
         self.walk_function_modifiers(&mut func.modifiers);
         self.walk_function_signature(&mut func.signature);
 
@@ -83,7 +80,6 @@ pub trait AstWalker {
 
     fn walk_parameter(&mut self, param: &mut Parameter) {
         self.visit_parameter(param);
-        self.walk_identifier(&mut param.name);
         self.walk_type(&mut param.ty);
         self.walk_parameter_kind(&mut param.kind);
 
@@ -98,7 +94,6 @@ pub trait AstWalker {
 
     fn walk_attribute(&mut self, attr: &mut Attribute) {
         self.visit_attribute(attr);
-        self.walk_identifier(&mut attr.name);
 
         if let Some(args) = &mut attr.args {
             for arg in args {
@@ -109,7 +104,6 @@ pub trait AstWalker {
 
     fn walk_class_declaration(&mut self, class: &mut ClassDeclaration) {
         self.visit_class_declaration(class);
-        self.walk_identifier(&mut class.name);
 
         for generic in &mut class.generics {
             self.walk_generic_parameter(generic);
@@ -122,7 +116,6 @@ pub trait AstWalker {
 
     fn walk_class_field(&mut self, field: &mut ClassField) {
         self.visit_class_field(field);
-        self.walk_identifier(&mut field.name);
         self.walk_type(&mut field.field_type);
 
         for attr in &mut field.attributes {
@@ -132,7 +125,6 @@ pub trait AstWalker {
 
     fn walk_enum_declaration(&mut self, enum_decl: &mut EnumDeclaration) {
         self.visit_enum_declaration(enum_decl);
-        self.walk_identifier(&mut enum_decl.name);
 
         if let Some(generics) = &mut enum_decl.generics {
             for generic in generics {
@@ -147,7 +139,6 @@ pub trait AstWalker {
 
     fn walk_enum_variant(&mut self, variant: &mut EnumVariant) {
         self.visit_enum_variant(variant);
-        self.walk_identifier(&mut variant.name);
         self.walk_enum_variant_data(&mut variant.data);
 
         for attr in &mut variant.attributes {
@@ -174,13 +165,13 @@ pub trait AstWalker {
 
     fn walk_expr(&mut self, expr: &mut Expr) {
         self.visit_expr(expr);
-        self.walk_expr_kind(&mut expr.kind);
+        self.walk_expr_kind(expr);
     }
 
-    fn walk_expr_kind(&mut self, kind: &mut ExprKind) {
-        match kind {
+    fn walk_expr_kind(&mut self, expr: &mut Expr) {
+        match &mut expr.kind {
             ExprKind::Literal(lit) => self.walk_literal(lit),
-            ExprKind::Identifier(id, _) => self.walk_identifier(id),
+            ExprKind::Identifier(id, sym_id) => self.walk_identifier(id, sym_id, expr.span.clone()),
             ExprKind::Binary { left, op, right } => {
                 self.walk_expr(left);
                 self.visit_binary_op(op);
@@ -209,7 +200,6 @@ pub trait AstWalker {
             }
             ExprKind::Call { callee, args } => {
                 self.visit_function_call(callee, args);
-                self.walk_expr(callee);
                 for arg in args {
                     self.walk_expr(arg);
                 }
@@ -218,6 +208,10 @@ pub trait AstWalker {
                 for expr in exprs {
                     self.walk_expr(expr);
                 }
+            }
+            ExprKind::Box(expr) => {
+                self.visit_box(expr);
+                self.walk_expr(expr);
             }
             ExprKind::CouldntParse(_) => {}
         }
@@ -229,7 +223,6 @@ pub trait AstWalker {
 
     fn walk_generic_parameter(&mut self, generic: &mut GenericParameter) {
         self.visit_generic_parameter(generic);
-        self.walk_identifier(&mut generic.name);
 
         for constraint in &mut generic.constraints {
             self.walk_trait_bound(constraint);
@@ -242,7 +235,6 @@ pub trait AstWalker {
 
     fn walk_trait_bound(&mut self, bound: &mut TraitBound) {
         self.visit_trait_bound(bound);
-        self.walk_identifier(&mut bound.name);
 
         for arg in &mut bound.generic_args {
             self.walk_generic_arg(arg);
@@ -254,7 +246,6 @@ pub trait AstWalker {
         match arg {
             GenericArg::Type(ty) => self.walk_type(ty),
             GenericArg::Named { name, ty } => {
-                self.walk_identifier(name);
                 self.walk_type(ty);
             }
         }
@@ -283,7 +274,6 @@ pub trait AstWalker {
                 self.walk_return_type(return_type);
             }
             Type::Named { name, generics } => {
-                self.walk_identifier(name);
                 for generic in generics {
                     self.walk_type(generic);
                 }
@@ -299,8 +289,8 @@ pub trait AstWalker {
         }
     }
 
-    fn walk_identifier(&mut self, id: &mut Identifier) {
-        self.visit_identifier(id);
+    fn walk_identifier(&mut self, id: &mut Identifier, sym_id: &mut Option<SymbolId>, span: Span) {
+        self.visit_identifier(id, sym_id, span);
     }
 
     fn walk_stmt(&mut self, stmt: &mut Stmt) {
@@ -318,7 +308,6 @@ pub trait AstWalker {
 
     fn walk_var_decl(&mut self, var_decl: &mut VarDecl) {
         self.visit_var_decl(var_decl);
-        self.walk_identifier(&mut var_decl.name);
         self.walk_type(&mut var_decl.ty);
         self.walk_expr(&mut var_decl.value);
     }
@@ -347,8 +336,15 @@ pub trait AstWalker {
     fn visit_generic_arg(&mut self, _arg: &mut GenericArg) {}
     fn visit_type(&mut self, _ty: &mut Type) {}
     fn visit_return_type(&mut self, _ret_ty: &mut ReturnType) {}
-    fn visit_identifier(&mut self, _id: &mut Identifier) {}
+    fn visit_identifier(
+        &mut self,
+        _id: &mut Identifier,
+        _sym_id: &mut Option<SymbolId>,
+        _span: Span,
+    ) {
+    }
     fn visit_stmt(&mut self, _stmt: &mut Stmt) {}
     fn visit_var_decl(&mut self, _var_decl: &mut VarDecl) {}
     fn visit_function_call(&mut self, _callee: &mut Expr, _args: &mut [Expr]) {}
+    fn visit_box(&mut self, _expr: &mut Expr) {}
 }

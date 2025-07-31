@@ -26,8 +26,6 @@ impl<'ctx> CompilationUnit<'ctx> {
         DeclarationCollection::new(symbols, reports, sources).collect(&mut result.modules);
         NameResolution::new(symbols, reports, sources).walk(&mut result.modules);
 
-        println!("{:#?}", result.modules);
-
         reports.print(sources);
     }
 }
