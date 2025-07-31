@@ -1,5 +1,5 @@
 use crate::{
-    SymbolTableError, TokenKind,
+    TokenKind,
     ast::{Keyword, Stmt, StmtKind, Type, VarDecl},
     parser::Parser,
     span::SpanUtils,

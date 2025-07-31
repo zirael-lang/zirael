@@ -1,5 +1,5 @@
 use crate::{
-    Keyword, ScopeType, TokenKind,
+    Keyword, TokenKind,
     ast::{BinaryOp, Expr, ExprKind, Literal, UnaryOp},
     parser::Parser,
     span::SpanUtils,

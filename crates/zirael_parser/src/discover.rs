@@ -1,5 +1,5 @@
 use crate::{
-    ModuleDiscoveryResult, ModuleId, ScopeType, SymbolTable,
+    ModuleDiscoveryResult, ModuleId,
     ast::{Ast, ImportKind, ItemKind},
     parser::Parser,
 };

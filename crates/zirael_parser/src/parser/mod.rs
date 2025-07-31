@@ -6,7 +6,7 @@ mod stmt;
 mod ty;
 
 use crate::{
-    LexedModule, ModuleId, SymbolTable, Token, TokenKind,
+    LexedModule, ModuleId, Token, TokenKind,
     ast::{Ast, Keyword},
     get_tokens,
 };
