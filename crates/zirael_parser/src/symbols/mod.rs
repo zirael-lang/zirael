@@ -1,13 +1,12 @@
-use crate::{
-    ClassField, EnumVariant, Expr, FunctionModifiers, FunctionSignature, GenericParameter, Type,
-    scopes::Scope,
-};
 use id_arena::Id;
 use zirael_utils::prelude::{Identifier, Span};
 
 pub mod scopes;
 mod table;
 
+use crate::{
+    ClassField, EnumVariant, Expr, FunctionModifiers, FunctionSignature, GenericParameter, Type,
+};
 pub use scopes::*;
 pub use table::*;
 
@@ -15,13 +14,38 @@ pub type SymbolId = Id<Symbol>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum SymbolKind {
-    Variable { ty: Type },
-    Constant { ty: Type, value: Option<Expr> },
-    Function { signature: FunctionSignature, modifiers: FunctionModifiers },
-    Parameter { ty: Type, is_variadic: bool, default_value: Option<Expr> },
-    Class { fields: Vec<ClassField>, generics: Vec<GenericParameter> },
-    Enum { generics: Option<Vec<GenericParameter>>, variants: Vec<EnumVariant> },
-    Temporary { ty: Type, lifetime: TemporaryLifetime },
+    Variable {
+        ty: Type,
+        is_heap: bool,              // allocated with `box`
+        is_moved: bool,             // ownership has been moved
+        is_borrowed: bool,          // currently borrowed
+        borrower: Option<SymbolId>, // variable holding & reference
+    },
+    Constant {
+        ty: Type,
+        value: Option<Expr>,
+    },
+    Function {
+        signature: FunctionSignature,
+        modifiers: FunctionModifiers,
+    },
+    Parameter {
+        ty: Type,
+        is_variadic: bool,
+        default_value: Option<Expr>,
+    },
+    Class {
+        fields: Vec<ClassField>,
+        generics: Vec<GenericParameter>,
+    },
+    Enum {
+        generics: Option<Vec<GenericParameter>>,
+        variants: Vec<EnumVariant>,
+    },
+    Temporary {
+        ty: Type,
+        lifetime: TemporaryLifetime,
+    },
 }
 
 impl SymbolKind {

@@ -1,11 +1,11 @@
 use crate::{
-    SymbolId,
     ast::{
         Abi, Ast, Attribute, BinaryOp, ClassDeclaration, ClassField, EnumDeclaration, EnumVariant,
         EnumVariantData, Expr, ExprKind, Function, FunctionModifiers, FunctionSignature,
         GenericArg, GenericParameter, ImportKind, Item, ItemKind, Literal, Parameter,
         ParameterKind, ReturnType, Stmt, StmtKind, TraitBound, Type, UnaryOp, VarDecl,
     },
+    symbols::SymbolId,
 };
 use zirael_utils::prelude::*;
 
@@ -209,7 +209,7 @@ pub trait AstWalker {
                     self.walk_expr(expr);
                 }
             }
-            ExprKind::Box(expr) => {
+            ExprKind::HeapAlloc(expr) => {
                 self.visit_box(expr);
                 self.walk_expr(expr);
             }

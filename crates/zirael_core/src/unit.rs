@@ -2,6 +2,7 @@ use crate::{
     passes::{DeclarationCollection, NameResolution},
     prelude::*,
 };
+use crate::passes::MemoryAnalysis;
 
 #[derive(Debug)]
 pub struct CompilationUnit<'ctx> {
@@ -25,6 +26,7 @@ impl<'ctx> CompilationUnit<'ctx> {
 
         DeclarationCollection::new(symbols, reports, sources).collect(&mut result.modules);
         NameResolution::new(symbols, reports, sources).walk(&mut result.modules);
+        MemoryAnalysis::new(symbols, reports, sources).walk(&mut result.modules);
 
         reports.print(sources);
     }

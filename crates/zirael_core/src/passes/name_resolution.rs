@@ -1,7 +1,7 @@
 use crate::prelude::warn;
 use zirael_parser::{
     AstWalker, Expr, Function, LexedModule, ModuleId, ScopeType, Symbol, SymbolId, SymbolKind,
-    SymbolTable, WalkerWithAst, impl_walker_with_ast,
+    SymbolTable, WalkerWithAst, impl_ast_pass,
 };
 use zirael_utils::prelude::*;
 
@@ -54,23 +54,9 @@ impl ExpectedSymbol {
     }
 }
 
-pub struct NameResolution<'reports> {
-    pub symbol_table: SymbolTable,
-    pub reports: Reports<'reports>,
-    pub processed_file: Option<SourceFileId>,
-    pub sources: Sources,
-}
+impl_ast_pass!(NameResolution);
 
 impl<'reports> NameResolution<'reports> {
-    pub fn new(table: &SymbolTable, reports: &Reports<'reports>, sources: &Sources) -> Self {
-        Self {
-            symbol_table: table.clone(),
-            reports: reports.clone(),
-            processed_file: None,
-            sources: sources.clone(),
-        }
-    }
-
     fn resolve_identifier(
         &mut self,
         ident: &Identifier,
@@ -147,8 +133,6 @@ impl<'reports> NameResolution<'reports> {
         report
     }
 }
-
-impl_walker_with_ast!(NameResolution);
 
 impl AstWalker for NameResolution<'_> {
     fn walk_function(&mut self, func: &mut Function) {

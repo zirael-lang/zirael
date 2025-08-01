@@ -1,16 +1,9 @@
-use crate::{
-    AstWalker, Expr, LexedModule, ModuleId, ScopeId, Symbol, SymbolId, SymbolKind,
-    TemporaryLifetime,
-    ast::{
-        ClassDeclaration, ClassField, EnumDeclaration, EnumVariant, Function, FunctionModifiers,
-        FunctionSignature, GenericParameter, Parameter, ReturnType, Type,
-    },
-    scopes::{Scope, ScopeType},
-};
+use crate::symbols::{Scope, ScopeId, ScopeType, Symbol, SymbolId, SymbolKind, TemporaryLifetime};
 use id_arena::{Arena, Id};
 use std::{collections::HashMap, ops::Range, sync::Arc};
 use strsim::levenshtein;
 use zirael_utils::prelude::*;
+use crate::{AstWalker, LexedModule, ModuleId, Type};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum SymbolTableError {
@@ -33,13 +26,13 @@ pub struct ImportConflict {
 }
 
 #[derive(Debug)]
-pub(crate) struct SymbolTableImpl {
-    pub(crate) symbols: Arena<Symbol>,
-    pub(crate) scopes: Arena<Scope>,
-    pub(crate) current_scope: ScopeId,
-    pub(crate) global_scope: ScopeId,
-    pub(crate) declaration_counter: usize,
-    pub(crate) name_lookup: HashMap<(Identifier, ScopeId), SymbolId>,
+pub struct SymbolTableImpl {
+    pub symbols: Arena<Symbol>,
+    pub scopes: Arena<Scope>,
+    pub current_scope: ScopeId,
+    pub global_scope: ScopeId,
+    pub declaration_counter: usize,
+    pub name_lookup: HashMap<(Identifier, ScopeId), SymbolId>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -77,11 +70,11 @@ impl SymbolTable {
         Default::default()
     }
 
-    pub(crate) fn read<R>(&self, reader: impl FnOnce(&SymbolTableImpl) -> R) -> R {
+    pub fn read<R>(&self, reader: impl FnOnce(&SymbolTableImpl) -> R) -> R {
         reader(&self.0.read())
     }
 
-    pub(crate) fn write<R>(&self, writer: impl FnOnce(&mut SymbolTableImpl) -> R) -> R {
+    pub fn write<R>(&self, writer: impl FnOnce(&mut SymbolTableImpl) -> R) -> R {
         writer(&mut self.0.write())
     }
 
@@ -554,8 +547,26 @@ pub trait WalkerWithAst<'reports>: AstWalker {
 }
 
 #[macro_export]
-macro_rules! impl_walker_with_ast {
+macro_rules! impl_ast_pass {
     ($struct_name:ident) => {
+        pub struct $struct_name<'reports> {
+            pub symbol_table: SymbolTable,
+            pub reports: Reports<'reports>,
+            pub processed_file: Option<SourceFileId>,
+            pub sources: Sources,
+        }
+        
+        impl<'reports> $struct_name<'reports> {
+            pub fn new(table: &SymbolTable, reports: &Reports<'reports>, sources: &Sources) -> Self {
+                Self {
+                    symbol_table: table.clone(),
+                    reports: reports.clone(),
+                    processed_file: None,
+                    sources: sources.clone(),
+                }
+            }
+        }
+        
         impl<'reports> WalkerWithAst<'reports> for $struct_name<'reports> {
             fn symbol_table(&self) -> &SymbolTable {
                 &self.symbol_table

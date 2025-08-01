@@ -1,7 +1,4 @@
-use crate::{
-    SymbolId,
-    symbols::table::{SymbolTable, SymbolTableError},
-};
+use crate::symbols::{SymbolId, SymbolTable, SymbolTableError};
 use id_arena::Id;
 use std::collections::HashMap;
 use zirael_utils::prelude::*;

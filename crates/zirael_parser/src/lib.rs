@@ -5,7 +5,7 @@ mod lexer;
 mod module;
 mod parser;
 mod span;
-mod symbols;
+pub mod symbols;
 mod walker;
 
 pub use ast::*;

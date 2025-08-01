@@ -1,9 +1,9 @@
 use crate::{
-    SymbolId,
     ast::{
         operator::{BinaryOp, UnaryOp},
         stmt::Stmt,
     },
+    symbols::SymbolId,
 };
 use colored::Colorize as _;
 use std::fmt::{self, Debug, Formatter};
@@ -21,7 +21,7 @@ pub enum ExprKind {
     Paren(Box<Expr>),
     Call { callee: Box<Expr>, args: Vec<Expr> },
     FieldAccess(Vec<Expr>),
-    Box(Box<Expr>),
+    HeapAlloc(Box<Expr>),
     CouldntParse(CouldntParse),
 }
 

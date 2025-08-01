@@ -1,32 +1,18 @@
 use crate::prelude::{ReportKind, WalkerWithAst, debug};
 use std::{any::Any, env::var, fmt::format, path::PathBuf};
 use zirael_parser::{
-    Ast, AstWalker, Dependency, DependencyGraph, Function, ImportConflict, ImportKind, ItemKind,
-    LexedModule, ModuleId, Parameter, ParameterKind, ScopeType, Symbol, SymbolKind, SymbolTable,
-    SymbolTableError, VarDecl, impl_walker_with_ast,
+    Ast, AstWalker, Dependency, DependencyGraph, ExprKind, Function, ImportConflict, ImportKind,
+    ItemKind, LexedModule, ModuleId, Parameter, ParameterKind, ScopeType, Symbol, SymbolKind,
+    SymbolTable, SymbolTableError, VarDecl, impl_ast_pass,
 };
 use zirael_utils::{
     prelude::{Colorize, Identifier, ReportBuilder, Reports, Sources, Span, resolve},
     sources::SourceFileId,
 };
 
-pub struct DeclarationCollection<'reports> {
-    pub symbol_table: SymbolTable,
-    pub reports: Reports<'reports>,
-    pub processed_file: Option<SourceFileId>,
-    pub sources: Sources,
-}
+impl_ast_pass!(DeclarationCollection);
 
 impl<'reports> DeclarationCollection<'reports> {
-    pub fn new(table: &SymbolTable, reports: &Reports<'reports>, sources: &Sources) -> Self {
-        Self {
-            symbol_table: table.clone(),
-            reports: reports.clone(),
-            processed_file: None,
-            sources: sources.clone(),
-        }
-    }
-
     pub fn collect(&mut self, modules: &mut Vec<LexedModule>) {
         self.walk(modules);
         for module in modules {
@@ -200,7 +186,6 @@ impl<'reports> DeclarationCollection<'reports> {
         }
     }
 }
-impl_walker_with_ast!(DeclarationCollection);
 
 impl AstWalker for DeclarationCollection<'_> {
     fn walk_function(&mut self, func: &mut Function) {
@@ -240,6 +225,18 @@ impl AstWalker for DeclarationCollection<'_> {
 
     fn visit_var_decl(&mut self, var_decl: &mut VarDecl) {
         let var = var_decl.clone();
-        self.register_symbol(var.name, SymbolKind::Variable { ty: var.ty }, var.span)
+
+        // we initialize all memory-related fields with false because we will reassign in [
+        self.register_symbol(
+            var.name,
+            SymbolKind::Variable {
+                ty: var.ty,
+                is_heap: false,
+                is_moved: false,
+                is_borrowed: false,
+                borrower: None,
+            },
+            var.span,
+        )
     }
 }
