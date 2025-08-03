@@ -21,6 +21,7 @@ pub enum ExprKind {
     Paren(Box<Expr>),
     Call { callee: Box<Expr>, args: Vec<Expr> },
     FieldAccess(Vec<Expr>),
+    IndexAccess(Box<Expr>, Box<Expr>),
     HeapAlloc(Box<Expr>),
     CouldntParse(CouldntParse),
 }
@@ -64,6 +65,41 @@ impl Expr {
         match &mut self.kind {
             ExprKind::Identifier(ident, sym_id) => Some((ident, sym_id)),
             _ => None,
+        }
+    }
+
+    // unchecked only refers to the symbol id. useful when we are sure that symbol id was assigned
+    pub fn as_identifier_unchecked(&self) -> Option<(&Identifier, SymbolId)> {
+        match &self.kind {
+            ExprKind::Identifier(ident, sym_id) => Some((ident, sym_id.unwrap())),
+            _ => None,
+        }
+    }
+}
+
+impl ExprKind {
+    pub fn name(&self) -> &'static str {
+        match self {
+            ExprKind::Literal(_) => "literal",
+            ExprKind::Identifier(_, _) => "identifier",
+            ExprKind::Binary { .. } => "binary expression",
+            ExprKind::Block(_) => "block",
+            ExprKind::Assign(_, _) => "assign",
+            ExprKind::AssignOp(_, _, _) => "assign with operator",
+            ExprKind::Unary(_, _) => "unary",
+            ExprKind::Paren(_) => "parenthesized expression",
+            ExprKind::Call { .. } => "call",
+            ExprKind::FieldAccess(_) => "field access",
+            ExprKind::IndexAccess(_, _) => "index access",
+            ExprKind::HeapAlloc(_) => "heap allocation",
+            ExprKind::CouldntParse(_) => "couldnt parse",
+        }
+    }
+    
+    pub fn can_be_borrowed(&self) -> bool {
+        match self {
+            ExprKind::Identifier(_, _) | ExprKind::FieldAccess(_) | ExprKind::IndexAccess(_, _) => true,
+            _ => false,
         }
     }
 }

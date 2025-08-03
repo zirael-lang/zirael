@@ -12,14 +12,18 @@ pub use table::*;
 
 pub type SymbolId = Id<Symbol>;
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+pub struct VariableMove {
+    pub from: Span,
+    pub to: Span,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum SymbolKind {
     Variable {
         ty: Type,
-        is_heap: bool,              // allocated with `box`
-        is_moved: bool,             // ownership has been moved
-        is_borrowed: bool,          // currently borrowed
-        borrower: Option<SymbolId>, // variable holding & reference
+        is_heap: bool,                  // allocated with `box`
+        is_moved: Option<VariableMove>, // ownership has been moved
     },
     Constant {
         ty: Type,
@@ -58,6 +62,13 @@ impl SymbolKind {
             SymbolKind::Class { .. } => "class",
             SymbolKind::Enum { .. } => "enum",
             SymbolKind::Temporary { .. } => "temporary",
+        }
+    }
+
+    pub fn is_value(&self) -> bool {
+        match self {
+            SymbolKind::Variable { .. } | SymbolKind::Parameter { .. } => true,
+            _ => false,
         }
     }
 }

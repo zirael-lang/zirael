@@ -1,30 +1,25 @@
 import "div.zr"
 
-fn print() {}
-
 fn main() {
-    // Stack value
-    var x = 5;
+    // Basic variable declarations
+    var x = 42
+    var y = 3.14
 
-    // Heap-allocated value
-    var y = box 10;
+    // Move semantics
+    var a = x  // x is moved to a, x cannot be used anymore
+    var b = a  // a is moved to b
 
-    // Move ownership
-    var z = y;
-    // y is now invalid
+    // Heap allocation (only allowed in variable declarations)
+    var heap_num = box 100
+    var heap_float = box 2.5
 
-    // Reference to a heap variable
-    var a = box 100;
-    var r = &a;
-    *r = 200;
+    // Borrowing
+    var num = 50
+    var ref_num = &num     // Borrow num
+    var another_ref = &num // Multiple borrows OK
 
-    // Can't use 'a' directly now (would be compile error)
-    print(*r);
-
-    // 'r' goes out of scope → 'a' usable again (optional)
-
-    // Mixing stack + heap
-    var n = 3;
-    var boxedN = box (n * 2);
-    print(*boxedN);
+    // Assignment
+    var counter = 0
+    counter = 10           // Simple assignment
+    counter = counter + 5  // Use and reassign
 }

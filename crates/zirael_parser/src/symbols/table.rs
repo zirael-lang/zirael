@@ -1,9 +1,11 @@
-use crate::symbols::{Scope, ScopeId, ScopeType, Symbol, SymbolId, SymbolKind, TemporaryLifetime};
+use crate::{
+    AstWalker, LexedModule, ModuleId, Type,
+    symbols::{Scope, ScopeId, ScopeType, Symbol, SymbolId, SymbolKind, TemporaryLifetime},
+};
 use id_arena::{Arena, Id};
 use std::{collections::HashMap, ops::Range, sync::Arc};
 use strsim::levenshtein;
 use zirael_utils::prelude::*;
-use crate::{AstWalker, LexedModule, ModuleId, Type};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum SymbolTableError {
@@ -50,6 +52,7 @@ impl Default for SymbolTableImpl {
             scope_type: ScopeType::Global,
             depth: 0,
             imported_modules: Vec::new(),
+            borrow_stack: Vec::new(),
         };
 
         let global_scope_id = scopes.alloc(global_scope);
@@ -495,94 +498,4 @@ impl SymbolTableImpl {
             false
         }
     }
-}
-
-pub trait WalkerWithAst<'reports>: AstWalker {
-    fn symbol_table(&self) -> &SymbolTable;
-    fn reports(&self) -> &Reports<'reports>;
-    fn processed_file(&self) -> Option<SourceFileId>;
-    fn set_processed_file(&mut self, file_id: SourceFileId);
-
-    fn pop_scope(&mut self) {
-        if let Err(err) = self.symbol_table().pop_scope()
-            && let Some(file_id) = self.processed_file()
-        {
-            self.reports().add(
-                file_id,
-                ReportBuilder::builder(
-                    &format!("failed to pop a scope: {:?}", err),
-                    ReportKind::Error,
-                ),
-            )
-        }
-    }
-
-    fn walk(&mut self, modules: &mut Vec<LexedModule>) {
-        for module in modules {
-            let ModuleId::File(file_id) = module.id else {
-                continue;
-            };
-
-            self.symbol_table().push_scope(ScopeType::Module(file_id));
-            self.set_processed_file(file_id);
-            self.walk_ast(&mut module.ast);
-            self.pop_scope();
-        }
-    }
-
-    fn error(&mut self, message: &str, labels: Vec<(String, Range<usize>)>, notes: Vec<String>) {
-        if let Some(file_id) = self.processed_file() {
-            let mut report = ReportBuilder::builder(message, ReportKind::Error);
-            for note in notes {
-                report = report.note(&note);
-            }
-            for (msg, span) in labels {
-                report = report.label(&msg, span);
-            }
-            self.reports().add(file_id, report);
-        } else {
-            warn!("report outside of a file: {}", message);
-        }
-    }
-}
-
-#[macro_export]
-macro_rules! impl_ast_pass {
-    ($struct_name:ident) => {
-        pub struct $struct_name<'reports> {
-            pub symbol_table: SymbolTable,
-            pub reports: Reports<'reports>,
-            pub processed_file: Option<SourceFileId>,
-            pub sources: Sources,
-        }
-        
-        impl<'reports> $struct_name<'reports> {
-            pub fn new(table: &SymbolTable, reports: &Reports<'reports>, sources: &Sources) -> Self {
-                Self {
-                    symbol_table: table.clone(),
-                    reports: reports.clone(),
-                    processed_file: None,
-                    sources: sources.clone(),
-                }
-            }
-        }
-        
-        impl<'reports> WalkerWithAst<'reports> for $struct_name<'reports> {
-            fn symbol_table(&self) -> &SymbolTable {
-                &self.symbol_table
-            }
-
-            fn reports(&self) -> &Reports<'reports> {
-                &self.reports
-            }
-
-            fn processed_file(&self) -> Option<SourceFileId> {
-                self.processed_file
-            }
-
-            fn set_processed_file(&mut self, file_id: SourceFileId) {
-                self.processed_file = Some(file_id);
-            }
-        }
-    };
 }

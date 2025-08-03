@@ -47,7 +47,7 @@ impl<'a> Parser<'a> {
         expr
     }
 
-    fn parse_logical_or(&mut self) -> Expr {
+    pub fn parse_logical_or(&mut self) -> Expr {
         self.parse_binary_expr(1)
     }
 

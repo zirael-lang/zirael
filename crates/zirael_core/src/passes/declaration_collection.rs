@@ -1,20 +1,20 @@
-use crate::prelude::{ReportKind, WalkerWithAst, debug};
+use crate::prelude::{ReportKind, WalkerContext, debug};
 use std::{any::Any, env::var, fmt::format, path::PathBuf};
 use zirael_parser::{
     Ast, AstWalker, Dependency, DependencyGraph, ExprKind, Function, ImportConflict, ImportKind,
     ItemKind, LexedModule, ModuleId, Parameter, ParameterKind, ScopeType, Symbol, SymbolKind,
-    SymbolTable, SymbolTableError, VarDecl, impl_ast_pass,
+    SymbolTable, SymbolTableError, VarDecl, impl_ast_walker,
 };
 use zirael_utils::{
     prelude::{Colorize, Identifier, ReportBuilder, Reports, Sources, Span, resolve},
     sources::SourceFileId,
 };
 
-impl_ast_pass!(DeclarationCollection);
+impl_ast_walker!(DeclarationCollection);
 
 impl<'reports> DeclarationCollection<'reports> {
     pub fn collect(&mut self, modules: &mut Vec<LexedModule>) {
-        self.walk(modules);
+        self.walk_modules(modules);
         for module in modules {
             let ModuleId::File(file_id) = module.id else {
                 continue;
@@ -147,7 +147,6 @@ impl<'reports> DeclarationCollection<'reports> {
         match self.symbol_table.insert(name, kind.clone(), Some(span.clone())) {
             Ok(_) => {}
             Err(SymbolTableError::SymbolAlreadyExists { existing_id, .. }) => {
-                println!("{:?}", self.symbol_table.get_symbol(existing_id).unwrap());
                 if let Some(existing_symbol) = self.symbol_table.get_symbol(existing_id) {
                     self.reports.add(
                         file_id,
@@ -187,8 +186,8 @@ impl<'reports> DeclarationCollection<'reports> {
     }
 }
 
-impl AstWalker for DeclarationCollection<'_> {
-    fn walk_function(&mut self, func: &mut Function) {
+impl<'reports> AstWalker<'reports> for DeclarationCollection<'reports> {
+    fn visit_function(&mut self, func: &mut Function) {
         self.register_symbol(
             func.name,
             SymbolKind::Function {
@@ -197,17 +196,6 @@ impl AstWalker for DeclarationCollection<'_> {
             },
             func.span.clone(),
         );
-
-        self.symbol_table.push_scope(ScopeType::Function(func.name));
-
-        self.walk_function_modifiers(&mut func.modifiers);
-        self.walk_function_signature(&mut func.signature);
-
-        if let Some(body) = &mut func.body {
-            self.walk_expr(body);
-        }
-
-        self.pop_scope();
     }
 
     fn visit_parameter(&mut self, param: &mut Parameter) {
@@ -226,16 +214,9 @@ impl AstWalker for DeclarationCollection<'_> {
     fn visit_var_decl(&mut self, var_decl: &mut VarDecl) {
         let var = var_decl.clone();
 
-        // we initialize all memory-related fields with false because we will reassign in [
         self.register_symbol(
             var.name,
-            SymbolKind::Variable {
-                ty: var.ty,
-                is_heap: false,
-                is_moved: false,
-                is_borrowed: false,
-                borrower: None,
-            },
+            SymbolKind::Variable { ty: var.ty, is_heap: false, is_moved: None },
             var.span,
         )
     }

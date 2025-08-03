@@ -1,5 +1,5 @@
 use crate::prelude::{SourceFileId, Sources};
-use ariadne::{Color, Label, ReportKind, Source, sources};
+use ariadne::{CharSet, Color, Config, IndexType, Label, LabelAttach, ReportKind, Source, sources};
 use log::error;
 use parking_lot::RwLock;
 use std::{collections::HashMap, ops::Range, path::PathBuf, process::exit, sync::Arc};
@@ -99,7 +99,7 @@ impl<'a> ReportBuilder<'a> {
         match self.kind {
             ReportKind::Error => Color::BrightRed,
             ReportKind::Warning => Color::BrightYellow,
-            ReportKind::Advice => Color::BrightGreen,
+            ReportKind::Advice => Color::BrightCyan,
             ReportKind::Custom(..) => Color::BrightWhite,
         }
     }
@@ -107,6 +107,12 @@ impl<'a> ReportBuilder<'a> {
     pub fn label(mut self, msg: &str, span: Range<usize>) -> Self {
         let label =
             LocalLabel { msg: msg.to_owned(), span, color: self.label_color(), custom_file: None };
+        self.labels.push(label);
+        self
+    }
+
+    pub fn label_color_custom(mut self, msg: &str, span: Range<usize>, color: Color) -> Self {
+        let label = LocalLabel { msg: msg.to_owned(), span, color, custom_file: None };
         self.labels.push(label);
         self
     }
@@ -133,7 +139,7 @@ impl<'a> ReportBuilder<'a> {
         match self.kind {
             ReportKind::Error => ReportKind::Custom("error", Color::BrightRed),
             ReportKind::Warning => ReportKind::Custom("warning", Color::BrightYellow),
-            ReportKind::Advice => ReportKind::Custom("advice", Color::BrightGreen),
+            ReportKind::Advice => ReportKind::Custom("advice", Color::BrightCyan),
             _ => self.kind,
         }
     }
@@ -163,6 +169,13 @@ impl<'a> ReportBuilder<'a> {
         report = report.with_labels(labels);
         report.with_notes(self.notes);
 
-        report.finish()
+        report
+            .with_config(
+                Config::default()
+                    .with_char_set(CharSet::Ascii)
+                    .with_index_type(IndexType::Char)
+                    .with_label_attach(LabelAttach::End),
+            )
+            .finish()
     }
 }

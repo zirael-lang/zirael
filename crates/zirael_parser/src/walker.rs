@@ -1,4 +1,5 @@
 use crate::{
+    LexedModule, ModuleId, Return, ScopeType, SymbolTable,
     ast::{
         Abi, Ast, Attribute, BinaryOp, ClassDeclaration, ClassField, EnumDeclaration, EnumVariant,
         EnumVariantData, Expr, ExprKind, Function, FunctionModifiers, FunctionSignature,
@@ -7,9 +8,32 @@ use crate::{
     },
     symbols::SymbolId,
 };
+use std::ops::Range;
 use zirael_utils::prelude::*;
 
-pub trait AstWalker {
+pub trait WalkerContext<'reports> {
+    fn symbol_table(&self) -> &SymbolTable;
+    fn symbol_table_mut(&mut self) -> &mut SymbolTable;
+    fn reports(&self) -> &Reports<'reports>;
+    fn processed_file(&self) -> Option<SourceFileId>;
+    fn set_processed_file(&mut self, file_id: SourceFileId);
+    fn sources(&self) -> &Sources;
+}
+
+pub trait AstWalker<'reports>: WalkerContext<'reports> {
+    fn walk_modules(&mut self, modules: &mut Vec<LexedModule>) {
+        for module in modules {
+            let ModuleId::File(file_id) = module.id else {
+                continue;
+            };
+
+            self.push_scope(ScopeType::Module(file_id));
+            self.set_processed_file(file_id);
+            self.walk_ast(&mut module.ast);
+            self.pop_scope();
+        }
+    }
+
     fn walk_ast(&mut self, ast: &mut Ast) {
         for item in &mut ast.items {
             self.walk_item(item);
@@ -39,18 +63,23 @@ pub trait AstWalker {
         self.visit_import_kind(import);
         match import {
             ImportKind::Path(_) => {}
-            ImportKind::ExternalModule(identifiers) => {}
+            ImportKind::ExternalModule(_identifiers) => {}
         }
     }
 
     fn walk_function(&mut self, func: &mut Function) {
         self.visit_function(func);
+
+        self.push_scope(ScopeType::Function(func.name.clone()));
+
         self.walk_function_modifiers(&mut func.modifiers);
         self.walk_function_signature(&mut func.signature);
 
         if let Some(body) = &mut func.body {
             self.walk_expr(body);
         }
+
+        self.pop_scope();
     }
 
     fn walk_function_modifiers(&mut self, modifiers: &mut FunctionModifiers) {
@@ -105,6 +134,8 @@ pub trait AstWalker {
     fn walk_class_declaration(&mut self, class: &mut ClassDeclaration) {
         self.visit_class_declaration(class);
 
+        self.push_scope(ScopeType::Class(class.name.clone()));
+
         for generic in &mut class.generics {
             self.walk_generic_parameter(generic);
         }
@@ -112,6 +143,8 @@ pub trait AstWalker {
         for field in &mut class.fields {
             self.walk_class_field(field);
         }
+
+        self.pop_scope();
     }
 
     fn walk_class_field(&mut self, field: &mut ClassField) {
@@ -126,6 +159,8 @@ pub trait AstWalker {
     fn walk_enum_declaration(&mut self, enum_decl: &mut EnumDeclaration) {
         self.visit_enum_declaration(enum_decl);
 
+        self.push_scope(ScopeType::Enum(enum_decl.name.clone()));
+
         if let Some(generics) = &mut enum_decl.generics {
             for generic in generics {
                 self.walk_generic_parameter(generic);
@@ -135,6 +170,8 @@ pub trait AstWalker {
         for variant in &mut enum_decl.variants {
             self.walk_enum_variant(variant);
         }
+
+        self.pop_scope();
     }
 
     fn walk_enum_variant(&mut self, variant: &mut EnumVariant) {
@@ -178,11 +215,16 @@ pub trait AstWalker {
                 self.walk_expr(right);
             }
             ExprKind::Block(stmts) => {
+                self.push_scope(ScopeType::Block);
+
                 for stmt in stmts {
                     self.walk_stmt(stmt);
                 }
+
+                self.pop_scope();
             }
             ExprKind::Assign(lhs, rhs) => {
+                self.visit_assign(lhs, rhs);
                 self.walk_expr(lhs);
                 self.walk_expr(rhs);
             }
@@ -192,7 +234,7 @@ pub trait AstWalker {
                 self.walk_expr(rhs);
             }
             ExprKind::Unary(op, expr) => {
-                self.visit_unary_op(op);
+                self.visit_unary(op, expr);
                 self.walk_expr(expr);
             }
             ExprKind::Paren(expr) => {
@@ -212,6 +254,10 @@ pub trait AstWalker {
             ExprKind::HeapAlloc(expr) => {
                 self.visit_box(expr);
                 self.walk_expr(expr);
+            }
+            ExprKind::IndexAccess(expr, index) => {
+                self.walk_expr(expr);
+                self.walk_expr(index);
             }
             ExprKind::CouldntParse(_) => {}
         }
@@ -245,7 +291,7 @@ pub trait AstWalker {
         self.visit_generic_arg(arg);
         match arg {
             GenericArg::Type(ty) => self.walk_type(ty),
-            GenericArg::Named { name, ty } => {
+            GenericArg::Named { name: _, ty } => {
                 self.walk_type(ty);
             }
         }
@@ -273,7 +319,7 @@ pub trait AstWalker {
                 }
                 self.walk_return_type(return_type);
             }
-            Type::Named { name, generics } => {
+            Type::Named { name: _, generics } => {
                 for generic in generics {
                     self.walk_type(generic);
                 }
@@ -303,6 +349,14 @@ pub trait AstWalker {
         match kind {
             StmtKind::Expr(expr) => self.walk_expr(expr),
             StmtKind::Var(var_decl) => self.walk_var_decl(var_decl),
+            StmtKind::Return(ret) => self.walk_return(ret),
+        }
+    }
+
+    fn walk_return(&mut self, ret: &mut Return) {
+        self.visit_return(ret);
+        if let Some(expr) = &mut ret.value {
+            self.walk_expr(expr);
         }
     }
 
@@ -310,6 +364,39 @@ pub trait AstWalker {
         self.visit_var_decl(var_decl);
         self.walk_type(&mut var_decl.ty);
         self.walk_expr(&mut var_decl.value);
+    }
+
+    fn push_scope(&mut self, scope_type: ScopeType) {
+        self.symbol_table_mut().push_scope(scope_type);
+    }
+
+    fn pop_scope(&mut self) {
+        if let Err(err) = self.symbol_table_mut().pop_scope() {
+            self.error(&format!("Failed to pop scope: {:?}", err), vec![], vec![]);
+        }
+    }
+
+    fn error(&mut self, message: &str, labels: Vec<(String, Range<usize>)>, notes: Vec<String>) {
+        if let Some(file_id) = self.processed_file() {
+            let mut report = ReportBuilder::builder(message, ReportKind::Error);
+            for note in notes {
+                report = report.note(&note);
+            }
+            for (msg, span) in labels {
+                report = report.label(&msg, span);
+            }
+            self.reports().add(file_id, report);
+        } else {
+            warn!("Report outside of a file: {}", message);
+        }
+    }
+
+    fn report(&mut self, report: ReportBuilder<'reports>) {
+        if let Some(file_id) = self.processed_file() {
+            self.reports().add(file_id, report);
+        } else {
+            warn!("Report outside of a file: {:?}", report);
+        }
     }
 
     fn visit_item(&mut self, _item: &mut Item) {}
@@ -329,7 +416,7 @@ pub trait AstWalker {
     fn visit_expr(&mut self, _expr: &mut Expr) {}
     fn visit_literal(&mut self, _lit: &mut Literal) {}
     fn visit_binary_op(&mut self, _op: &mut BinaryOp) {}
-    fn visit_unary_op(&mut self, _op: &mut UnaryOp) {}
+    fn visit_unary(&mut self, _op: &mut UnaryOp, _expr: &mut Expr) {}
     fn visit_stmt_kind(&mut self, _kind: &mut StmtKind) {}
     fn visit_generic_parameter(&mut self, _param: &mut GenericParameter) {}
     fn visit_trait_bound(&mut self, _bound: &mut TraitBound) {}
@@ -347,4 +434,59 @@ pub trait AstWalker {
     fn visit_var_decl(&mut self, _var_decl: &mut VarDecl) {}
     fn visit_function_call(&mut self, _callee: &mut Expr, _args: &mut [Expr]) {}
     fn visit_box(&mut self, _expr: &mut Expr) {}
+    fn visit_assign(&mut self, _lhs: &mut Expr, _rhs: &mut Expr) {}
+    fn visit_return(&mut self, _ret: &mut Return) {}
+}
+
+#[macro_export]
+macro_rules! impl_ast_walker {
+    ($struct_name:ident) => {
+        pub struct $struct_name<'reports> {
+            pub symbol_table: SymbolTable,
+            pub reports: Reports<'reports>,
+            pub processed_file: Option<SourceFileId>,
+            pub sources: Sources,
+        }
+
+        impl<'reports> $struct_name<'reports> {
+            pub fn new(
+                table: &SymbolTable,
+                reports: &Reports<'reports>,
+                sources: &Sources,
+            ) -> Self {
+                Self {
+                    symbol_table: table.clone(),
+                    reports: reports.clone(),
+                    processed_file: None,
+                    sources: sources.clone(),
+                }
+            }
+        }
+
+        impl<'reports> WalkerContext<'reports> for $struct_name<'reports> {
+            fn symbol_table(&self) -> &SymbolTable {
+                &self.symbol_table
+            }
+
+            fn symbol_table_mut(&mut self) -> &mut SymbolTable {
+                &mut self.symbol_table
+            }
+
+            fn reports(&self) -> &Reports<'reports> {
+                &self.reports
+            }
+
+            fn processed_file(&self) -> Option<SourceFileId> {
+                self.processed_file
+            }
+
+            fn set_processed_file(&mut self, file_id: SourceFileId) {
+                self.processed_file = Some(file_id);
+            }
+
+            fn sources(&self) -> &Sources {
+                &self.sources
+            }
+        }
+    };
 }

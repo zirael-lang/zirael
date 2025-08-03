@@ -1,7 +1,7 @@
-use crate::prelude::warn;
+use crate::prelude::{WalkerContext, warn};
 use zirael_parser::{
     AstWalker, Expr, Function, LexedModule, ModuleId, ScopeType, Symbol, SymbolId, SymbolKind,
-    SymbolTable, WalkerWithAst, impl_ast_pass,
+    SymbolTable, impl_ast_walker,
 };
 use zirael_utils::prelude::*;
 
@@ -54,7 +54,7 @@ impl ExpectedSymbol {
     }
 }
 
-impl_ast_pass!(NameResolution);
+impl_ast_walker!(NameResolution);
 
 impl<'reports> NameResolution<'reports> {
     fn resolve_identifier(
@@ -127,27 +127,14 @@ impl<'reports> NameResolution<'reports> {
                 ),
                 span,
                 &path,
-                Color::BrightGreen,
+                Color::BrightCyan,
             );
         }
         report
     }
 }
 
-impl AstWalker for NameResolution<'_> {
-    fn walk_function(&mut self, func: &mut Function) {
-        self.symbol_table.push_scope(ScopeType::Function(func.name));
-
-        self.walk_function_modifiers(&mut func.modifiers);
-        self.walk_function_signature(&mut func.signature);
-
-        if let Some(body) = &mut func.body {
-            self.walk_expr(body);
-        }
-
-        self.pop_scope();
-    }
-
+impl<'reports> AstWalker<'reports> for NameResolution<'reports> {
     fn visit_function_call(&mut self, callee: &mut Expr, _args: &mut [Expr]) {
         let span = callee.span.clone();
         let Some((ident, ident_sym_id)) = callee.as_identifier() else {

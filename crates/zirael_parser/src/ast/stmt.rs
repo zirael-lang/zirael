@@ -8,6 +8,13 @@ pub struct Stmt(pub StmtKind);
 pub enum StmtKind {
     Expr(Expr),
     Var(VarDecl),
+    Return(Return),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Return {
+    pub value: Option<Expr>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]

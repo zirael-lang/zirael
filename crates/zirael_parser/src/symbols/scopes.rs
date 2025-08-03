@@ -1,4 +1,7 @@
-use crate::symbols::{SymbolId, SymbolTable, SymbolTableError};
+use crate::{
+    Expr, ExprKind, Symbol,
+    symbols::{SymbolId, SymbolTable, SymbolTableError},
+};
 use id_arena::Id;
 use std::collections::HashMap;
 use zirael_utils::prelude::*;
@@ -13,6 +16,19 @@ pub struct Scope {
     pub scope_type: ScopeType,
     pub depth: usize,
     pub imported_modules: Vec<ScopeId>,
+    pub borrow_stack: Vec<BorrowStackEntry>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct BorrowStackEntry {
+    pub symbol_id: SymbolId,
+    pub borrow_span: Span,
+}
+
+impl BorrowStackEntry {
+    pub fn new(symbol_id: SymbolId, borrow_span: Span) -> Self {
+        Self { symbol_id, borrow_span }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -54,6 +70,7 @@ impl SymbolTable {
                 scope_type,
                 depth: parent_depth + 1,
                 imported_modules: Vec::new(),
+                borrow_stack: Vec::new(),
             };
 
             let scope_id = table.scopes.alloc(new_scope);
@@ -112,5 +129,36 @@ impl SymbolTable {
                 .map(|scope| scope.symbols.iter().map(|(&name, &id)| (name, id)).collect())
                 .unwrap_or_default()
         })
+    }
+
+    pub fn mark_borrowed(&self, symbol_id: SymbolId, span: Span) {
+        self.write(|table| {
+            table
+                .scopes
+                .get_mut(table.current_scope)
+                .unwrap()
+                .borrow_stack
+                .push(BorrowStackEntry::new(symbol_id, span));
+        })
+    }
+
+    pub fn is_borrowed(&self, symbol_id: SymbolId) -> Option<BorrowStackEntry> {
+        self.read(|table| {
+            table
+                .scopes
+                .get(table.current_scope)
+                .map(|scope| {
+                    scope.borrow_stack.iter().find(|entry| entry.symbol_id == symbol_id).cloned()
+                })
+                .unwrap_or(None)
+        })
+    }
+
+    pub fn symbol_from_expr(&self, expr: &Expr) -> Option<(Symbol, SymbolId)> {
+        if let ExprKind::Identifier(_, sym_id) = expr.kind {
+            self.get_symbol(sym_id?).map(|sym| (sym, sym_id.unwrap()))
+        } else {
+            None
+        }
     }
 }
