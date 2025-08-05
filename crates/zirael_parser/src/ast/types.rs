@@ -1,5 +1,7 @@
 use zirael_utils::prelude::*;
 
+pub type TypeVarId = u32;
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Type {
     String,
@@ -10,18 +12,26 @@ pub enum Type {
     Void,
     Pointer(Box<Type>),
     Reference(Box<Type>),
-    MutableReference(Box<Type>),
     Array(Box<Type>, Option<usize>),
-    Function { params: Vec<Type>, return_type: Box<ReturnType> },
+    Function { params: Vec<Type>, return_type: Box<Type> },
     Named { name: Identifier, generics: Vec<Type> },
-    // Type placeholder for inference
+
     Inferred,
+    Error,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum ReturnType {
-    Default,
-    Type(Type),
+impl Type {
+    pub fn is_numeric(&self) -> bool {
+        matches!(self, Type::Int | Type::Float)
+    }
+
+    pub fn is_int(&self) -> bool {
+        matches!(self, Type::Int)
+    }
+
+    pub fn is_float(&self) -> bool {
+        matches!(self, Type::Float)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

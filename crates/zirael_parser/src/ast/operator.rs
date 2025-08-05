@@ -16,22 +16,40 @@ pub enum UnaryOp {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BinaryOp {
+    /// `+` - Addition
     Add,
-    Subtract,
-    Multiply,
-    Divide,
-    Modulo,
-    Equal,
-    NotEqual,
-    LessThan,
-    LessThanOrEqual,
-    GreaterThan,
-    GreaterThanOrEqual,
-    LogicalAnd,
-    LogicalOr,
-    BitwiseAnd,
-    BitwiseOr,
-    BitwiseXor,
-    LeftShift,
-    RightShift,
+    /// `-` - Subtraction
+    Sub,
+    /// `*` - Multiplication
+    Mul,
+    /// `/` - Division
+    Div,
+    /// `%` - Remainder
+    Rem,
+    /// `==` - Equality
+    Eq,
+    /// `!=` - Not equal
+    Ne,
+    /// `<` - Less than
+    Lt,
+    /// `<=` - Less than or equal
+    Le,
+    /// `>` - Greater than
+    Gt,
+    /// `>=` - Greater than or equal
+    Ge,
+    /// `&&` - Logical AND
+    And,
+    /// `||` - Logical OR
+    Or,
+    /// `&` - Bitwise AND
+    BitAnd,
+    /// `|` - Bitwise OR
+    BitOr,
+    /// `^` - Bitwise XOR
+    BitXor,
+    /// `<<` - Bitwise shift left
+    Shl,
+    /// `>>` - Bitwise shift right
+    Shr,
 }

@@ -1,6 +1,6 @@
 use crate::{
     Token, TokenKind,
-    ast::{Keyword, ReturnType, Type},
+    ast::{Keyword, Type},
     parser::Parser,
 };
 use zirael_utils::prelude::*;
@@ -53,11 +53,7 @@ impl<'a> Parser<'a> {
         }
 
         if self.match_token(TokenKind::BitwiseAnd) {
-            if self.match_keyword(Keyword::Mut) {
-                if let Some(inner_type) = self.parse_type() {
-                    return Some(Type::MutableReference(Box::new(inner_type)));
-                }
-            } else if let Some(inner_type) = self.parse_type() {
+            if let Some(inner_type) = self.parse_type() {
                 return Some(Type::Reference(Box::new(inner_type)));
             }
             self.error_at_current("expected type after '&'");
@@ -174,11 +170,11 @@ impl<'a> Parser<'a> {
         let return_type = (|| {
             if self.match_token(TokenKind::Arrow) {
                 let Some(ty) = self.parse_type() else {
-                    return Box::new(ReturnType::Default);
+                    return Box::new(Type::Void);
                 };
-                Box::new(ReturnType::Type(ty))
+                Box::new(ty)
             } else {
-                Box::new(ReturnType::Default)
+                Box::new(Type::Void)
             }
         })();
 

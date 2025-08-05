@@ -4,6 +4,12 @@ use zirael_utils::prelude::*;
 #[derive(Debug, Clone, PartialEq)]
 pub struct Stmt(pub StmtKind);
 
+impl Stmt {
+    pub fn kind(&self) -> &StmtKind {
+        &self.0
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum StmtKind {
     Expr(Expr),

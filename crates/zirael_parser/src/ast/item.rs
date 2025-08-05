@@ -1,6 +1,6 @@
 use crate::ast::{
     expr::Expr,
-    types::{GenericParameter, ReturnType, Type},
+    types::{GenericParameter, Type},
 };
 use std::path::PathBuf;
 use zirael_utils::prelude::*;
@@ -50,7 +50,7 @@ pub struct Abi(pub String);
 pub struct FunctionSignature {
     pub generics: Vec<GenericParameter>,
     pub parameters: Vec<Parameter>,
-    pub return_type: ReturnType,
+    pub return_type: Type,
 }
 
 #[derive(Debug, Clone, PartialEq)]

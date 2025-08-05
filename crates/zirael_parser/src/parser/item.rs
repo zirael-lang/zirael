@@ -1,8 +1,8 @@
 use crate::{
-    TokenKind,
+    TokenKind, Type,
     ast::{
         Abi, Function, FunctionModifiers, FunctionSignature, ImportKind, Item, ItemKind, Keyword,
-        Parameter, ParameterKind, ReturnType,
+        Parameter, ParameterKind,
     },
     parser::Parser,
     span::SpanUtils,
@@ -75,13 +75,9 @@ impl<'a> Parser<'a> {
         let parameters = self.parse_parameters();
 
         let return_type = if self.match_token(TokenKind::Colon) {
-            if let Some(ty) = self.parse_type() {
-                ReturnType::Type(ty)
-            } else {
-                ReturnType::Default
-            }
+            if let Some(ty) = self.parse_type() { ty } else { Type::Void }
         } else {
-            ReturnType::Default
+            Type::Void
         };
         let span = span.to(self.prev_span());
 

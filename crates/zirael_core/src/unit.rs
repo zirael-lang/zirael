@@ -2,6 +2,7 @@ use crate::{
     passes::{DeclarationCollection, MemoryAnalysis, NameResolution},
     prelude::*,
 };
+use zirael_type_checker::run_type_checker;
 
 #[derive(Debug)]
 pub struct CompilationUnit<'ctx> {
@@ -28,6 +29,8 @@ impl<'ctx> CompilationUnit<'ctx> {
         reports.print(sources);
 
         MemoryAnalysis::new(symbols, reports, sources).walk_modules(&mut result.modules);
+        run_type_checker(symbols, reports, sources, &mut result.modules);
+
         reports.print(sources);
     }
 }

@@ -6,10 +6,11 @@ mod stmt;
 mod ty;
 
 use crate::{
-    LexedModule, ModuleId, Token, TokenKind,
+    Expr, ExprId, ExprKind, LexedModule, ModuleId, Token, TokenKind,
     ast::{Ast, Keyword},
     get_tokens,
 };
+use id_arena::Arena;
 use std::{ops::Range, path::PathBuf};
 use zirael_utils::prelude::*;
 
@@ -27,6 +28,7 @@ pub struct Parser<'a> {
     source: SourceFile,
     sync_tokens: Vec<TokenKind>,
     pub discover_queue: Vec<(PathBuf, Range<usize>)>,
+    expr_id_arena: Arena<()>,
 }
 
 impl<'a> Parser<'a> {
@@ -39,7 +41,16 @@ impl<'a> Parser<'a> {
             source: input,
             sync_tokens: vec![TokenKind::BraceClose],
             discover_queue: Vec::new(),
+            expr_id_arena: Arena::new(),
         }
+    }
+
+    pub fn fresh_expr_id(&mut self) -> ExprId {
+        self.expr_id_arena.alloc(())
+    }
+
+    pub fn new_expr(&mut self, kind: ExprKind, span: Span) -> Expr {
+        Expr::new(kind, span, self.fresh_expr_id())
     }
 
     pub fn with_sync_tokens(mut self, sync_tokens: Vec<TokenKind>) -> Self {

@@ -20,16 +20,16 @@ impl<'a> Parser<'a> {
                     self.advance();
                     let right = self.parse_assignment();
                     let end_span = self.prev_span();
-                    return Expr::new(
+                    return self.new_expr(
                         ExprKind::Assign(Box::new(expr), Box::new(right)),
                         start_span.to(end_span),
                     );
                 }
                 TokenKind::PlusEquals => Some(BinaryOp::Add),
-                TokenKind::MinusEquals => Some(BinaryOp::Subtract),
-                TokenKind::MultiplyEquals => Some(BinaryOp::Multiply),
-                TokenKind::DivideEquals => Some(BinaryOp::Divide),
-                TokenKind::ModuloEquals => Some(BinaryOp::Modulo),
+                TokenKind::MinusEquals => Some(BinaryOp::Sub),
+                TokenKind::MultiplyEquals => Some(BinaryOp::Mul),
+                TokenKind::DivideEquals => Some(BinaryOp::Div),
+                TokenKind::ModuloEquals => Some(BinaryOp::Rem),
                 _ => None,
             };
 
@@ -37,7 +37,7 @@ impl<'a> Parser<'a> {
                 self.advance();
                 let right = self.parse_assignment();
                 let end_span = self.prev_span();
-                return Expr::new(
+                return self.new_expr(
                     ExprKind::AssignOp(Box::new(expr), op, Box::new(right)),
                     start_span.to(end_span),
                 );
@@ -53,24 +53,24 @@ impl<'a> Parser<'a> {
 
     fn get_binary_op_precedence(&self, token: &TokenKind) -> Option<(BinaryOp, u8)> {
         match token {
-            TokenKind::LogicalOr => Some((BinaryOp::LogicalOr, 1)),
-            TokenKind::LogicalAnd => Some((BinaryOp::LogicalAnd, 2)),
-            TokenKind::BitwiseOr => Some((BinaryOp::BitwiseOr, 3)),
-            TokenKind::BitwiseXor => Some((BinaryOp::BitwiseXor, 4)),
-            TokenKind::BitwiseAnd => Some((BinaryOp::BitwiseAnd, 5)),
-            TokenKind::EqualsEquals => Some((BinaryOp::Equal, 6)),
-            TokenKind::NotEquals => Some((BinaryOp::NotEqual, 6)),
-            TokenKind::LessThan => Some((BinaryOp::LessThan, 7)),
-            TokenKind::LessThanOrEqual => Some((BinaryOp::LessThanOrEqual, 7)),
-            TokenKind::GreaterThan => Some((BinaryOp::GreaterThan, 7)),
-            TokenKind::GreaterThanOrEqual => Some((BinaryOp::GreaterThanOrEqual, 7)),
-            TokenKind::LeftShift => Some((BinaryOp::LeftShift, 8)),
-            TokenKind::RightShift => Some((BinaryOp::RightShift, 8)),
+            TokenKind::LogicalOr => Some((BinaryOp::Or, 1)),
+            TokenKind::LogicalAnd => Some((BinaryOp::And, 2)),
+            TokenKind::BitwiseOr => Some((BinaryOp::BitOr, 3)),
+            TokenKind::BitwiseXor => Some((BinaryOp::BitXor, 4)),
+            TokenKind::BitwiseAnd => Some((BinaryOp::BitAnd, 5)),
+            TokenKind::EqualsEquals => Some((BinaryOp::Eq, 6)),
+            TokenKind::NotEquals => Some((BinaryOp::Ne, 6)),
+            TokenKind::LessThan => Some((BinaryOp::Lt, 7)),
+            TokenKind::LessThanOrEqual => Some((BinaryOp::Le, 7)),
+            TokenKind::GreaterThan => Some((BinaryOp::Gt, 7)),
+            TokenKind::GreaterThanOrEqual => Some((BinaryOp::Ge, 7)),
+            TokenKind::LeftShift => Some((BinaryOp::Shl, 8)),
+            TokenKind::RightShift => Some((BinaryOp::Shr, 8)),
             TokenKind::Plus => Some((BinaryOp::Add, 9)),
-            TokenKind::Minus => Some((BinaryOp::Subtract, 9)),
-            TokenKind::Multiply => Some((BinaryOp::Multiply, 10)),
-            TokenKind::Divide => Some((BinaryOp::Divide, 10)),
-            TokenKind::Modulo => Some((BinaryOp::Modulo, 10)),
+            TokenKind::Minus => Some((BinaryOp::Sub, 9)),
+            TokenKind::Multiply => Some((BinaryOp::Mul, 10)),
+            TokenKind::Divide => Some((BinaryOp::Div, 10)),
+            TokenKind::Modulo => Some((BinaryOp::Rem, 10)),
             _ => None,
         }
     }
@@ -92,7 +92,7 @@ impl<'a> Parser<'a> {
             self.advance();
             let right = self.parse_binary_expr(precedence + 1);
             let end_span = right.span.clone();
-            left = Expr::new(
+            left = self.new_expr(
                 ExprKind::Binary { left: Box::new(left), op, right: Box::new(right) },
                 start_span.to(end_span),
             );
@@ -118,7 +118,7 @@ impl<'a> Parser<'a> {
                 self.advance();
                 let expr = self.parse_unary();
                 let end_span = expr.span.clone();
-                return Expr::new(
+                return self.new_expr(
                     ExprKind::Unary(Box::new(op), Box::new(expr)),
                     start_span.to(end_span),
                 );
@@ -150,7 +150,7 @@ impl<'a> Parser<'a> {
         }
 
         let end_span = self.prev_span();
-        Expr::new(ExprKind::Call { callee: Box::new(callee), args }, start_span.to(end_span))
+        self.new_expr(ExprKind::Call { callee: Box::new(callee), args }, start_span.to(end_span))
     }
 
     fn parse_field_access(&mut self, base: Expr) -> Expr {
@@ -164,7 +164,7 @@ impl<'a> Parser<'a> {
 
         if field_chain.len() > 1 {
             let end_span = field_chain.last().unwrap().span.clone();
-            Expr::new(ExprKind::FieldAccess(field_chain), start_span.to(end_span))
+            self.new_expr(ExprKind::FieldAccess(field_chain), start_span.to(end_span))
         } else {
             field_chain.into_iter().next().unwrap()
         }
@@ -201,25 +201,25 @@ impl<'a> Parser<'a> {
                     let value = *value;
                     self.advance();
                     let span = self.prev_span();
-                    Expr::new(ExprKind::Literal(Literal::Integer(value)), span)
+                    self.new_expr(ExprKind::Literal(Literal::Integer(value)), span)
                 }
                 TokenKind::Float(value) => {
                     let value = *value;
                     self.advance();
                     let span = self.prev_span();
-                    Expr::new(ExprKind::Literal(Literal::Float(value)), span)
+                    self.new_expr(ExprKind::Literal(Literal::Float(value)), span)
                 }
                 TokenKind::String(value) => {
                     let value = value.clone();
                     self.advance();
                     let span = self.prev_span();
-                    Expr::new(ExprKind::Literal(Literal::String(value)), span)
+                    self.new_expr(ExprKind::Literal(Literal::String(value)), span)
                 }
                 TokenKind::Bool(value) => {
                     let value = *value;
                     self.advance();
                     let span = self.prev_span();
-                    Expr::new(ExprKind::Literal(Literal::Bool(value)), span)
+                    self.new_expr(ExprKind::Literal(Literal::Bool(value)), span)
                 }
 
                 TokenKind::Identifier(name) => {
@@ -227,7 +227,7 @@ impl<'a> Parser<'a> {
                     self.advance();
                     let span = self.prev_span();
                     let identifier = zirael_utils::prelude::get_or_intern(&name);
-                    Expr::new(ExprKind::Identifier(identifier, None), span)
+                    self.new_expr(ExprKind::Identifier(identifier, None), span)
                 }
 
                 TokenKind::ParenOpen => {
@@ -240,7 +240,7 @@ impl<'a> Parser<'a> {
                     }
 
                     let end_span = self.prev_span();
-                    Expr::new(ExprKind::Paren(Box::new(expr)), start_span.to(end_span))
+                    self.new_expr(ExprKind::Paren(Box::new(expr)), start_span.to(end_span))
                 }
 
                 TokenKind::BraceOpen => {
@@ -252,13 +252,13 @@ impl<'a> Parser<'a> {
                     self.error_at_peek(format!("unexpected token in expression: {:?}", token.kind));
                     self.advance();
                     let span = self.prev_span();
-                    Expr::new(ExprKind::couldnt_parse(), span)
+                    self.new_expr(ExprKind::couldnt_parse(), span)
                 }
             }
         } else {
             self.error_at_current("unexpected end of input in expression");
             let span = self.peek_span();
-            Expr::new(ExprKind::couldnt_parse(), span)
+            self.new_expr(ExprKind::couldnt_parse(), span)
         }
     }
 
@@ -276,6 +276,6 @@ impl<'a> Parser<'a> {
         }
 
         let end_span = self.prev_span();
-        Expr::new(ExprKind::Block(stmts), start_span.to(end_span))
+        self.new_expr(ExprKind::Block(stmts), start_span.to(end_span))
     }
 }

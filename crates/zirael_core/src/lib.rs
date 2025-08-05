@@ -1,5 +1,3 @@
-extern crate core;
-
 mod context;
 mod passes;
 mod unit;

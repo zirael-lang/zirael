@@ -4,7 +4,7 @@ use crate::{
         Abi, Ast, Attribute, BinaryOp, ClassDeclaration, ClassField, EnumDeclaration, EnumVariant,
         EnumVariantData, Expr, ExprKind, Function, FunctionModifiers, FunctionSignature,
         GenericArg, GenericParameter, ImportKind, Item, ItemKind, Literal, Parameter,
-        ParameterKind, ReturnType, Stmt, StmtKind, TraitBound, Type, UnaryOp, VarDecl,
+        ParameterKind, Stmt, StmtKind, TraitBound, Type, UnaryOp, VarDecl,
     },
     symbols::SymbolId,
 };
@@ -104,7 +104,7 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
             self.walk_parameter(param);
         }
 
-        self.walk_return_type(&mut sig.return_type);
+        self.walk_type(&mut sig.return_type);
     }
 
     fn walk_parameter(&mut self, param: &mut Parameter) {
@@ -251,10 +251,6 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
                     self.walk_expr(expr);
                 }
             }
-            ExprKind::HeapAlloc(expr) => {
-                self.visit_box(expr);
-                self.walk_expr(expr);
-            }
             ExprKind::IndexAccess(expr, index) => {
                 self.walk_expr(expr);
                 self.walk_expr(index);
@@ -307,7 +303,7 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
             | Type::Bool
             | Type::Void
             | Type::Inferred => {}
-            Type::Pointer(inner) | Type::Reference(inner) | Type::MutableReference(inner) => {
+            Type::Pointer(inner) | Type::Reference(inner) => {
                 self.walk_type(inner);
             }
             Type::Array(inner, _) => {
@@ -317,21 +313,14 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
                 for param in params {
                     self.walk_type(param);
                 }
-                self.walk_return_type(return_type);
+                self.walk_type(return_type);
             }
             Type::Named { name: _, generics } => {
                 for generic in generics {
                     self.walk_type(generic);
                 }
             }
-        }
-    }
-
-    fn walk_return_type(&mut self, ret_ty: &mut ReturnType) {
-        self.visit_return_type(ret_ty);
-        match ret_ty {
-            ReturnType::Default => {}
-            ReturnType::Type(ty) => self.walk_type(ty),
+            _ => warn!("Unhandled type: {:?}", ty),
         }
     }
 
@@ -422,7 +411,6 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
     fn visit_trait_bound(&mut self, _bound: &mut TraitBound) {}
     fn visit_generic_arg(&mut self, _arg: &mut GenericArg) {}
     fn visit_type(&mut self, _ty: &mut Type) {}
-    fn visit_return_type(&mut self, _ret_ty: &mut ReturnType) {}
     fn visit_identifier(
         &mut self,
         _id: &mut Identifier,
@@ -441,11 +429,29 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
 #[macro_export]
 macro_rules! impl_ast_walker {
     ($struct_name:ident) => {
+        impl_ast_walker!($struct_name, {}, with_defaults);
+    };
+
+    ($struct_name:ident, { $($field_name:ident: $field_type:ty),* $(,)? }) => {
+        impl_ast_walker!($struct_name, { $($field_name: $field_type),* }, with_defaults);
+    };
+
+    ($struct_name:ident, { $($field_name:ident: $field_type:ty),* $(,)? }, no_defaults) => {
+        impl_ast_walker!($struct_name, { $($field_name: $field_type),* }, no_defaults, {});
+    };
+
+    ($struct_name:ident, { $($field_name:ident: $field_type:ty),* $(,)? }, custom, { $($custom_impl:item)* }) => {
+        impl_ast_walker!($struct_name, { $($field_name: $field_type),* }, custom, { $($custom_impl)* });
+    };
+
+    ($struct_name:ident, { $($field_name:ident: $field_type:ty),* }, with_defaults) => {
+        #[derive(Debug, Clone)]
         pub struct $struct_name<'reports> {
             pub symbol_table: SymbolTable,
             pub reports: Reports<'reports>,
             pub processed_file: Option<SourceFileId>,
             pub sources: Sources,
+            $(pub $field_name: $field_type,)*
         }
 
         impl<'reports> $struct_name<'reports> {
@@ -459,6 +465,22 @@ macro_rules! impl_ast_walker {
                     reports: reports.clone(),
                     processed_file: None,
                     sources: sources.clone(),
+                    $($field_name: Default::default(),)*
+                }
+            }
+
+            pub fn new_no_defaults(
+                table: &SymbolTable,
+                reports: &Reports<'reports>,
+                sources: &Sources,
+                $($field_name: $field_type,)*
+            ) -> Self {
+                Self {
+                    symbol_table: table.clone(),
+                    reports: reports.clone(),
+                    processed_file: None,
+                    sources: sources.clone(),
+                    $($field_name,)*
                 }
             }
         }
@@ -488,5 +510,67 @@ macro_rules! impl_ast_walker {
                 &self.sources
             }
         }
+    };
+
+    ($struct_name:ident, { $($field_name:ident: $field_type:ty),* }, no_defaults, { $($custom_impl:item)* }) => {
+        pub struct $struct_name<'reports> {
+            pub symbol_table: SymbolTable,
+            pub reports: Reports<'reports>,
+            pub processed_file: Option<SourceFileId>,
+            pub sources: Sources,
+            $(pub $field_name: $field_type,)*
+        }
+
+        impl<'reports> $struct_name<'reports> {
+            pub fn new_no_defaults(
+                table: &SymbolTable,
+                reports: &Reports<'reports>,
+                sources: &Sources,
+                $($field_name: $field_type,)*
+            ) -> Self {
+                Self {
+                    symbol_table: table.clone(),
+                    reports: reports.clone(),
+                    processed_file: None,
+                    sources: sources.clone(),
+                    $($field_name,)*
+                }
+            }
+        }
+
+        impl_ast_walker!(@maybe_impl_walker_context, $struct_name, { $($custom_impl)* });
+
+        $($custom_impl)*
+    };
+
+    (@maybe_impl_walker_context, $struct_name:ident, {}) => {
+        impl<'reports> WalkerContext<'reports> for $struct_name<'reports> {
+            fn symbol_table(&self) -> &SymbolTable {
+                &self.symbol_table
+            }
+
+            fn symbol_table_mut(&mut self) -> &mut SymbolTable {
+                &mut self.symbol_table
+            }
+
+            fn reports(&self) -> &Reports<'reports> {
+                &self.reports
+            }
+
+            fn processed_file(&self) -> Option<SourceFileId> {
+                self.processed_file
+            }
+
+            fn set_processed_file(&mut self, file_id: SourceFileId) {
+                self.processed_file = Some(file_id);
+            }
+
+            fn sources(&self) -> &Sources {
+                &self.sources
+            }
+        }
+    };
+
+    (@maybe_impl_walker_context, $struct_name:ident, { $($custom_impl:item)+ }) => {
     };
 }

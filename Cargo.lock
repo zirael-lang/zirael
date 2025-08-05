@@ -1307,6 +1307,7 @@ name = "zirael_core"
 version = "0.1.0"
 dependencies = [
  "zirael_parser",
+ "zirael_type_checker",
  "zirael_utils",
 ]
 
@@ -1323,6 +1324,15 @@ dependencies = [
  "ordinal",
  "petgraph",
  "strsim 0.11.1",
+ "zirael_utils",
+]
+
+[[package]]
+name = "zirael_type_checker"
+version = "0.1.0"
+dependencies = [
+ "id-arena",
+ "zirael_parser",
  "zirael_utils",
 ]
 

@@ -98,7 +98,9 @@ impl SymbolTable {
                 });
             }
 
-            let symbol = Symbol {
+            table.declaration_counter += 1;
+            let symbol_id = table.symbols.alloc_with_id(|id| Symbol {
+                id,
                 name,
                 kind,
                 scope: current_scope,
@@ -106,10 +108,7 @@ impl SymbolTable {
                 is_used: false,
                 declaration_order: table.declaration_counter,
                 imported_from: None,
-            };
-
-            table.declaration_counter += 1;
-            let symbol_id = table.symbols.alloc(symbol);
+            });
 
             table.name_lookup.insert((name, current_scope), symbol_id);
 
@@ -264,11 +263,11 @@ impl SymbolTable {
     pub fn update_symbol_kind(
         &self,
         id: SymbolId,
-        new_kind: SymbolKind,
+        new_kind: impl FnOnce(&mut SymbolKind) -> SymbolKind,
     ) -> Result<(), SymbolTableError> {
         self.write(|table| {
             if let Some(symbol) = table.symbols.get_mut(id) {
-                symbol.kind = new_kind;
+                symbol.kind = new_kind(&mut symbol.kind);
                 Ok(())
             } else {
                 Err(SymbolTableError::SymbolNotFound {
@@ -444,7 +443,9 @@ impl SymbolTableImpl {
             .ok_or(SymbolTableError::SymbolNotFound { name: symbol_name, scope: source_module })?
             .clone();
 
-        let imported_symbol = Symbol {
+        self.declaration_counter += 1;
+        let imported_symbol_id = self.symbols.alloc_with_id(|id| Symbol {
+            id,
             name: symbol_name,
             kind: source_symbol.kind,
             scope: target_module,
@@ -452,10 +453,7 @@ impl SymbolTableImpl {
             is_used: false,
             declaration_order: self.declaration_counter,
             imported_from: Some(source_module),
-        };
-
-        self.declaration_counter += 1;
-        let imported_symbol_id = self.symbols.alloc(imported_symbol);
+        });
 
         self.name_lookup.insert((symbol_name, target_module), imported_symbol_id);
 

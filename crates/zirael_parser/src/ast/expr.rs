@@ -6,6 +6,7 @@ use crate::{
     symbols::SymbolId,
 };
 use colored::Colorize as _;
+use id_arena::Id;
 use std::fmt::{self, Debug, Formatter};
 use zirael_utils::prelude::*;
 
@@ -22,7 +23,6 @@ pub enum ExprKind {
     Call { callee: Box<Expr>, args: Vec<Expr> },
     FieldAccess(Vec<Expr>),
     IndexAccess(Box<Expr>, Box<Expr>),
-    HeapAlloc(Box<Expr>),
     CouldntParse(CouldntParse),
 }
 
@@ -50,15 +50,17 @@ impl Debug for CouldntParse {
     }
 }
 
+pub type ExprId = Id<()>;
 #[derive(Debug, Clone, PartialEq)]
 pub struct Expr {
+    pub id: ExprId,
     pub kind: ExprKind,
     pub span: Span,
 }
 
 impl Expr {
-    pub fn new(kind: ExprKind, span: Span) -> Self {
-        Self { kind, span }
+    pub fn new(kind: ExprKind, span: Span, id: ExprId) -> Self {
+        Self { kind, span, id }
     }
 
     pub fn as_identifier(&mut self) -> Option<(&mut Identifier, &mut Option<SymbolId>)> {
@@ -91,14 +93,15 @@ impl ExprKind {
             ExprKind::Call { .. } => "call",
             ExprKind::FieldAccess(_) => "field access",
             ExprKind::IndexAccess(_, _) => "index access",
-            ExprKind::HeapAlloc(_) => "heap allocation",
             ExprKind::CouldntParse(_) => "couldnt parse",
         }
     }
-    
+
     pub fn can_be_borrowed(&self) -> bool {
         match self {
-            ExprKind::Identifier(_, _) | ExprKind::FieldAccess(_) | ExprKind::IndexAccess(_, _) => true,
+            ExprKind::Identifier(_, _) | ExprKind::FieldAccess(_) | ExprKind::IndexAccess(_, _) => {
+                true
+            }
             _ => false,
         }
     }

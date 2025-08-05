@@ -82,6 +82,7 @@ pub enum TemporaryLifetime {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Symbol {
+    pub id: SymbolId,
     pub name: Identifier,
     pub kind: SymbolKind,
     pub scope: ScopeId,
