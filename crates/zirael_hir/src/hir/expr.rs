@@ -16,11 +16,10 @@ pub enum HirExprKind {
     Unary { op: UnaryOp, operand: Box<HirExpr> },
     Block(Vec<HirStmt>),
     Assign { lhs: Box<HirExpr>, rhs: Box<HirExpr> },
-    AssignOp { lhs: Box<HirExpr>, op: BinaryOp, rhs: Box<HirExpr> },
     Call { callee: Box<HirExpr>, args: Vec<HirExpr> },
     FieldAccess { receiver: Box<HirExpr>, field_symbol: SymbolId },
     IndexAccess { object: Box<HirExpr>, index: Box<HirExpr> },
-    Error
+    Error,
 }
 
 #[derive(Debug, Clone)]

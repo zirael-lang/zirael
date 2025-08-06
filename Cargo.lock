@@ -1303,6 +1303,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "zirael_codegen"
+version = "0.1.0"
+dependencies = [
+ "zirael_hir",
+]
+
+[[package]]
 name = "zirael_core"
 version = "0.1.0"
 dependencies = [

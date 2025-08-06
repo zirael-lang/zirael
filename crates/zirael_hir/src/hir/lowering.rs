@@ -161,7 +161,18 @@ impl<'reports> AstLowering<'reports> {
             ExprKind::AssignOp(lhs, op, rhs) => {
                 let lhs_expr = Box::new(self.lower_expr_with_locals(lhs, locals));
                 let rhs_expr = Box::new(self.lower_expr_with_locals(rhs, locals));
-                HirExprKind::AssignOp { lhs: lhs_expr, op: op.clone(), rhs: rhs_expr }
+                HirExprKind::Assign {
+                    lhs: lhs_expr.clone(),
+                    rhs: Box::new(HirExpr {
+                        kind: HirExprKind::Binary {
+                            left: lhs_expr,
+                            op: op.clone(),
+                            right: rhs_expr,
+                        },
+                        ty: ast_expr.ty.clone(),
+                        span: ast_expr.span.clone(),
+                    }),
+                }
             }
 
             ExprKind::Call { callee, args } => {
