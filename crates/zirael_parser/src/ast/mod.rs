@@ -1,5 +1,5 @@
 mod expr;
-mod item;
+pub mod item;
 mod keyword;
 mod operator;
 mod stmt;

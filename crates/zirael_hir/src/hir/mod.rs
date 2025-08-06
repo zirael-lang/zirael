@@ -1,0 +1,96 @@
+use crate::hir::expr::{HirExpr, HirExprKind};
+use id_arena::Id;
+use std::collections::HashMap;
+use zirael_parser::{ExprId, SymbolId, Type};
+use zirael_utils::prelude::Span;
+
+mod expr;
+pub mod lowering;
+
+#[derive(Debug, Clone, Default)]
+pub struct HirModule {
+    pub items: HashMap<SymbolId, HirItem>,
+}
+
+#[derive(Debug, Clone)]
+pub struct HirItem {
+    pub symbol_id: SymbolId,
+    pub kind: HirItemKind,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub enum HirItemKind {
+    Function(HirFunction),
+    Class(HirClass),
+    Enum(HirEnum),
+}
+
+#[derive(Debug, Clone)]
+pub struct HirFunction {
+    pub symbol_id: SymbolId,
+    pub signature: HirFunctionSignature,
+    pub body: Option<HirBody>,
+    pub is_async: bool,
+    pub is_const: bool,
+    pub is_extern: bool,
+    pub abi: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct HirFunctionSignature {
+    pub parameters: Vec<HirParam>,
+    pub return_type: Type,
+}
+
+#[derive(Debug, Clone)]
+pub struct HirParam {
+    pub symbol_id: SymbolId,
+    pub ty: Type,
+    pub is_variadic: bool,
+    pub default_value: Option<HirExpr>,
+}
+
+#[derive(Debug, Clone)]
+pub struct HirBody {
+    pub locals: HashMap<SymbolId, HirLocal>,
+    pub root_expr: HirExpr,
+}
+
+#[derive(Debug, Clone)]
+pub struct HirLocal {
+    pub symbol_id: SymbolId,
+    pub ty: Type,
+}
+
+#[derive(Debug, Clone)]
+pub struct HirClass {
+    pub symbol_id: SymbolId,
+    pub fields: Vec<HirField>,
+}
+
+#[derive(Debug, Clone)]
+pub struct HirField {
+    pub symbol_id: SymbolId,
+    pub ty: Type,
+    pub is_public: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct HirEnum {
+    pub symbol_id: SymbolId,
+    pub variants: Vec<HirVariant>,
+}
+
+#[derive(Debug, Clone)]
+pub struct HirVariant {
+    pub symbol_id: SymbolId,
+    pub data: HirVariantData,
+}
+
+#[derive(Debug, Clone)]
+pub enum HirVariantData {
+    Unit,
+    Tuple(Vec<Type>),
+    Struct(Vec<HirField>),
+}

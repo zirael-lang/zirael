@@ -3,22 +3,24 @@ use zirael_parser::{
     AstWalker, BinaryOp, Expr, ExprId, ExprKind, Literal, ScopeType, Stmt, StmtKind, SymbolId,
     SymbolKind, Type, UnaryOp, VarDecl, WalkerContext,
 };
-use zirael_utils::prelude::{Colorize, SourceFileId, warn};
+use zirael_utils::prelude::{Colorize, SourceFileId, Span, warn};
 
 impl<'reports> TypeInference<'reports> {
     pub fn infer_expr(&mut self, expr: &mut Expr) -> Type {
-        match &mut expr.kind {
+        let ty = match &mut expr.kind {
             ExprKind::Literal(lit) => self.infer_literal(lit),
             ExprKind::Identifier(_, symbol_id) => self.infer_identifier(symbol_id.unwrap()),
             ExprKind::Assign(lhs, rhs) => self.infer_assignment(lhs, rhs),
-            ExprKind::Block(stmts) => self.infer_block(stmts),
+            ExprKind::Block(stmts) => self.infer_block(stmts, expr.span.clone()),
             ExprKind::Unary(op, expr) => self.infer_unary(op, expr),
             ExprKind::Binary { left, op, right } => self.infer_binary(left, op, right),
             _ => {
                 warn!("unimplemented expr: {:#?}", expr);
                 Type::Error
             }
-        }
+        };
+        expr.ty = ty.clone();
+        ty
     }
 
     fn infer_unary(&mut self, op: &UnaryOp, expr: &mut Expr) -> Type {
@@ -148,8 +150,8 @@ impl<'reports> TypeInference<'reports> {
         Type::Void
     }
 
-    fn infer_block(&mut self, stmts: &mut [Stmt]) -> Type {
-        self.push_scope(ScopeType::Block);
+    fn infer_block(&mut self, stmts: &mut [Stmt], block_span: Span) -> Type {
+        self.push_scope(ScopeType::Block(block_span));
         if stmts.is_empty() {
             return Type::Void;
         }
@@ -181,16 +183,18 @@ impl<'reports> TypeInference<'reports> {
 
     pub fn infer_variable(&mut self, decl: &mut VarDecl) -> Type {
         let value_ty = &self.infer_expr(&mut decl.value);
-        let variable_ty = if let Type::Inferred = decl.ty { &value_ty } else { &decl.ty };
+        let variable_ty =
+            if let Type::Inferred = decl.ty { value_ty.clone() } else { decl.ty.clone() };
 
         let symbol = self.symbol_table.lookup_symbol(&decl.name).unwrap();
         self.ctx.add_variable(symbol.id, variable_ty.clone());
 
-        if !self.eq(value_ty, variable_ty) {
-            self.type_mismatch(variable_ty, value_ty, decl.span.clone());
+        if !self.eq(value_ty, &variable_ty) {
+            self.type_mismatch(&variable_ty, value_ty, decl.span.clone());
             return Type::Error;
         }
 
+        decl.ty = value_ty.clone();
         variable_ty.clone()
     }
 

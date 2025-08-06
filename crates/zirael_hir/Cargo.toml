@@ -1,16 +1,14 @@
 [package]
-name = "zirael_core"
+name = "zirael_hir"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Zirael Core"
 
 [dependencies]
+id-arena = { workspace = true }
 zirael_parser = { workspace = true }
 zirael_utils = { workspace = true }
-zirael_type_checker = { workspace = true }
-zirael_hir = { workspace = true }
 
 [lints]
 workspace = true

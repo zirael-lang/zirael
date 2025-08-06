@@ -1,5 +1,5 @@
 use crate::{
-    AstWalker, LexedModule, ModuleId, Type,
+    AstWalker, ItemId, LexedModule, ModuleId, Type,
     symbols::{Scope, ScopeId, ScopeType, Symbol, SymbolId, SymbolKind, TemporaryLifetime},
 };
 use id_arena::{Arena, Id};
@@ -214,7 +214,6 @@ impl SymbolTable {
                 if let Some(&symbol_id) = table.name_lookup.get(&(*name, scope_id)) {
                     return Some(symbol_id);
                 }
-
                 current_scope = table.scopes.get(scope_id)?.parent;
             }
 

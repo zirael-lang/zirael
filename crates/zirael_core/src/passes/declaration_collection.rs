@@ -2,8 +2,8 @@ use crate::prelude::{ReportKind, WalkerContext, debug};
 use std::{any::Any, env::var, fmt::format, path::PathBuf};
 use zirael_parser::{
     Ast, AstWalker, Dependency, DependencyGraph, ExprKind, Function, ImportConflict, ImportKind,
-    ItemKind, LexedModule, ModuleId, Parameter, ParameterKind, ScopeType, Symbol, SymbolKind,
-    SymbolTable, SymbolTableError, VarDecl, impl_ast_walker,
+    ItemId, ItemKind, LexedModule, ModuleId, Parameter, ParameterKind, ScopeType, Symbol, SymbolId,
+    SymbolKind, SymbolTable, SymbolTableError, VarDecl, impl_ast_walker, item::Item,
 };
 use zirael_utils::{
     prelude::{Colorize, Identifier, ReportBuilder, Reports, Sources, Span, resolve},
@@ -138,14 +138,19 @@ impl<'reports> DeclarationCollection<'reports> {
         format!("{} {}", symbol.kind.name(), resolve(&symbol.name)).dimmed().bold().to_string()
     }
 
-    pub fn register_symbol(&mut self, name: Identifier, kind: SymbolKind, span: Span) {
+    pub fn register_symbol(
+        &mut self,
+        name: Identifier,
+        kind: SymbolKind,
+        span: Span,
+    ) -> Option<SymbolId> {
         let file_id =
             self.processed_file.expect("when registering a symbol, the current file must be known");
         let symbol_name = resolve(&name);
         let symbol_type = kind.name();
 
         match self.symbol_table.insert(name, kind.clone(), Some(span.clone())) {
-            Ok(_) => {}
+            Ok(id) => Some(id),
             Err(SymbolTableError::SymbolAlreadyExists { existing_id, .. }) => {
                 if let Some(existing_symbol) = self.symbol_table.get_symbol(existing_id) {
                     self.reports.add(
@@ -167,6 +172,7 @@ impl<'reports> DeclarationCollection<'reports> {
                         ),
                     );
                 }
+                None
             }
             Err(other_error) => {
                 self.reports.add(
@@ -181,43 +187,54 @@ impl<'reports> DeclarationCollection<'reports> {
                     )
                     .label("failed to register", span),
                 );
+                None
             }
         }
     }
 }
 
 impl<'reports> AstWalker<'reports> for DeclarationCollection<'reports> {
-    fn visit_function(&mut self, func: &mut Function) {
-        self.register_symbol(
-            func.name,
-            SymbolKind::Function {
-                signature: func.signature.clone(),
-                modifiers: func.modifiers.clone(),
-            },
-            func.span.clone(),
-        );
+    fn visit_function(&mut self, func: &mut Function) {}
+
+    fn visit_item(&mut self, item: &mut Item) {
+        let id = match &item.kind {
+            ItemKind::Function(func) => self.register_symbol(
+                func.name,
+                SymbolKind::Function {
+                    signature: func.signature.clone(),
+                    modifiers: func.modifiers.clone(),
+                },
+                func.span.clone(),
+            ),
+            ItemKind::Import(..) => None,
+            _ => todo!(),
+        };
+
+        item.symbol_id = id;
     }
 
     fn visit_parameter(&mut self, param: &mut Parameter) {
-        let param = param.clone();
-        self.register_symbol(
-            param.name,
+        let p = param.clone();
+        let sym_id = self.register_symbol(
+            p.name,
             SymbolKind::Parameter {
-                ty: param.ty,
-                is_variadic: param.kind == ParameterKind::Variadic,
-                default_value: param.default_value,
+                ty: p.ty,
+                is_variadic: p.kind == ParameterKind::Variadic,
+                default_value: p.default_value,
             },
-            param.span,
+            p.span,
         );
+        param.symbol_id = sym_id;
     }
 
     fn visit_var_decl(&mut self, var_decl: &mut VarDecl) {
-        let var = var_decl.clone();
+        let v = var_decl.clone();
 
-        self.register_symbol(
-            var.name,
-            SymbolKind::Variable { ty: var.ty, is_heap: false, is_moved: None },
-            var.span,
-        )
+        let sym_id = self.register_symbol(
+            v.name,
+            SymbolKind::Variable { ty: v.ty, is_heap: false, is_moved: None },
+            v.span,
+        );
+        var_decl.symbol_id = sym_id;
     }
 }

@@ -1,4 +1,4 @@
-mod ast;
+pub mod ast;
 mod dependency;
 mod discover;
 mod lexer;

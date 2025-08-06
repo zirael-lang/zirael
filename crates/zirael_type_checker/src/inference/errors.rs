@@ -50,4 +50,18 @@ impl<'reports> TypeInference<'reports> {
 
         self.reports.add(self.file_id(), report);
     }
+
+    pub fn return_type_mismatch(&mut self, expected: &Type, found: &Type, span: Span) {
+        let report = ReportBuilder::builder(
+            &format!(
+                "expected return type {}, found {}",
+                self.format_type(expected).dimmed().bold(),
+                self.format_type(found).dimmed().bold()
+            ),
+            ReportKind::Error,
+        )
+        .label("here", span);
+
+        self.reports.add(self.file_id(), report);
+    }
 }

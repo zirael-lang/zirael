@@ -37,6 +37,7 @@ zirael_core = { path = "crates/zirael_core", version = "0.1.0" }
 zirael_parser = { path = "crates/zirael_parser", version = "0.1.0" }
 zirael_utils = { path = "crates/zirael_utils", version = "0.1.0" }
 zirael_type_checker = { path = "crates/zirael_type_checker", version = "0.1.0" }
+zirael_hir = { path = "crates/zirael_hir", version = "0.1.0" }
 
 # Rules were taken from egui
 [workspace.lints.rust]

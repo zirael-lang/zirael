@@ -1,16 +1,24 @@
-use crate::ast::{
-    expr::Expr,
-    types::{GenericParameter, Type},
+use crate::{
+    SymbolId,
+    ast::{
+        expr::Expr,
+        types::{GenericParameter, Type},
+    },
 };
+use id_arena::Id;
 use std::path::PathBuf;
 use zirael_utils::prelude::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Item {
+    pub id: ItemId,
     pub kind: ItemKind,
     pub attributes: Vec<Attribute>,
     pub name: Identifier,
+    pub span: Span,
+    pub symbol_id: Option<SymbolId>,
 }
+pub type ItemId = Id<()>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ItemKind {
@@ -60,6 +68,7 @@ pub struct Parameter {
     pub kind: ParameterKind,
     pub default_value: Option<Expr>,
     pub span: Span,
+    pub symbol_id: Option<SymbolId>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]

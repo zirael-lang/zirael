@@ -63,4 +63,22 @@ impl<'reports> AstWalker<'reports> for TypeInference<'reports> {
     fn visit_var_decl(&mut self, _var_decl: &mut VarDecl) {
         self.infer_variable(_var_decl);
     }
+
+    fn walk_function(&mut self, func: &mut Function) {
+        self.visit_function(func);
+        self.push_scope(ScopeType::Function(func.name.clone()));
+
+        self.walk_function_modifiers(&mut func.modifiers);
+        self.walk_function_signature(&mut func.signature);
+
+        if let Some(body) = &mut func.body {
+            let body_ty = self.infer_expr(body);
+
+            if !self.eq(&body_ty, &func.signature.return_type) {
+                self.return_type_mismatch(&func.signature.return_type, &body_ty, func.span.clone());
+            }
+        }
+
+        self.pop_scope();
+    }
 }

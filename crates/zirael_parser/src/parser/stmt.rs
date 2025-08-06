@@ -28,6 +28,7 @@ impl<'a> Parser<'a> {
                 value,
                 ty,
                 span: span_start.to(span_end),
+                symbol_id: None,
             }))
         } else if self.match_keyword(Keyword::Return) {
             let span = self.prev_span();

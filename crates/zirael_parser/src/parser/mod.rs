@@ -6,7 +6,7 @@ mod stmt;
 mod ty;
 
 use crate::{
-    Expr, ExprId, ExprKind, LexedModule, ModuleId, Token, TokenKind,
+    Expr, ExprId, ExprKind, ItemId, LexedModule, ModuleId, Token, TokenKind,
     ast::{Ast, Keyword},
     get_tokens,
 };
@@ -29,6 +29,7 @@ pub struct Parser<'a> {
     sync_tokens: Vec<TokenKind>,
     pub discover_queue: Vec<(PathBuf, Range<usize>)>,
     expr_id_arena: Arena<()>,
+    item_id_arena: Arena<()>,
 }
 
 impl<'a> Parser<'a> {
@@ -42,11 +43,16 @@ impl<'a> Parser<'a> {
             sync_tokens: vec![TokenKind::BraceClose],
             discover_queue: Vec::new(),
             expr_id_arena: Arena::new(),
+            item_id_arena: Arena::new(),
         }
     }
 
     pub fn fresh_expr_id(&mut self) -> ExprId {
         self.expr_id_arena.alloc(())
+    }
+
+    pub fn fresh_item_id(&mut self) -> ItemId {
+        self.item_id_arena.alloc(())
     }
 
     pub fn new_expr(&mut self, kind: ExprKind, span: Span) -> Expr {

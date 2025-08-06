@@ -1,3 +1,4 @@
+use crate::prelude::ItemId;
 use crate::prelude::{WalkerContext, warn};
 use zirael_parser::{
     AstWalker, Expr, Function, LexedModule, ModuleId, ScopeType, Symbol, SymbolId, SymbolKind,

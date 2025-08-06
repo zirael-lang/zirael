@@ -1,4 +1,7 @@
-use crate::ast::{expr::Expr, types::Type};
+use crate::{
+    SymbolId,
+    ast::{expr::Expr, types::Type},
+};
 use zirael_utils::prelude::*;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -30,4 +33,5 @@ pub struct VarDecl {
     pub ty: Type,
     pub value: Expr,
     pub span: Span,
+    pub symbol_id: Option<SymbolId>,
 }

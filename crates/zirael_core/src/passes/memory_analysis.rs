@@ -1,4 +1,4 @@
-use crate::prelude::{Color, ReportKind, WalkerContext, debug};
+use crate::prelude::{Color, ItemId, ReportKind, WalkerContext, debug};
 use zirael_parser::{
     AstWalker, Expr, ExprKind, Return, SymbolId, SymbolKind, SymbolTable, UnaryOp, VarDecl,
     VariableMove, impl_ast_walker,

@@ -36,7 +36,7 @@ pub enum ScopeType {
     Global,
     Module(SourceFileId),
     Function(Identifier),
-    Block,
+    Block(Span),
     Class(Identifier),
     Enum(Identifier),
     Loop,

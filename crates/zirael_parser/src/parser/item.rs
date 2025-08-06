@@ -15,6 +15,7 @@ use zirael_utils::prelude::*;
 
 impl<'a> Parser<'a> {
     pub fn parse_item(&mut self) -> Option<Item> {
+        let span = self.peek_span();
         let attrs = self.parse_attrs();
 
         let (kind, name) = if self.match_keyword(Keyword::Fn) {
@@ -27,7 +28,14 @@ impl<'a> Parser<'a> {
             return None;
         };
 
-        Some(Item { attributes: attrs, name, kind })
+        Some(Item {
+            attributes: attrs,
+            name,
+            kind,
+            id: self.fresh_item_id(),
+            span: span.to(self.prev_span()),
+            symbol_id: None,
+        })
     }
 
     pub fn parse_import(&mut self) -> (ItemKind, Identifier) {
@@ -218,6 +226,7 @@ impl<'a> Parser<'a> {
             ty,
             default_value,
             span: span.to(self.prev_span()),
+            symbol_id: None,
         })
     }
 }

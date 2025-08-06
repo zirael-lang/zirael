@@ -1,4 +1,5 @@
 use crate::{
+    Type,
     ast::{
         operator::{BinaryOp, UnaryOp},
         stmt::Stmt,
@@ -56,11 +57,12 @@ pub struct Expr {
     pub id: ExprId,
     pub kind: ExprKind,
     pub span: Span,
+    pub ty: Type,
 }
 
 impl Expr {
     pub fn new(kind: ExprKind, span: Span, id: ExprId) -> Self {
-        Self { kind, span, id }
+        Self { kind, span, id, ty: Type::Inferred }
     }
 
     pub fn as_identifier(&mut self) -> Option<(&mut Identifier, &mut Option<SymbolId>)> {

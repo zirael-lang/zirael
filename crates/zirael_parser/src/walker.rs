@@ -1,5 +1,5 @@
 use crate::{
-    LexedModule, ModuleId, Return, ScopeType, SymbolTable,
+    ItemId, LexedModule, ModuleId, Return, ScopeType, SymbolTable,
     ast::{
         Abi, Ast, Attribute, BinaryOp, ClassDeclaration, ClassField, EnumDeclaration, EnumVariant,
         EnumVariantData, Expr, ExprKind, Function, FunctionModifiers, FunctionSignature,
@@ -69,7 +69,6 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
 
     fn walk_function(&mut self, func: &mut Function) {
         self.visit_function(func);
-
         self.push_scope(ScopeType::Function(func.name.clone()));
 
         self.walk_function_modifiers(&mut func.modifiers);
@@ -215,7 +214,7 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
                 self.walk_expr(right);
             }
             ExprKind::Block(stmts) => {
-                self.push_scope(ScopeType::Block);
+                self.push_scope(ScopeType::Block(expr.span.clone()));
 
                 for stmt in stmts {
                     self.walk_stmt(stmt);
