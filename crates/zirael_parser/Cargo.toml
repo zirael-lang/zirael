@@ -16,6 +16,7 @@ ordinal = { workspace = true }
 convert_case = { workspace = true }
 id-arena = { workspace = true }
 strsim = { workspace = true }
+anyhow = { workspace = true }
 
 [lints]
 workspace = true

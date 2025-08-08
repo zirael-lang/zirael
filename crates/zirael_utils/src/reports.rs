@@ -45,7 +45,6 @@ impl<'a> Reports<'a> {
                 let file = srcs.get_unchecked(*id);
                 let path = file.path();
                 let path = &path.display().to_string();
-                let source = Source::from(file.content());
 
                 for report in report {
                     let report = report.clone().build(path);

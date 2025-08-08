@@ -1,6 +1,7 @@
 use id_arena::Id;
 use zirael_utils::prelude::{Identifier, Span};
 
+mod relations;
 pub mod scopes;
 mod table;
 

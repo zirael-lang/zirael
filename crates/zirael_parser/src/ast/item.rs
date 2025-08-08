@@ -1,5 +1,5 @@
 use crate::{
-    SymbolId,
+    Ast, ScopeId, SymbolId,
     ast::{
         expr::Expr,
         types::{GenericParameter, Type},
@@ -11,14 +11,14 @@ use zirael_utils::prelude::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Item {
-    pub id: ItemId,
+    pub id: AstId,
     pub kind: ItemKind,
     pub attributes: Vec<Attribute>,
     pub name: Identifier,
     pub span: Span,
     pub symbol_id: Option<SymbolId>,
 }
-pub type ItemId = Id<()>;
+pub type AstId = Id<()>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ItemKind {
@@ -36,6 +36,7 @@ pub enum ImportKind {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Function {
+    pub id: AstId,
     pub name: Identifier,
     pub modifiers: FunctionModifiers,
     pub signature: FunctionSignature,

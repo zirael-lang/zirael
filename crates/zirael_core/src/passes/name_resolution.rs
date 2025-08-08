@@ -1,8 +1,7 @@
-use crate::prelude::ItemId;
-use crate::prelude::{WalkerContext, warn};
+use crate::prelude::{AstId, WalkerContext, warn};
 use zirael_parser::{
     AstWalker, Expr, Function, LexedModule, ModuleId, ScopeType, Symbol, SymbolId, SymbolKind,
-    SymbolTable, impl_ast_walker,
+    SymbolTable, impl_ast_walker, item::Item,
 };
 use zirael_utils::prelude::*;
 
@@ -55,7 +54,9 @@ impl ExpectedSymbol {
     }
 }
 
-impl_ast_walker!(NameResolution);
+impl_ast_walker!(NameResolution, {
+    current_item: Option<SymbolId>
+});
 
 impl<'reports> NameResolution<'reports> {
     fn resolve_identifier(
@@ -136,6 +137,10 @@ impl<'reports> NameResolution<'reports> {
 }
 
 impl<'reports> AstWalker<'reports> for NameResolution<'reports> {
+    fn visit_item(&mut self, _item: &mut Item) {
+        self.current_item = _item.symbol_id;
+    }
+
     fn visit_function_call(&mut self, callee: &mut Expr, _args: &mut [Expr]) {
         let span = callee.span.clone();
         let Some((ident, ident_sym_id)) = callee.as_identifier() else {
@@ -145,6 +150,8 @@ impl<'reports> AstWalker<'reports> for NameResolution<'reports> {
 
         if let Some(id) = self.resolve_identifier(ident, span, ExpectedSymbol::Function) {
             *ident_sym_id = Some(id);
+
+            self.symbol_table.new_relation(self.current_item.unwrap(), id);
         }
     }
 

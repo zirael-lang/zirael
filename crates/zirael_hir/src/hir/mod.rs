@@ -1,15 +1,16 @@
 use crate::hir::expr::{HirExpr, HirExprKind};
 use id_arena::Id;
 use std::collections::HashMap;
-use zirael_parser::{ExprId, SymbolId, Type};
-use zirael_utils::prelude::Span;
+use zirael_parser::{AstId, SymbolId, Type};
+use zirael_utils::prelude::{SourceFileId, Span};
 
-mod expr;
+pub mod expr;
 pub mod lowering;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct HirModule {
     pub items: HashMap<SymbolId, HirItem>,
+    pub id: SourceFileId,
 }
 
 #[derive(Debug, Clone)]
@@ -28,6 +29,7 @@ pub enum HirItemKind {
 
 #[derive(Debug, Clone)]
 pub struct HirFunction {
+    pub id: AstId,
     pub symbol_id: SymbolId,
     pub signature: HirFunctionSignature,
     pub body: Option<HirBody>,

@@ -1,8 +1,8 @@
 use crate::{
-    Expr, ExprKind, Symbol,
-    symbols::{SymbolId, SymbolTable, SymbolTableError},
+    AstId, Expr, ExprKind, Symbol,
+    symbols::{SymbolId, SymbolTable, SymbolTableError, relations::SymbolRelations},
 };
-use id_arena::Id;
+use id_arena::{Arena, Id};
 use std::collections::HashMap;
 use zirael_utils::prelude::*;
 
@@ -16,85 +16,68 @@ pub struct Scope {
     pub scope_type: ScopeType,
     pub depth: usize,
     pub imported_modules: Vec<ScopeId>,
-    pub borrow_stack: Vec<BorrowStackEntry>,
+    pub drop_stack: Vec<DropStackEntry>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct BorrowStackEntry {
+pub struct DropStackEntry {
     pub symbol_id: SymbolId,
-    pub borrow_span: Span,
+    pub drop_span: Span,
 }
 
-impl BorrowStackEntry {
-    pub fn new(symbol_id: SymbolId, borrow_span: Span) -> Self {
-        Self { symbol_id, borrow_span }
+impl DropStackEntry {
+    pub fn new(symbol_id: SymbolId, drop_span: Span) -> Self {
+        Self { symbol_id, drop_span }
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ScopeType {
     Global,
     Module(SourceFileId),
-    Function(Identifier),
-    Block(Span),
-    Class(Identifier),
-    Enum(Identifier),
-    Loop,
-    Conditional,
+    Function(AstId),
+    Block(AstId),
+    Class(AstId),
+    Enum(AstId),
+    Loop(AstId),
+    Conditional(AstId),
 }
 
 impl SymbolTable {
-    pub fn push_scope(&self, scope_type: ScopeType) -> ScopeId {
+    pub fn create_scope(&self, scope_type: ScopeType) -> ScopeId {
         self.write(|table| {
-            let current_scope = table.current_scope;
-            if let Some(existing_child) = table.scopes.get(current_scope).and_then(|scope| {
-                scope.children.iter().find(|&&child_id| {
-                    table
-                        .scopes
-                        .get(child_id)
-                        .map(|child| child.scope_type == scope_type)
-                        .unwrap_or(false)
-                })
-            }) {
-                table.current_scope = *existing_child;
-                return *existing_child;
-            }
-
-            let parent_id = table.current_scope;
-            let parent_depth = table.scopes.get(parent_id).map(|s| s.depth).unwrap_or(0);
+            let current_scope = table.current_scope_creation_id;
+            let parent_depth = table.scopes_arena.get(current_scope).map(|s| s.depth).unwrap_or(0);
 
             let new_scope = Scope {
-                parent: Some(parent_id),
+                parent: Some(current_scope),
                 children: Vec::new(),
                 symbols: HashMap::new(),
                 scope_type,
                 depth: parent_depth + 1,
                 imported_modules: Vec::new(),
-                borrow_stack: Vec::new(),
+                drop_stack: Vec::new(),
             };
 
-            let scope_id = table.scopes.alloc(new_scope);
+            let scope_id = table.scopes_arena.alloc(new_scope);
 
-            if let Some(parent) = table.scopes.get_mut(parent_id) {
-                parent.children.push(scope_id);
+            if let Some(parent_scope) = table.scopes_arena.get_mut(current_scope) {
+                parent_scope.children.push(scope_id);
             }
 
-            table.current_scope = scope_id;
+            table.current_scope_creation_id = scope_id;
+
             scope_id
         })
     }
 
-    pub fn lookup_in_scope(&self, name: Identifier, scope: ScopeId) -> Option<SymbolId> {
-        self.read(|table| table.name_lookup.get(&(name, scope)).copied())
-    }
-
-    pub fn pop_scope(&self) -> Result<ScopeId, SymbolTableError> {
+    pub fn exit_scope(&self) -> Result<ScopeId, SymbolTableError> {
         self.write(|table| {
-            let current_scope = table.current_scope;
+            let current_scope = table.current_scope_creation_id;
 
-            if let Some(scope) = table.scopes.get(current_scope) {
+            if let Some(scope) = table.scopes_arena.get(current_scope) {
                 if let Some(parent_id) = scope.parent {
-                    table.current_scope = parent_id;
+                    table.current_scope_creation_id = parent_id;
                     Ok(current_scope)
                 } else {
                     Err(SymbolTableError::InvalidScope(current_scope))
@@ -105,8 +88,124 @@ impl SymbolTable {
         })
     }
 
+    pub fn push_scope(&self, scope_type: ScopeType) -> Result<ScopeId, SymbolTableError> {
+        self.write(|table| {
+            let current_scope = table.current_traversal_scope;
+
+            if let Some(scope) = table.scopes_arena.get(current_scope) {
+                if let Some(&target_child) = scope.children.iter().find(|&&child_id| {
+                    table
+                        .scopes_arena
+                        .get(child_id)
+                        .map(|child| child.scope_type == scope_type)
+                        .unwrap_or(false)
+                }) {
+                    table.current_traversal_scope = target_child;
+                    Ok(target_child)
+                } else {
+                    debug!("No child scope of type {:?} found in {:?}", scope_type, scope);
+                    Err(SymbolTableError::InvalidScope(current_scope))
+                }
+            } else {
+                Err(SymbolTableError::ScopeNotFound(current_scope))
+            }
+        })
+    }
+
+    pub fn pop_scope(&self) -> Result<ScopeId, SymbolTableError> {
+        self.write(|table| {
+            let current_scope = table.current_traversal_scope;
+
+            if let Some(scope) = table.scopes_arena.get(current_scope) {
+                if let Some(parent_id) = scope.parent {
+                    table.current_traversal_scope = parent_id;
+                    Ok(current_scope)
+                } else {
+                    Err(SymbolTableError::InvalidScope(current_scope))
+                }
+            } else {
+                Err(SymbolTableError::ScopeNotFound(current_scope))
+            }
+        })
+    }
+
+    pub fn navigate_to_scope(&self, scope_id: ScopeId) -> Result<(), SymbolTableError> {
+        self.write(|table| {
+            if table.scopes_arena.get(scope_id).is_some() {
+                table.current_traversal_scope = scope_id;
+                Ok(())
+            } else {
+                Err(SymbolTableError::ScopeNotFound(scope_id))
+            }
+        })
+    }
+
+    pub fn get_child_scopes(&self) -> Vec<ScopeId> {
+        self.read(|table| {
+            table
+                .scopes_arena
+                .get(table.current_traversal_scope)
+                .map(|scope| scope.children.clone())
+                .unwrap_or_default()
+        })
+    }
+
+    pub fn find_child_scope_by_type(&self, scope_type: &ScopeType) -> Option<ScopeId> {
+        self.read(|table| {
+            let current_scope = table.current_traversal_scope;
+            table
+                .scopes_arena
+                .get(current_scope)?
+                .children
+                .iter()
+                .find(|&&child_id| {
+                    table
+                        .scopes_arena
+                        .get(child_id)
+                        .map(|child| &child.scope_type == scope_type)
+                        .unwrap_or(false)
+                })
+                .copied()
+        })
+    }
+
+    pub fn reset_to_global(&self) {
+        self.write(|table| {
+            table.current_traversal_scope = table.global_scope;
+        })
+    }
+
+    pub fn reset_construction_to_global(&self) {
+        self.write(|table| {
+            table.current_scope_creation_id = table.global_scope;
+        })
+    }
+
+    pub fn get_scope_path(&self) -> Vec<ScopeId> {
+        self.read(|table| {
+            let mut path = Vec::new();
+            let mut current = table.current_traversal_scope;
+
+            while let Some(scope) = table.scopes_arena.get(current) {
+                path.push(current);
+                if let Some(parent) = scope.parent {
+                    current = parent;
+                } else {
+                    break;
+                }
+            }
+
+            path.reverse();
+            path
+        })
+    }
+
     pub fn current_scope(&self) -> ScopeId {
-        self.read(|table| table.current_scope)
+        self.read(|table| table.current_traversal_scope)
+    }
+
+    pub fn current_construction_scope(&self) -> ScopeId {
+        self.read(|table| table.current_scope_creation_id)
     }
 
     pub fn global_scope(&self) -> ScopeId {
@@ -114,41 +213,47 @@ impl SymbolTable {
     }
 
     pub fn get_scope(&self, id: ScopeId) -> Option<Scope> {
-        self.read(|table| table.scopes.get(id).cloned())
+        self.read(|table| table.scopes_arena.get(id).cloned())
     }
 
     pub fn get_scope_unchecked(&self, id: ScopeId) -> Scope {
-        self.read(|table| table.scopes.get(id).cloned().unwrap())
+        self.read(|table| table.scopes_arena.get(id).cloned().unwrap())
+    }
+
+    pub fn lookup_in_scope(&self, name: Identifier, scope: ScopeId) -> Option<SymbolId> {
+        self.read(|table| table.name_lookup.get(&(name, scope)).copied())
     }
 
     pub fn get_symbols_in_scope(&self, scope_id: ScopeId) -> Vec<(Identifier, SymbolId)> {
         self.read(|table| {
             table
-                .scopes
+                .scopes_arena
                 .get(scope_id)
                 .map(|scope| scope.symbols.iter().map(|(&name, &id)| (name, id)).collect())
                 .unwrap_or_default()
         })
     }
 
-    pub fn mark_borrowed(&self, symbol_id: SymbolId, span: Span) {
+    pub fn mark_drop(&self, symbol_id: SymbolId, span: Span) {
         self.write(|table| {
+            let current_scope = table.current_traversal_scope;
             table
-                .scopes
-                .get_mut(table.current_scope)
+                .scopes_arena
+                .get_mut(current_scope)
                 .unwrap()
-                .borrow_stack
-                .push(BorrowStackEntry::new(symbol_id, span));
+                .drop_stack
+                .push(DropStackEntry::new(symbol_id, span));
         })
     }
 
-    pub fn is_borrowed(&self, symbol_id: SymbolId) -> Option<BorrowStackEntry> {
+    pub fn is_borrowed(&self, symbol_id: SymbolId) -> Option<DropStackEntry> {
         self.read(|table| {
+            let current_scope = table.current_traversal_scope;
             table
-                .scopes
-                .get(table.current_scope)
+                .scopes_arena
+                .get(current_scope)
                 .map(|scope| {
-                    scope.borrow_stack.iter().find(|entry| entry.symbol_id == symbol_id).cloned()
+                    scope.drop_stack.iter().find(|entry| entry.symbol_id == symbol_id).cloned()
                 })
                 .unwrap_or(None)
         })

@@ -1,4 +1,4 @@
-use crate::prelude::{Color, ItemId, ReportKind, WalkerContext, debug};
+use crate::prelude::{AstId, Color, ReportKind, WalkerContext, debug};
 use zirael_parser::{
     AstWalker, Expr, ExprKind, Return, SymbolId, SymbolKind, SymbolTable, UnaryOp, VarDecl,
     VariableMove, impl_ast_walker,
@@ -17,13 +17,20 @@ pub enum ExprContext {
 }
 
 impl<'reports> MemoryAnalysis<'reports> {
-    fn visit_unary_impl(&mut self, op: &mut UnaryOp, expr: &mut Expr, ctx: ExprContext) {
+    fn visit_unary_impl(
+        &mut self,
+        op: &mut UnaryOp,
+        expr: &mut Expr,
+        ctx: ExprContext,
+        mark_heap: &mut bool,
+    ) {
         match (op, ctx) {
             (UnaryOp::Ref, _) => {
                 self.handle_borrow_operation(expr);
             }
             (UnaryOp::Box, ExprContext::VarDecl) => {
                 self.walk_expr(expr);
+                *mark_heap = true;
             }
             (UnaryOp::Box, ExprContext::Expr) => {
                 self.handle_invalid_box_operation(expr);
@@ -53,8 +60,6 @@ impl<'reports> MemoryAnalysis<'reports> {
             }
             _ => unreachable!(),
         };
-
-        self.symbol_table.mark_borrowed(sym_id, expr.span.clone());
     }
 
     fn handle_invalid_box_operation(&mut self, expr: &mut Expr) {
@@ -72,7 +77,7 @@ impl<'reports> MemoryAnalysis<'reports> {
         if let Some((mut symbol, sym_id)) = self.symbol_table.symbol_from_expr(expr) {
             if let SymbolKind::Variable { ref mut is_moved, .. } = symbol.kind {
                 if let Some(entry) = self.symbol_table.is_borrowed(sym_id) {
-                    self.report_move_of_borrowed_value(expr, &entry.borrow_span);
+                    self.report_move_of_borrowed_value(expr, &entry.drop_span);
                     return false;
                 }
 
@@ -181,16 +186,23 @@ impl<'reports> MemoryAnalysis<'reports> {
 impl<'reports> AstWalker<'reports> for MemoryAnalysis<'reports> {
     fn walk_var_decl(&mut self, var: &mut VarDecl) {
         self.walk_type(&mut var.ty);
+        let is_heap = &mut false;
 
         if let ExprKind::Unary(op, expr) = &mut var.value.kind {
-            self.visit_unary_impl(op, expr, ExprContext::VarDecl);
+            self.visit_unary_impl(op, expr, ExprContext::VarDecl, is_heap);
+
+            if is_heap.clone() {
+                let sym_id = var.symbol_id.unwrap();
+                self.symbol_table.mark_heap_variable(sym_id).unwrap();
+                self.symbol_table.mark_drop(sym_id, expr.span.clone());
+            }
         } else if !self.handle_move_semantics(&mut var.value) {
             self.walk_expr(&mut var.value);
         }
     }
 
     fn visit_unary(&mut self, op: &mut UnaryOp, expr: &mut Expr) {
-        self.visit_unary_impl(op, expr, ExprContext::Expr);
+        self.visit_unary_impl(op, expr, ExprContext::Expr, &mut false);
     }
 
     fn visit_identifier(&mut self, id: &mut Identifier, sym_id: &mut Option<SymbolId>, span: Span) {
@@ -220,7 +232,7 @@ impl<'reports> AstWalker<'reports> for MemoryAnalysis<'reports> {
     fn visit_assign(&mut self, lhs: &mut Expr, rhs: &mut Expr) {
         if let Some((_, sym_id)) = self.symbol_table.symbol_from_expr(lhs) {
             if let Some(entry) = self.symbol_table.is_borrowed(sym_id) {
-                self.report_assignment_to_borrowed_value(lhs, &entry.borrow_span);
+                self.report_assignment_to_borrowed_value(lhs, &entry.drop_span);
             }
         }
 

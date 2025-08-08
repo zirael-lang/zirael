@@ -1,5 +1,7 @@
 import "div.zr"
 
+fn test(num: &int) {}
+
 fn main() {
     // Basic variable declarations
     var x = 42
@@ -9,14 +11,15 @@ fn main() {
     var a = x  // x is moved to a, x cannot be used anymore
     var b = a  // a is moved to b
 
-    // Heap allocation (only allowed in variable declarations)
+    {// Heap allocation (only allowed in variable declarations)
     var heap_num = box 100
-    var heap_float = box 2.5
+    var heap_float = box 2.5}
 
     // Borrowing
     var num = 50
     var ref_num = &num     // Borrow num
     var another_ref = &num // Multiple borrows OK
+    test(&num);
 
     // Assignment
     var counter = 0

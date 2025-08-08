@@ -1,5 +1,5 @@
 use crate::{
-    ItemId, LexedModule, ModuleId, Return, ScopeType, SymbolTable,
+    AstId, LexedModule, ModuleId, Return, ScopeType, SymbolTable,
     ast::{
         Abi, Ast, Attribute, BinaryOp, ClassDeclaration, ClassField, EnumDeclaration, EnumVariant,
         EnumVariantData, Expr, ExprKind, Function, FunctionModifiers, FunctionSignature,
@@ -69,7 +69,7 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
 
     fn walk_function(&mut self, func: &mut Function) {
         self.visit_function(func);
-        self.push_scope(ScopeType::Function(func.name.clone()));
+        self.push_scope(ScopeType::Function(func.id));
 
         self.walk_function_modifiers(&mut func.modifiers);
         self.walk_function_signature(&mut func.signature);
@@ -131,9 +131,10 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
     }
 
     fn walk_class_declaration(&mut self, class: &mut ClassDeclaration) {
+        todo!("Implement class declaration");
         self.visit_class_declaration(class);
 
-        self.push_scope(ScopeType::Class(class.name.clone()));
+        // self.push_scope(ScopeType::Class(class.name.clone()));
 
         for generic in &mut class.generics {
             self.walk_generic_parameter(generic);
@@ -156,9 +157,11 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
     }
 
     fn walk_enum_declaration(&mut self, enum_decl: &mut EnumDeclaration) {
+        todo!("Implement enum declaration");
+
         self.visit_enum_declaration(enum_decl);
 
-        self.push_scope(ScopeType::Enum(enum_decl.name.clone()));
+        // self.push_scope(ScopeType::Enum(enum_decl.name.clone()));
 
         if let Some(generics) = &mut enum_decl.generics {
             for generic in generics {
@@ -204,6 +207,16 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
         self.walk_expr_kind(expr);
     }
 
+    fn walk_block(&mut self, stmts: &mut Vec<Stmt>, id: AstId) {
+        self.push_scope(ScopeType::Block(id));
+
+        for stmt in stmts {
+            self.walk_stmt(stmt);
+        }
+
+        self.pop_scope();
+    }
+
     fn walk_expr_kind(&mut self, expr: &mut Expr) {
         match &mut expr.kind {
             ExprKind::Literal(lit) => self.walk_literal(lit),
@@ -213,15 +226,7 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
                 self.visit_binary_op(op);
                 self.walk_expr(right);
             }
-            ExprKind::Block(stmts) => {
-                self.push_scope(ScopeType::Block(expr.span.clone()));
-
-                for stmt in stmts {
-                    self.walk_stmt(stmt);
-                }
-
-                self.pop_scope();
-            }
+            ExprKind::Block(stmts) => self.walk_block(stmts, expr.id),
             ExprKind::Assign(lhs, rhs) => {
                 self.visit_assign(lhs, rhs);
                 self.walk_expr(lhs);

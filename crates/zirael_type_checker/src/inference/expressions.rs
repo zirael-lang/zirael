@@ -1,9 +1,9 @@
 use crate::inference::{TypeInference, TypeInferenceContext};
 use zirael_parser::{
-    AstWalker, BinaryOp, Expr, ExprId, ExprKind, Literal, ScopeType, Stmt, StmtKind, SymbolId,
+    AstId, AstWalker, BinaryOp, Expr, ExprKind, Literal, ScopeType, Stmt, StmtKind, SymbolId,
     SymbolKind, Type, UnaryOp, VarDecl, WalkerContext,
 };
-use zirael_utils::prelude::{Colorize, SourceFileId, Span, warn};
+use zirael_utils::prelude::{Colorize, SourceFileId, Span, resolve, warn};
 
 impl<'reports> TypeInference<'reports> {
     pub fn infer_expr(&mut self, expr: &mut Expr) -> Type {
@@ -11,9 +11,10 @@ impl<'reports> TypeInference<'reports> {
             ExprKind::Literal(lit) => self.infer_literal(lit),
             ExprKind::Identifier(_, symbol_id) => self.infer_identifier(symbol_id.unwrap()),
             ExprKind::Assign(lhs, rhs) => self.infer_assignment(lhs, rhs),
-            ExprKind::Block(stmts) => self.infer_block(stmts, expr.span.clone()),
+            ExprKind::Block(stmts) => self.infer_block(stmts, expr.id),
             ExprKind::Unary(op, expr) => self.infer_unary(op, expr),
             ExprKind::Binary { left, op, right } => self.infer_binary(left, op, right),
+            ExprKind::Call { callee, args } => self.infer_call(callee, args),
             _ => {
                 warn!("unimplemented expr: {:#?}", expr);
                 Type::Error
@@ -150,9 +151,10 @@ impl<'reports> TypeInference<'reports> {
         Type::Void
     }
 
-    fn infer_block(&mut self, stmts: &mut [Stmt], block_span: Span) -> Type {
-        self.push_scope(ScopeType::Block(block_span));
+    fn infer_block(&mut self, stmts: &mut [Stmt], id: AstId) -> Type {
+        self.push_scope(ScopeType::Block(id));
         if stmts.is_empty() {
+            self.pop_scope();
             return Type::Void;
         }
 
@@ -171,8 +173,8 @@ impl<'reports> TypeInference<'reports> {
                     }
                     break;
                 }
-                _ => {
-                    self.infer_stmt(stmt);
+                StmtKind::Var(var) => {
+                    self.infer_variable(var);
                 }
             }
         }
@@ -181,12 +183,29 @@ impl<'reports> TypeInference<'reports> {
         block_type
     }
 
+    fn infer_call(&mut self, callee: &mut Expr, args: &mut Vec<Expr>) -> Type {
+        let (_, symbol_id) = callee.as_identifier_unchecked().unwrap();
+
+        for arg in args.iter_mut() {
+            self.infer_expr(arg);
+        }
+
+        let sym = self.symbol_table().get_symbol_unchecked(&symbol_id);
+
+        if let SymbolKind::Function { signature, .. } = sym.kind {
+            signature.return_type.clone()
+        } else {
+            unreachable!()
+        }
+    }
+
     pub fn infer_variable(&mut self, decl: &mut VarDecl) -> Type {
         let value_ty = &self.infer_expr(&mut decl.value);
         let variable_ty =
             if let Type::Inferred = decl.ty { value_ty.clone() } else { decl.ty.clone() };
 
-        let symbol = self.symbol_table.lookup_symbol(&decl.name).unwrap();
+        let symbol = self.symbol_table.get_symbol_unchecked(&decl.symbol_id.unwrap());
+
         self.ctx.add_variable(symbol.id, variable_ty.clone());
 
         if !self.eq(value_ty, &variable_ty) {
@@ -218,24 +237,5 @@ impl<'reports> TypeInference<'reports> {
             Literal::String(_) => Type::String,
         };
         ty
-    }
-
-    fn infer_stmt(&mut self, stmt: &mut Stmt) {
-        match &mut stmt.0 {
-            StmtKind::Var(decl) => {
-                self.infer_variable(decl);
-            }
-            StmtKind::Expr(expr) => {
-                self.infer_expr(expr);
-            }
-            StmtKind::Return(ret) => {
-                if let Some(expr) = ret.value.as_mut() {
-                    self.infer_expr(expr);
-                }
-            }
-            _ => {
-                warn!("unimplemented stmt: {:#?}", stmt);
-            }
-        }
     }
 }

@@ -2,22 +2,32 @@ use crate::{
     passes::{DeclarationCollection, MemoryAnalysis, NameResolution},
     prelude::*,
 };
+use zirael_codegen::{codegen::run_codegen, ir::lower_hir_to_ir};
 use zirael_hir::hir::lowering::lower_ast_to_hir;
-use zirael_type_checker::run_type_checker;
+use zirael_type_checker::TypeInference;
 
 #[derive(Debug)]
 pub struct CompilationUnit<'ctx> {
     pub entry_point: SourceFileId,
     pub context: Context<'ctx>,
     pub module_graph: DependencyGraph,
+    pub mode: Mode,
+    pub root: PathBuf,
+    pub name: String,
 }
 
 impl<'ctx> CompilationUnit<'ctx> {
-    pub fn new(entry_point: SourceFileId, context: Context<'ctx>) -> Self {
-        Self { entry_point, context, module_graph: Default::default() }
+    pub fn new(
+        entry_point: SourceFileId,
+        context: Context<'ctx>,
+        mode: Mode,
+        root: PathBuf,
+        name: String,
+    ) -> Self {
+        Self { entry_point, context, module_graph: Default::default(), mode, root, name }
     }
 
-    pub fn compile(&mut self) {
+    pub fn compile(&mut self) -> Result<()> {
         let reports = self.context.reports();
         let sources = self.context.sources();
         let symbols = self.context.symbols();
@@ -30,10 +40,15 @@ impl<'ctx> CompilationUnit<'ctx> {
         reports.print(sources);
 
         MemoryAnalysis::new(symbols, reports, sources).walk_modules(&mut result.modules);
-        run_type_checker(symbols, reports, sources, &mut result.modules);
+        TypeInference::new(symbols, reports, sources).walk_modules(&mut result.modules);
         reports.print(sources);
 
-        let hir = lower_ast_to_hir(&mut result.modules, symbols, reports, sources);
-        println!("{:#?}", hir);
+        let mut hir = lower_ast_to_hir(&mut result.modules, symbols, reports, sources);
+        // TODO: optimizations on HIR
+
+        let ir = lower_hir_to_ir(&mut hir, symbols, sources, self.mode, self.root.clone());
+
+        let order = symbols.build_symbol_relations()?;
+        run_codegen(ir, self.name.clone(), order)
     }
 }

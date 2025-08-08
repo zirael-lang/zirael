@@ -1,9 +1,12 @@
 use crate::{
-    AstWalker, ItemId, LexedModule, ModuleId, Type,
-    symbols::{Scope, ScopeId, ScopeType, Symbol, SymbolId, SymbolKind, TemporaryLifetime},
+    AstId, AstWalker, LexedModule, ModuleId, Type,
+    symbols::{
+        Scope, ScopeId, ScopeType, Symbol, SymbolId, SymbolKind, TemporaryLifetime,
+        relations::SymbolRelations,
+    },
 };
 use id_arena::{Arena, Id};
-use std::{collections::HashMap, ops::Range, sync::Arc};
+use std::{collections::HashMap, fmt::Formatter, ops::Range, sync::Arc};
 use strsim::levenshtein;
 use zirael_utils::prelude::*;
 
@@ -30,11 +33,13 @@ pub struct ImportConflict {
 #[derive(Debug)]
 pub struct SymbolTableImpl {
     pub symbols: Arena<Symbol>,
-    pub scopes: Arena<Scope>,
-    pub current_scope: ScopeId,
+    pub scopes_arena: Arena<Scope>,
+    pub current_scope_creation_id: ScopeId,
+    pub current_traversal_scope: ScopeId,
     pub global_scope: ScopeId,
     pub declaration_counter: usize,
     pub name_lookup: HashMap<(Identifier, ScopeId), SymbolId>,
+    pub symbol_relations: SymbolRelations,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -52,18 +57,20 @@ impl Default for SymbolTableImpl {
             scope_type: ScopeType::Global,
             depth: 0,
             imported_modules: Vec::new(),
-            borrow_stack: Vec::new(),
+            drop_stack: Vec::new(),
         };
 
         let global_scope_id = scopes.alloc(global_scope);
 
         Self {
             symbols,
-            scopes,
-            current_scope: global_scope_id,
+            scopes_arena: scopes,
+            current_scope_creation_id: global_scope_id,
             global_scope: global_scope_id,
             declaration_counter: 0,
             name_lookup: HashMap::new(),
+            symbol_relations: SymbolRelations::new(),
+            current_traversal_scope: global_scope_id,
         }
     }
 }
@@ -88,7 +95,7 @@ impl SymbolTable {
         span: Option<Span>,
     ) -> Result<SymbolId, SymbolTableError> {
         self.write(|table| {
-            let current_scope = table.current_scope;
+            let current_scope = table.current_scope_creation_id;
 
             if let Some(&existing_id) = table.name_lookup.get(&(name, current_scope)) {
                 return Err(SymbolTableError::SymbolAlreadyExists {
@@ -112,7 +119,7 @@ impl SymbolTable {
 
             table.name_lookup.insert((name, current_scope), symbol_id);
 
-            if let Some(scope) = table.scopes.get_mut(current_scope) {
+            if let Some(scope) = table.scopes_arena.get_mut(current_scope) {
                 scope.symbols.insert(name, symbol_id);
             }
 
@@ -170,7 +177,7 @@ impl SymbolTable {
 
     pub fn get_imported_modules(&self, scope: ScopeId) -> Vec<ScopeId> {
         self.read(|table| {
-            table.scopes.get(scope).map(|s| s.imported_modules.clone()).unwrap_or_default()
+            table.scopes_arena.get(scope).map(|s| s.imported_modules.clone()).unwrap_or_default()
         })
     }
 
@@ -181,7 +188,7 @@ impl SymbolTable {
     pub fn get_imported_symbols(&self, scope: ScopeId) -> Vec<(SymbolId, ScopeId)> {
         self.read(|table| {
             table
-                .scopes
+                .scopes_arena
                 .get(scope)
                 .map(|scope| {
                     scope
@@ -200,7 +207,7 @@ impl SymbolTable {
 
     pub fn find_module_by_source(&self, source_file: SourceFileId) -> Option<ScopeId> {
         self.read(|table| {
-            table.scopes.iter()
+            table.scopes_arena.iter()
                 .find(|(_, scope)| matches!(scope.scope_type, ScopeType::Module(id) if id == source_file))
                 .map(|(id, _)| id)
         })
@@ -208,13 +215,13 @@ impl SymbolTable {
 
     pub fn lookup(&self, name: &Identifier) -> Option<SymbolId> {
         self.read(|table| {
-            let mut current_scope = Some(table.current_scope);
+            let mut current_scope = Some(table.current_traversal_scope);
 
             while let Some(scope_id) = current_scope {
                 if let Some(&symbol_id) = table.name_lookup.get(&(*name, scope_id)) {
                     return Some(symbol_id);
                 }
-                current_scope = table.scopes.get(scope_id)?.parent;
+                current_scope = table.scopes_arena.get(scope_id)?.parent;
             }
 
             None
@@ -242,7 +249,23 @@ impl SymbolTable {
             } else {
                 Err(SymbolTableError::SymbolNotFound {
                     name: default_ident(),
-                    scope: table.current_scope,
+                    scope: table.current_traversal_scope,
+                })
+            }
+        })
+    }
+
+    pub fn mark_heap_variable(&self, id: SymbolId) -> Result<(), SymbolTableError> {
+        self.write(|table| {
+            if let Some(symbol) = table.symbols.get_mut(id) {
+                if let SymbolKind::Variable { is_heap, .. } = &mut symbol.kind {
+                    *is_heap = true;
+                }
+                Ok(())
+            } else {
+                Err(SymbolTableError::SymbolNotFound {
+                    name: default_ident(),
+                    scope: table.current_traversal_scope,
                 })
             }
         })
@@ -271,7 +294,7 @@ impl SymbolTable {
             } else {
                 Err(SymbolTableError::SymbolNotFound {
                     name: default_ident(),
-                    scope: table.current_scope,
+                    scope: table.current_traversal_scope,
                 })
             }
         })
@@ -285,7 +308,7 @@ impl SymbolTable {
                 if scope_id == ancestor {
                     return true;
                 }
-                current = table.scopes.get(scope_id).expect("missing").parent;
+                current = table.scopes_arena.get(scope_id).expect("missing").parent;
             }
 
             false
@@ -295,10 +318,10 @@ impl SymbolTable {
     pub fn get_accessible_symbols(&self) -> Vec<(Identifier, SymbolId, ScopeId)> {
         self.read(|table| {
             let mut symbols = Vec::new();
-            let mut current_scope = Some(table.current_scope);
+            let mut current_scope = Some(table.current_traversal_scope);
 
             while let Some(scope_id) = current_scope {
-                if let Some(scope) = table.scopes.get(scope_id) {
+                if let Some(scope) = table.scopes_arena.get(scope_id) {
                     for (&name, &symbol_id) in &scope.symbols {
                         symbols.push((name, symbol_id, scope_id));
                     }
@@ -378,7 +401,7 @@ impl SymbolTable {
         predicate: impl Fn(&Symbol) -> bool,
     ) -> Option<SymbolId> {
         self.read(|table| {
-            let mut current_scope = Some(table.current_scope);
+            let mut current_scope = Some(table.current_traversal_scope);
 
             while let Some(scope_id) = current_scope {
                 let symbols_in_scope = self.get_symbols_in_scope(scope_id);
@@ -396,17 +419,43 @@ impl SymbolTable {
                     return Some(symbol_id);
                 }
 
-                current_scope = table.scopes.get(scope_id)?.parent;
+                current_scope = table.scopes_arena.get(scope_id)?.parent;
             }
 
             None
         })
     }
+
+    pub fn get_symbol_module(&self, scope: ScopeId) -> Option<SourceFileId> {
+        self.read(|table| {
+            let mut current_scope = Some(scope);
+
+            while let Some(scope_id) = current_scope {
+                let scope = table.scopes_arena.get(scope_id)?;
+                if let ScopeType::Module(id) = &scope.scope_type {
+                    return Some(id.clone());
+                }
+                current_scope = scope.parent;
+            }
+
+            None
+        })
+    }
+
+    pub fn new_relation(&self, referrer: SymbolId, referred: SymbolId) {
+        self.write(|table| {
+            table.symbol_relations.entry(referrer, referred);
+        })
+    }
+
+    pub fn build_symbol_relations(&self) -> Result<Vec<SymbolId>> {
+        self.read(|table| table.symbol_relations.build_graph())
+    }
 }
 
 impl SymbolTableImpl {
     fn find_module_by_source_id(&self, source_file: SourceFileId) -> Option<ScopeId> {
-        self.scopes
+        self.scopes_arena
             .iter()
             .find(
                 |(_, scope)| matches!(scope.scope_type, ScopeType::Module(id) if id == source_file),
@@ -415,7 +464,7 @@ impl SymbolTableImpl {
     }
 
     fn get_originally_declared_symbols(&self, module_id: ScopeId) -> Vec<(Identifier, SymbolId)> {
-        let Some(module_scope) = self.scopes.get(module_id) else {
+        let Some(module_scope) = self.scopes_arena.get(module_id) else {
             return Vec::new();
         };
 
@@ -456,7 +505,7 @@ impl SymbolTableImpl {
 
         self.name_lookup.insert((symbol_name, target_module), imported_symbol_id);
 
-        if let Some(target_scope) = self.scopes.get_mut(target_module) {
+        if let Some(target_scope) = self.scopes_arena.get_mut(target_module) {
             target_scope.symbols.insert(symbol_name, imported_symbol_id);
         }
 
@@ -464,7 +513,7 @@ impl SymbolTableImpl {
     }
 
     fn record_module_import(&mut self, target_module: ScopeId, source_module: ScopeId) {
-        if let Some(target_scope) = self.scopes.get_mut(target_module) {
+        if let Some(target_scope) = self.scopes_arena.get_mut(target_module) {
             if !target_scope.imported_modules.contains(&source_module) {
                 target_scope.imported_modules.push(source_module);
             }
@@ -485,7 +534,8 @@ impl SymbolTableImpl {
     }
 
     fn scopes_would_conflict_in_c(&self, scope1: ScopeId, scope2: ScopeId) -> bool {
-        if let (Some(s1), Some(s2)) = (self.scopes.get(scope1), self.scopes.get(scope2)) {
+        if let (Some(s1), Some(s2)) = (self.scopes_arena.get(scope1), self.scopes_arena.get(scope2))
+        {
             match (&s1.scope_type, &s2.scope_type) {
                 (ScopeType::Global, _) | (_, ScopeType::Global) => true,
                 (ScopeType::Function(f1), ScopeType::Function(f2)) => f1 == f2,

@@ -6,6 +6,7 @@ pub struct HirExpr {
     pub kind: HirExprKind,
     pub ty: Type,
     pub span: Span,
+    pub id: AstId,
 }
 
 #[derive(Debug, Clone)]
@@ -25,6 +26,15 @@ pub enum HirExprKind {
 #[derive(Debug, Clone)]
 pub enum HirStmt {
     Expr(HirExpr),
-    Let { symbol_id: SymbolId, init: Option<HirExpr> },
+    Var { symbol_id: SymbolId, init: HirExpr },
     Return(Option<HirExpr>),
+}
+
+impl HirExprKind {
+    pub fn can_be_wrapped_in_return(&self) -> bool {
+        match self {
+            HirExprKind::Assign { .. } | HirExprKind::Block(_) => false,
+            _ => true,
+        }
+    }
 }

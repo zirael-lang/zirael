@@ -65,8 +65,7 @@ impl<'reports> AstWalker<'reports> for TypeInference<'reports> {
     }
 
     fn walk_function(&mut self, func: &mut Function) {
-        self.visit_function(func);
-        self.push_scope(ScopeType::Function(func.name.clone()));
+        self.push_scope(ScopeType::Function(func.id));
 
         self.walk_function_modifiers(&mut func.modifiers);
         self.walk_function_signature(&mut func.signature);

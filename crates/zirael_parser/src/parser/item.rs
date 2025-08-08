@@ -1,5 +1,5 @@
 use crate::{
-    TokenKind, Type,
+    AstId, TokenKind, Type,
     ast::{
         Abi, Function, FunctionModifiers, FunctionSignature, ImportKind, Item, ItemKind, Keyword,
         Parameter, ParameterKind,
@@ -18,8 +18,9 @@ impl<'a> Parser<'a> {
         let span = self.peek_span();
         let attrs = self.parse_attrs();
 
+        let id = self.fresh_id();
         let (kind, name) = if self.match_keyword(Keyword::Fn) {
-            self.parse_fn()
+            self.parse_fn(id)
         } else if self.match_keyword(Keyword::Import) {
             self.parse_import()
         } else {
@@ -32,7 +33,7 @@ impl<'a> Parser<'a> {
             attributes: attrs,
             name,
             kind,
-            id: self.fresh_item_id(),
+            id,
             span: span.to(self.prev_span()),
             symbol_id: None,
         })
@@ -56,7 +57,7 @@ impl<'a> Parser<'a> {
         (ItemKind::Import(kind, span), default_ident())
     }
 
-    pub fn parse_fn(&mut self) -> (ItemKind, Identifier) {
+    pub fn parse_fn(&mut self, id: AstId) -> (ItemKind, Identifier) {
         let span = self.prev_span();
         let async_ = self.match_keyword(Keyword::Async);
         let const_ = self.match_keyword(Keyword::Const);
@@ -95,6 +96,7 @@ impl<'a> Parser<'a> {
 
         let signature = FunctionSignature { generics, parameters, return_type };
         let function = Function {
+            id,
             name,
             modifiers: FunctionModifiers {
                 is_async: async_,

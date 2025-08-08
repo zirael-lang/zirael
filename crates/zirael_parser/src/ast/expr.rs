@@ -1,5 +1,5 @@
 use crate::{
-    Type,
+    AstId, Type,
     ast::{
         operator::{BinaryOp, UnaryOp},
         stmt::Stmt,
@@ -51,17 +51,16 @@ impl Debug for CouldntParse {
     }
 }
 
-pub type ExprId = Id<()>;
 #[derive(Debug, Clone, PartialEq)]
 pub struct Expr {
-    pub id: ExprId,
+    pub id: AstId,
     pub kind: ExprKind,
     pub span: Span,
     pub ty: Type,
 }
 
 impl Expr {
-    pub fn new(kind: ExprKind, span: Span, id: ExprId) -> Self {
+    pub fn new(kind: ExprKind, span: Span, id: AstId) -> Self {
         Self { kind, span, id, ty: Type::Inferred }
     }
 

@@ -40,7 +40,7 @@ impl<'reports> AstLowering<'reports> {
     }
 
     fn lower_module(&mut self, lexed_module: &mut LexedModule) -> HirModule {
-        let mut hir_module = HirModule { items: HashMap::new() };
+        let mut hir_module = HirModule { items: HashMap::new(), id: lexed_module.file().unwrap() };
         let id = lexed_module.id.as_file().unwrap();
         self.processed_file = Some(id);
 
@@ -64,7 +64,7 @@ impl<'reports> AstLowering<'reports> {
 
         match &mut item.kind {
             ItemKind::Function(func) => {
-                self.push_scope(ScopeType::Function(func.name));
+                self.push_scope(ScopeType::Function(func.id));
 
                 let hir_function = self.lower_function(func, symbol_id);
                 self.pop_scope();
@@ -93,6 +93,7 @@ impl<'reports> AstLowering<'reports> {
             func.body.as_mut().map(|body_expr| self.lower_function_body(body_expr, symbol_id));
 
         HirFunction {
+            id: func.id,
             symbol_id,
             signature: hir_signature,
             body,
@@ -171,6 +172,7 @@ impl<'reports> AstLowering<'reports> {
                         },
                         ty: ast_expr.ty.clone(),
                         span: ast_expr.span.clone(),
+                        id: ast_expr.id,
                     }),
                 }
             }
@@ -193,15 +195,47 @@ impl<'reports> AstLowering<'reports> {
             }
 
             ExprKind::Block(stmts) => {
-                self.push_scope(ScopeType::Block(ast_expr.span.clone()));
-                let hir_stmts: Vec<HirStmt> = stmts
-                    .iter_mut()
-                    .map(|stmt| self.lower_stmt_with_locals(stmt, locals))
-                    .collect();
+                self.push_scope(ScopeType::Block(ast_expr.id));
+                let mut hir_stmts = vec![];
+                let mut has_return = false;
+
+                let stmts_len = stmts.len();
+                for (i, stmt) in stmts.iter_mut().enumerate() {
+                    match &mut stmt.0 {
+                        StmtKind::Expr(expr) => {
+                            let is_last_stmt = i == stmts_len - 1;
+                            let lowered_expr = self.lower_expr(expr);
+
+                            if is_last_stmt
+                                && !has_return
+                                && lowered_expr.kind.can_be_wrapped_in_return()
+                            {
+                                hir_stmts.push(HirStmt::Return(Some(lowered_expr)));
+                            } else {
+                                hir_stmts.push(HirStmt::Expr(lowered_expr));
+                            }
+                        }
+                        StmtKind::Return(ret) => {
+                            hir_stmts.push(HirStmt::Return(
+                                ret.value.clone().map(|mut e| self.lower_expr(&mut e)),
+                            ));
+                            has_return = true;
+                            break;
+                        }
+                        StmtKind::Var(var_stmt) => {
+                            let symbol_id = var_stmt.symbol_id.unwrap();
+
+                            hir_stmts.push(HirStmt::Var {
+                                symbol_id,
+                                init: self.lower_expr(&mut var_stmt.value),
+                            });
+                        }
+                    }
+                }
+
                 self.pop_scope();
                 HirExprKind::Block(hir_stmts)
             }
-
             ExprKind::Paren(inner) => {
                 return self.lower_expr_with_locals(inner, locals);
             }
@@ -212,40 +246,17 @@ impl<'reports> AstLowering<'reports> {
             }
         };
 
-        HirExpr { kind: hir_kind, ty: ast_expr.ty.clone(), span: ast_expr.span.clone() }
+        HirExpr {
+            kind: hir_kind,
+            ty: ast_expr.ty.clone(),
+            span: ast_expr.span.clone(),
+            id: ast_expr.id,
+        }
     }
 
     fn lower_expr(&mut self, ast_expr: &mut Expr) -> HirExpr {
         let mut locals = HashMap::new();
         self.lower_expr_with_locals(ast_expr, &mut locals)
-    }
-
-    fn lower_stmt_with_locals(
-        &mut self,
-        ast_stmt: &mut Stmt,
-        locals: &mut HashMap<SymbolId, HirLocal>,
-    ) -> HirStmt {
-        match &mut ast_stmt.0 {
-            StmtKind::Expr(expr) => {
-                let hir_expr = self.lower_expr_with_locals(expr, locals);
-                HirStmt::Expr(hir_expr)
-            }
-            StmtKind::Var(var_decl) => {
-                let symbol_id = var_decl.symbol_id.unwrap();
-                let init_expr = self.lower_expr_with_locals(&mut var_decl.value, locals);
-
-                let local = HirLocal { symbol_id, ty: var_decl.ty.clone() };
-
-                locals.insert(symbol_id, local);
-
-                HirStmt::Let { symbol_id, init: Some(init_expr) }
-            }
-            StmtKind::Return(ret) => {
-                let value_expr =
-                    ret.value.as_mut().map(|expr| self.lower_expr_with_locals(expr, locals));
-                HirStmt::Return(value_expr)
-            }
-        }
     }
 
     fn error(&mut self, message: &str, labels: Vec<(String, Range<usize>)>, notes: Vec<String>) {

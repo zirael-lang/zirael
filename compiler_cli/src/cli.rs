@@ -10,6 +10,7 @@ use zirael_core::prelude::*;
 pub struct Cli {
     #[arg(value_name = "input", help = "Each input file is compiled as its own project.")]
     files: Vec<PathBuf>,
+
     #[arg(
         value_name = "verbose",
         short = 'v',
@@ -17,6 +18,7 @@ pub struct Cli {
         help = "Enable verbose logging: debug and trace"
     )]
     verbose: bool,
+
     #[arg(
         value_name = "dependencies",
         short = 'd',
@@ -24,10 +26,22 @@ pub struct Cli {
         help = "Add dependencies that will be resolved by the compiler. \
     Each dependency should be a path to its entry point, with all imports \
     resolved relative to this path. Example: -d std=./std/lib.zr allows \
-    the compiler to resolve 'import \"std/io\"'.\
-    Order is important, because if one dependency depends on another, but it isn't compiled yes, the compiler will fail."
+    the compiler to resolve 'import \"std/io\"'. \
+    Order is important, because if one dependency depends on another, but it isn't compiled yet, the compiler will fail."
     )]
     dependencies: Vec<String>,
+
+    #[arg(
+        value_name = "mode",
+        short = 'm',
+        long = "mode",
+        help = "Compilation mode: either 'debug' or 'release'",
+        default_value = "debug"
+    )]
+    mode: Mode,
+
+    #[arg(value_name = "name", long = "name", help = "Name of the project")]
+    name: String,
 }
 
 pub const CLAP_STYLING: Styles = Styles::styled()
@@ -71,7 +85,7 @@ pub fn try_cli() -> Result<()> {
     );
 
     for file in &cli.files {
-        info!("processing entrypoint: {}", file.display());
+        info!("processing entrypoint: {} with {:?} mode", file.display(), cli.mode);
 
         if let Some(ext) = file.extension() {
             if ext != FILE_EXTENSION {
@@ -83,12 +97,14 @@ pub fn try_cli() -> Result<()> {
             }
         }
 
-        let file = current_dir()?.join(file);
+        let root = current_dir()?;
+        let file = root.join(file);
         let contents = fs::read_to_string(file.clone())?;
 
         let file = context.sources().add_owned(contents, file);
-        let mut unit = CompilationUnit::new(file, context.clone());
-        unit.compile();
+        let mut unit =
+            CompilationUnit::new(file, context.clone(), cli.mode, root, cli.name.clone());
+        unit.compile()?;
     }
 
     Ok(())

@@ -1,9 +1,9 @@
 use crate::prelude::{ReportKind, WalkerContext, debug};
 use std::{any::Any, env::var, fmt::format, path::PathBuf};
 use zirael_parser::{
-    Ast, AstWalker, Dependency, DependencyGraph, ExprKind, Function, ImportConflict, ImportKind,
-    ItemId, ItemKind, LexedModule, ModuleId, Parameter, ParameterKind, ScopeType, Symbol, SymbolId,
-    SymbolKind, SymbolTable, SymbolTableError, VarDecl, impl_ast_walker, item::Item,
+    Ast, AstId, AstWalker, Dependency, DependencyGraph, Expr, ExprKind, Function, ImportConflict,
+    ImportKind, ItemKind, LexedModule, ModuleId, Parameter, ParameterKind, ScopeType, Stmt, Symbol,
+    SymbolId, SymbolKind, SymbolTable, SymbolTableError, VarDecl, impl_ast_walker, item::Item,
 };
 use zirael_utils::{
     prelude::{Colorize, Identifier, ReportBuilder, Reports, Sources, Span, resolve},
@@ -20,7 +20,7 @@ impl<'reports> DeclarationCollection<'reports> {
                 continue;
             };
 
-            self.symbol_table.push_scope(ScopeType::Module(file_id));
+            self.push_scope(ScopeType::Module(file_id));
             self.processed_file = Some(file_id);
 
             let import_items = self.extract_import_items(&module.ast);
@@ -194,23 +194,46 @@ impl<'reports> DeclarationCollection<'reports> {
 }
 
 impl<'reports> AstWalker<'reports> for DeclarationCollection<'reports> {
-    fn visit_function(&mut self, func: &mut Function) {}
+    fn walk_item(&mut self, item: &mut Item) {
+        let id = match &mut item.kind {
+            ItemKind::Function(func) => {
+                let sym = self.register_symbol(
+                    func.name,
+                    SymbolKind::Function {
+                        signature: func.signature.clone(),
+                        modifiers: func.modifiers.clone(),
+                    },
+                    func.span.clone(),
+                );
 
-    fn visit_item(&mut self, item: &mut Item) {
-        let id = match &item.kind {
-            ItemKind::Function(func) => self.register_symbol(
-                func.name,
-                SymbolKind::Function {
-                    signature: func.signature.clone(),
-                    modifiers: func.modifiers.clone(),
-                },
-                func.span.clone(),
-            ),
+                self.symbol_table.create_scope(ScopeType::Function(func.id));
+
+                self.walk_function_modifiers(&mut func.modifiers);
+                self.walk_function_signature(&mut func.signature);
+
+                if let Some(body) = &mut func.body {
+                    self.walk_expr(body);
+                }
+
+                self.symbol_table.exit_scope().unwrap();
+
+                sym
+            }
             ItemKind::Import(..) => None,
             _ => todo!(),
         };
 
         item.symbol_id = id;
+    }
+
+    fn walk_block(&mut self, stmts: &mut Vec<Stmt>, id: AstId) {
+        self.symbol_table.create_scope(ScopeType::Block(id));
+
+        for stmt in stmts {
+            self.walk_stmt(stmt);
+        }
+
+        self.symbol_table.exit_scope().unwrap();
     }
 
     fn visit_parameter(&mut self, param: &mut Parameter) {
@@ -236,5 +259,18 @@ impl<'reports> AstWalker<'reports> for DeclarationCollection<'reports> {
             v.span,
         );
         var_decl.symbol_id = sym_id;
+    }
+
+    fn walk_modules(&mut self, modules: &mut Vec<LexedModule>) {
+        for module in modules {
+            let ModuleId::File(file_id) = module.id else {
+                continue;
+            };
+
+            self.symbol_table.create_scope(ScopeType::Module(file_id));
+            self.set_processed_file(file_id);
+            self.walk_ast(&mut module.ast);
+            self.symbol_table.exit_scope().unwrap();
+        }
     }
 }

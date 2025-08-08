@@ -1,2 +1,3 @@
 fn divSafe(a: int, b: int): int {
+    5
 }
