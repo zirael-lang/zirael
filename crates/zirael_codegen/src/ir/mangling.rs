@@ -6,7 +6,7 @@ use zirael_utils::{
     prelude::{Mode, strip_same_root},
 };
 
-impl HirLowering {
+impl<'reports> HirLowering<'reports> {
     pub fn mangle_symbol(&self, sym_id: SymbolId) -> String {
         if self.mode == Mode::Debug {
             self.symbol_table.get_c_identifier(sym_id).unwrap()

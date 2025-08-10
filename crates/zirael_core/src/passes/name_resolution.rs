@@ -157,6 +157,7 @@ impl<'reports> AstWalker<'reports> for NameResolution<'reports> {
 
     fn visit_identifier(&mut self, id: &mut Identifier, sym_id: &mut Option<SymbolId>, span: Span) {
         if let Some(id) = self.resolve_identifier(id, span, ExpectedSymbol::Value) {
+            self.symbol_table.mark_used(id).expect("invalid symbol id");
             *sym_id = Some(id);
         }
     }

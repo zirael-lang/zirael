@@ -250,7 +250,6 @@ impl<'a> Parser<'a> {
 
     pub fn expect_any(&mut self, expected: &[TokenKind]) -> Option<Token> {
         match self.peek() {
-            // Changed from current() to peek()
             Some(token) if expected.contains(&token.kind) => Some(self.advance().unwrap()),
             Some(token) => {
                 self.add_report(

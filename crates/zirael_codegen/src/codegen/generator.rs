@@ -47,6 +47,11 @@ impl Gen for IrItem {
                 p.write(")");
 
                 if let Some(body) = &func.body {
+                    if body.stmts.is_empty() {
+                        p.writeln(";");
+                        return;
+                    }
+
                     p.write(" ");
                     body.generate(p);
                 }
@@ -79,6 +84,12 @@ impl Gen for IrStmt {
                 p.write(";\n");
             }
             IrStmt::Expr(expr) => {
+                if let IrExprKind::Block(block) = &expr.kind
+                    && block.stmts.is_empty()
+                {
+                    return;
+                }
+
                 p.write_indented("");
                 expr.generate(p);
                 p.write(";\n");

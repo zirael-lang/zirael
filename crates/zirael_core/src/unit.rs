@@ -46,7 +46,8 @@ impl<'ctx> CompilationUnit<'ctx> {
         let mut hir = lower_ast_to_hir(&mut result.modules, symbols, reports, sources);
         // TODO: optimizations on HIR
 
-        let ir = lower_hir_to_ir(&mut hir, symbols, sources, self.mode, self.root.clone());
+        let ir = lower_hir_to_ir(&mut hir, symbols, reports, sources, self.mode, self.root.clone());
+        reports.print(sources);
 
         let order = symbols.build_symbol_relations()?;
         run_codegen(ir, self.name.clone(), order)

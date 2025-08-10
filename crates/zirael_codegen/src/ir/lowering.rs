@@ -16,34 +16,44 @@ use zirael_parser::{
     SymbolTable, Type, UnaryOp, item::Item,
 };
 use zirael_utils::prelude::{
-    Identifier, Mode, Reports, SourceFileId, Sources, Span, resolve, strip_same_root,
+    Colorize, Identifier, Mode, ReportBuilder, ReportKind, Reports, SourceFileId, Sources, Span,
+    debug, resolve, strip_same_root, warn,
 };
 
-pub fn lower_hir_to_ir(
+pub fn lower_hir_to_ir<'reports>(
     hir_modules: &mut Vec<HirModule>,
     symbol_table: &SymbolTable,
+    reports: &Reports<'reports>,
     sources: &Sources,
     mode: Mode,
     root: PathBuf,
 ) -> Vec<IrModule> {
-    let mut lowering = HirLowering::new(symbol_table, sources, mode, root);
+    let mut lowering = HirLowering::new(symbol_table, reports, sources, mode, root);
     lowering.lower_modules(hir_modules)
 }
 
-pub struct HirLowering {
+pub struct HirLowering<'reports> {
     pub symbol_table: SymbolTable,
     processed_file: Option<SourceFileId>,
     pub sources: Sources,
     pub mode: Mode,
     pub root: PathBuf,
+    pub reports: Reports<'reports>,
 }
 
-impl HirLowering {
-    pub fn new(symbol_table: &SymbolTable, sources: &Sources, mode: Mode, root: PathBuf) -> Self {
+impl<'reports> HirLowering<'reports> {
+    pub fn new(
+        symbol_table: &SymbolTable,
+        reports: &Reports<'reports>,
+        sources: &Sources,
+        mode: Mode,
+        root: PathBuf,
+    ) -> Self {
         Self {
             symbol_table: symbol_table.clone(),
             processed_file: None,
             sources: sources.clone(),
+            reports: reports.clone(),
             mode,
             root,
         }
@@ -66,6 +76,7 @@ impl HirLowering {
         let mut hir_module = IrModule { items: vec![] };
 
         self.push_scope(ScopeType::Module(lexed_module.id));
+        self.processed_file = Some(lexed_module.id);
         for item in &mut lexed_module.items.values_mut() {
             if let Some(hir_item) = self.lower_item(item) {
                 hir_module.items.push(hir_item);
@@ -166,6 +177,10 @@ impl HirLowering {
         ))
     }
 
+    fn warn(&mut self, report: ReportBuilder<'reports>) {
+        self.reports.add(self.processed_file.unwrap(), report);
+    }
+
     fn lower_block(&mut self, block: Vec<HirStmt>, id: AstId) -> IrBlock {
         self.push_scope(ScopeType::Block(id));
         let mut ir_block = vec![];
@@ -174,6 +189,21 @@ impl HirLowering {
                 HirStmt::Var { symbol_id, init } => {
                     let symbol = self.symbol_table.get_symbol_unchecked(&symbol_id);
                     let SymbolKind::Variable { is_heap, .. } = symbol.kind else { unreachable!() };
+
+                    let var_name = resolve(&symbol.name);
+                    if !symbol.is_used && !var_name.starts_with("_") {
+                        debug!("eliminating unused variable: {}", var_name);
+
+                        self.warn(
+                            ReportBuilder::builder(
+                                &format!("unused variable: {}", var_name.dimmed().bold()),
+                                ReportKind::Warning,
+                            )
+                            .label("declared here", symbol.source_location.unwrap()),
+                        );
+
+                        continue;
+                    }
 
                     let name = self.mangle_symbol(symbol_id);
                     if is_heap {

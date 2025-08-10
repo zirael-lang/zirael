@@ -4,12 +4,18 @@ use std::ops::Index;
 use zirael_parser::{DropStackEntry, Type, Type::Inferred};
 use zirael_utils::prelude::debug;
 
-impl HirLowering {
+impl<'reports> HirLowering<'reports> {
     pub fn add_drop(&mut self, entries: Vec<DropStackEntry>, stmts: &mut Vec<IrStmt>) {
         let ids = entries.iter().map(|entry| entry.symbol_id).dedup().collect_vec();
         debug!("dropping {} values", ids.len());
 
-        let names = ids.iter().map(|id| self.mangle_symbol(*id)).collect_vec();
+        let names = ids
+            .iter()
+            .filter_map(|id| {
+                let sym = self.symbol_table.get_symbol_unchecked(id);
+                if sym.is_used { Some(self.mangle_symbol(*id)) } else { None }
+            })
+            .collect_vec();
         let insert_pos = if let Some(last) = stmts.last()
             && let IrStmt::Return(_) = last
         {
