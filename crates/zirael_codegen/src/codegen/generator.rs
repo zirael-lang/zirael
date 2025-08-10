@@ -2,19 +2,25 @@ use crate::{
     codegen::{Codegen, Gen},
     ir::{IrBlock, IrExpr, IrExprKind, IrItem, IrItemKind, IrModule, IrParam, IrStmt},
 };
+use itertools::Itertools;
 use zirael_parser::{BinaryOp, Literal, Stmt, SymbolId, Type, UnaryOp};
 use zirael_utils::prelude::warn;
 
 pub fn run_codegen(
     modules: Vec<IrModule>,
     name: String,
-    order: Vec<SymbolId>,
+    mut order: Vec<SymbolId>,
 ) -> anyhow::Result<()> {
     let cg = &mut Codegen::new();
 
     cg.writeln("#include <stdlib.h>");
     cg.writeln("#include <uchar.h>");
+    cg.writeln("#include <stdint.h>");
     let module_items = modules.iter().map(|m| &m.items).flatten().collect::<Vec<_>>();
+
+    if order.is_empty() {
+        order = module_items.iter().map(|i| i.sym_id).collect_vec();
+    }
 
     for id in order {
         let Some(item) = module_items.iter().find(|i| i.sym_id == id) else {
@@ -224,8 +230,9 @@ impl Gen for IrParam {
 impl Gen for Type {
     fn generate(&self, p: &mut Codegen) {
         match self {
-            Type::Int => p.write("int"),
-            Type::Float => p.write("float"),
+            Type::Int => p.write("int64_t"),
+            Type::Uint => p.write("uint64_t"),
+            Type::Float => p.write("double"),
             Type::Void => p.write("void"),
             Type::Char => p.write("char32_t"),
             Type::String => p.write("char32_t*"),

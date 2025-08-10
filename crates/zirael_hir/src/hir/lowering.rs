@@ -13,6 +13,7 @@ pub struct AstLowering<'reports> {
     reports: Reports<'reports>,
     sources: Sources,
     processed_file: Option<SourceFileId>,
+    pub folded_vars: HashMap<SymbolId, HirExprKind>,
 }
 
 impl<'reports> AstLowering<'reports> {
@@ -22,6 +23,7 @@ impl<'reports> AstLowering<'reports> {
             reports: reports.clone(),
             sources: sources.clone(),
             processed_file: None,
+            folded_vars: HashMap::new(),
         }
     }
 
@@ -224,11 +226,13 @@ impl<'reports> AstLowering<'reports> {
                         }
                         StmtKind::Var(var_stmt) => {
                             let symbol_id = var_stmt.symbol_id.unwrap();
+                            let expr = self.lower_expr(&mut var_stmt.value);
+                            if self.can_be_folded(&expr.kind) {
+                                let folded = self.try_to_constant_fold(expr.kind.clone());
+                                self.folded_vars.insert(symbol_id, folded);
+                            }
 
-                            hir_stmts.push(HirStmt::Var {
-                                symbol_id,
-                                init: self.lower_expr(&mut var_stmt.value),
-                            });
+                            hir_stmts.push(HirStmt::Var { symbol_id, init: expr });
                         }
                     }
                 }
@@ -247,7 +251,7 @@ impl<'reports> AstLowering<'reports> {
         };
 
         HirExpr {
-            kind: hir_kind,
+            kind: self.try_to_constant_fold(hir_kind),
             ty: ast_expr.ty.clone(),
             span: ast_expr.span.clone(),
             id: ast_expr.id,

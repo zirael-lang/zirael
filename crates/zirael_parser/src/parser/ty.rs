@@ -17,6 +17,8 @@ impl<'a> Parser<'a> {
     fn parse_primary_type(&mut self) -> Option<Type> {
         if self.match_keyword(Keyword::Int) {
             return Some(Type::Int);
+        } else if self.match_keyword(Keyword::Uint) {
+            return Some(Type::Uint);
         } else if self.match_keyword(Keyword::Bool) {
             return Some(Type::Bool);
         } else if self.match_keyword(Keyword::Void) {

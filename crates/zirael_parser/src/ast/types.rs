@@ -7,6 +7,7 @@ pub enum Type {
     String,
     Char,
     Int,
+    Uint,
     Float,
     Bool,
     Void,
@@ -22,11 +23,11 @@ pub enum Type {
 
 impl Type {
     pub fn is_numeric(&self) -> bool {
-        matches!(self, Type::Int | Type::Float)
+        matches!(self, Type::Int | Type::Float | Type::Uint)
     }
 
     pub fn is_int(&self) -> bool {
-        matches!(self, Type::Int)
+        matches!(self, Type::Int | Type::Uint)
     }
 
     pub fn is_float(&self) -> bool {

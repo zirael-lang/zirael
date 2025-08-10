@@ -20,6 +20,7 @@ pub enum Keyword {
 
     // types
     Int,
+    Uint,
     Float,
     Bool,
     String,
@@ -47,6 +48,7 @@ impl Keyword {
         Self::Const,
         Self::Async,
         Self::Int,
+        Self::Uint,
         Self::Float,
         Self::Bool,
         Self::String,
@@ -68,6 +70,7 @@ impl Keyword {
             Self::Const => "const",
             Self::Async => "async",
             Self::Int => "int",
+            Self::Uint => "uint",
             Self::Float => "float",
             Self::Bool => "bool",
             Self::String => "string",

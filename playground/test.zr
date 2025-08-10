@@ -1,28 +1,48 @@
 import "div.zr"
 
-fn test(num: &int) {}
+fn test(num: &uint) {}
 
 fn main() {
     // Basic variable declarations
-    var x = 42
-    var y = 3.14
+    //var x = 42
+    //var y = 3.14
 
     // Move semantics
-    var a = x  // x is moved to a, x cannot be used anymore
-    var b = a  // a is moved to b
+    //var a = x  // x is moved to a, x cannot be used anymore
+    //var b = a  // a is moved to b
 
-    {// Heap allocation (only allowed in variable declarations)
-    var heap_num = box 100
-    var heap_float = box 2.5}
+    //var heap_num = box 100
+    //var heap_float = box 2.5
 
     // Borrowing
-    var num = 50
-    var ref_num = &num     // Borrow num
-    var another_ref = &num // Multiple borrows OK
-    test(&num);
+    //var num = 50
+    //var ref_num = &num     // Borrow num
+    //var another_ref = &num // Multiple borrows OK
+    //test(&num);
 
     // Assignment
-    var counter = 0
-    counter = 10           // Simple assignment
-    counter = counter + 5  // Use and reassign
+    //var counter = 0
+    //counter = 10           // Simple assignment
+    //counter = counter + 5  // Use and reassign
+
+    var _a = 10 + 20;
+    var _b = 100 - 25;
+    var _c = 6 * 7;
+    var _d = 84 / 12;
+    var _e = 17 % 5;
+
+    var _x = 5.6;
+    var _y = 5.5;
+    var _z = 10.0;
+    var _w = 5.0;
+    var _r = 1.5;
+
+    var _mixed1 = 10 + 2.5;
+    var _mixed2 = 3.0 * 4;
+    var _mixed3 = 20 / 4.0;
+
+    var _complex1 = (10 + 5) * (20 - 8);
+    var _complex2 = ((3 + 7) * 2) + (15 / 3);
+    var _complex3 = 100 - (25 + (10 * 3));
+
 }

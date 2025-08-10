@@ -15,6 +15,7 @@ impl<'reports> TypeInference<'reports> {
             ExprKind::Unary(op, expr) => self.infer_unary(op, expr),
             ExprKind::Binary { left, op, right } => self.infer_binary(left, op, right),
             ExprKind::Call { callee, args } => self.infer_call(callee, args),
+            ExprKind::Paren(expr) => self.infer_expr(expr),
             _ => {
                 warn!("unimplemented expr: {:#?}", expr);
                 Type::Error

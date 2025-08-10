@@ -303,6 +303,7 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
             Type::String
             | Type::Char
             | Type::Int
+            | Type::Uint
             | Type::Float
             | Type::Bool
             | Type::Void

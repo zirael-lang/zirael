@@ -29,7 +29,7 @@ pub enum ExprKind {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Literal {
-    Integer(i128),
+    Integer(i64),
     Float(f64),
     String(String),
     Char(char),

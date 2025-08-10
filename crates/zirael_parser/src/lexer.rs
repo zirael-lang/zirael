@@ -32,6 +32,7 @@ pub enum TokenKind {
     #[token("mut", |_| Keyword::Mut)]
     #[token("box", |_| Keyword::Box)]
     #[token("return", |_| Keyword::Return)]
+    #[token("uint", |_| Keyword::Uint)]
     Keyword(Keyword),
 
     // Brackets and braces
@@ -184,8 +185,8 @@ pub enum TokenKind {
     #[token("::")]
     DoubleColon,
 
-    #[regex(r"-?(?:0|[1-9]\d*)", |lex| lex.slice().parse::<i128>().unwrap())]
-    Integer(i128),
+    #[regex(r"-?(?:0|[1-9]\d*)", |lex| lex.slice().parse::<i64>().unwrap())]
+    Integer(i64),
 
     #[regex(r"-?(?:0|[1-9]\d*)\.\d+(?:[eE][+-]?\d+)?", |lex| lex.slice().parse::<f64>().unwrap())]
     #[regex(r"-?(?:0|[1-9]\d*)[eE][+-]?\d+", |lex| lex.slice().parse::<f64>().unwrap())]

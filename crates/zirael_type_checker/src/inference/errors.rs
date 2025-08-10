@@ -10,6 +10,7 @@ impl<'reports> TypeInference<'reports> {
     pub fn format_type(&self, ty: &Type) -> String {
         match ty {
             Type::Int => "int".to_string(),
+            Type::Uint => "uint".to_string(),
             Type::Bool => "bool".to_string(),
             Type::Char => "char".to_string(),
             Type::String => "string".to_string(),
