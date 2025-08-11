@@ -1,5 +1,5 @@
 use crate::{
-    Return, TokenKind,
+    ExprKind, Return, TokenKind,
     ast::{Keyword, Stmt, StmtKind, Type, VarDecl},
     parser::Parser,
     span::SpanUtils,
@@ -44,6 +44,16 @@ impl<'a> Parser<'a> {
             Stmt(StmtKind::Return(Return { value, span: span.to(self.prev_span()) }))
         } else {
             let expr = self.parse_expr();
+
+            if !self.match_token(TokenKind::Semicolon)
+                && !matches!(expr.kind, ExprKind::Assign(_, _) | ExprKind::AssignOp(..))
+            {
+                return Stmt(StmtKind::Return(Return {
+                    value: Some(expr.clone()),
+                    span: expr.span,
+                }));
+            }
+
             self.match_token(TokenKind::Semicolon);
             Stmt(StmtKind::Expr(expr))
         }

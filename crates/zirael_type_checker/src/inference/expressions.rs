@@ -164,7 +164,7 @@ impl<'reports> TypeInference<'reports> {
         for stmt in stmts.iter_mut() {
             match &mut stmt.0 {
                 StmtKind::Expr(expr) => {
-                    block_type = self.infer_expr(expr);
+                    self.infer_expr(expr);
                 }
                 StmtKind::Return(ret) => {
                     if let Some(expr) = ret.value.as_mut() {

@@ -55,14 +55,7 @@ pub struct HirParam {
 
 #[derive(Debug, Clone)]
 pub struct HirBody {
-    pub locals: HashMap<SymbolId, HirLocal>,
     pub root_expr: HirExpr,
-}
-
-#[derive(Debug, Clone)]
-pub struct HirLocal {
-    pub symbol_id: SymbolId,
-    pub ty: Type,
 }
 
 #[derive(Debug, Clone)]
@@ -95,4 +88,10 @@ pub enum HirVariantData {
     Unit,
     Tuple(Vec<Type>),
     Struct(Vec<HirField>),
+}
+
+#[derive(PartialEq)]
+pub enum ExprContext {
+    Stmt,
+    Expr,
 }

@@ -1,5 +1,5 @@
 use crate::hir::{
-    HirBody, HirFunction, HirFunctionSignature, HirItem, HirItemKind, HirLocal, HirModule,
+    ExprContext, HirBody, HirFunction, HirFunctionSignature, HirItem, HirItemKind, HirModule,
     HirParam,
     expr::{HirExpr, HirExprKind, HirStmt},
 };
@@ -119,17 +119,20 @@ impl<'reports> AstLowering<'reports> {
     }
 
     fn lower_function_body(&mut self, body_expr: &mut Expr, _function_symbol: SymbolId) -> HirBody {
-        let mut locals = HashMap::new();
-        let root_expr = self.lower_expr_with_locals(body_expr, &mut locals);
+        let root_expr = self.lower_expr(body_expr);
 
-        HirBody { locals, root_expr }
+        HirBody { root_expr }
     }
 
-    fn lower_expr_with_locals(
-        &mut self,
-        ast_expr: &mut Expr,
-        locals: &mut HashMap<SymbolId, HirLocal>,
-    ) -> HirExpr {
+    fn lower_expr(&mut self, ast_expr: &mut Expr) -> HirExpr {
+        self.lower_expr_impl(ast_expr, ExprContext::Expr)
+    }
+
+    fn lower_expr_stmt(&mut self, ast_expr: &mut Expr) -> HirExpr {
+        self.lower_expr_impl(ast_expr, ExprContext::Stmt)
+    }
+
+    fn lower_expr_impl(&mut self, ast_expr: &mut Expr, context: ExprContext) -> HirExpr {
         let hir_kind = match &mut ast_expr.kind {
             ExprKind::Literal(lit) => HirExprKind::Literal(lit.clone()),
 
@@ -145,25 +148,25 @@ impl<'reports> AstLowering<'reports> {
             }
 
             ExprKind::Binary { left, op, right } => {
-                let left_expr = Box::new(self.lower_expr_with_locals(left, locals));
-                let right_expr = Box::new(self.lower_expr_with_locals(right, locals));
+                let left_expr = Box::new(self.lower_expr(left));
+                let right_expr = Box::new(self.lower_expr(right));
                 HirExprKind::Binary { left: left_expr, op: op.clone(), right: right_expr }
             }
 
             ExprKind::Unary(op, operand) => {
-                let operand_expr = Box::new(self.lower_expr_with_locals(operand, locals));
+                let operand_expr = Box::new(self.lower_expr(operand));
                 HirExprKind::Unary { op: *op.clone(), operand: operand_expr }
             }
 
             ExprKind::Assign(lhs, rhs) => {
-                let lhs_expr = Box::new(self.lower_expr_with_locals(lhs, locals));
-                let rhs_expr = Box::new(self.lower_expr_with_locals(rhs, locals));
+                let lhs_expr = Box::new(self.lower_expr(lhs));
+                let rhs_expr = Box::new(self.lower_expr(rhs));
                 HirExprKind::Assign { lhs: lhs_expr, rhs: rhs_expr }
             }
 
             ExprKind::AssignOp(lhs, op, rhs) => {
-                let lhs_expr = Box::new(self.lower_expr_with_locals(lhs, locals));
-                let rhs_expr = Box::new(self.lower_expr_with_locals(rhs, locals));
+                let lhs_expr = Box::new(self.lower_expr(lhs));
+                let rhs_expr = Box::new(self.lower_expr(rhs));
                 HirExprKind::Assign {
                     lhs: lhs_expr.clone(),
                     rhs: Box::new(HirExpr {
@@ -180,9 +183,9 @@ impl<'reports> AstLowering<'reports> {
             }
 
             ExprKind::Call { callee, args } => {
-                let callee_expr = Box::new(self.lower_expr_with_locals(callee, locals));
+                let callee_expr = Box::new(self.lower_expr(callee));
                 let arg_exprs: Vec<HirExpr> =
-                    args.iter_mut().map(|arg| self.lower_expr_with_locals(arg, locals)).collect();
+                    args.iter_mut().map(|arg| self.lower_expr(arg)).collect();
                 HirExprKind::Call { callee: callee_expr, args: arg_exprs }
             }
 
@@ -191,37 +194,31 @@ impl<'reports> AstLowering<'reports> {
             }
 
             ExprKind::IndexAccess(object, index) => {
-                let object_expr = Box::new(self.lower_expr_with_locals(object, locals));
-                let index_expr = Box::new(self.lower_expr_with_locals(index, locals));
+                let object_expr = Box::new(self.lower_expr(object));
+                let index_expr = Box::new(self.lower_expr(index));
                 HirExprKind::IndexAccess { object: object_expr, index: index_expr }
             }
 
             ExprKind::Block(stmts) => {
                 self.push_scope(ScopeType::Block(ast_expr.id));
                 let mut hir_stmts = vec![];
-                let mut has_return = false;
 
-                let stmts_len = stmts.len();
-                for (i, stmt) in stmts.iter_mut().enumerate() {
+                for stmt in stmts.iter_mut() {
                     match &mut stmt.0 {
                         StmtKind::Expr(expr) => {
-                            let is_last_stmt = i == stmts_len - 1;
-                            let lowered_expr = self.lower_expr(expr);
+                            let lowered_expr = self.lower_expr_stmt(expr);
 
-                            if is_last_stmt
-                                && !has_return
-                                && lowered_expr.kind.can_be_wrapped_in_return()
-                            {
-                                hir_stmts.push(HirStmt::Return(Some(lowered_expr)));
-                            } else {
-                                hir_stmts.push(HirStmt::Expr(lowered_expr));
+                            if self.is_expr_pointless(&lowered_expr.kind) {
+                                self.result_not_used_error(&lowered_expr);
+                                continue;
                             }
+
+                            hir_stmts.push(HirStmt::Expr(lowered_expr));
                         }
                         StmtKind::Return(ret) => {
                             hir_stmts.push(HirStmt::Return(
                                 ret.value.clone().map(|mut e| self.lower_expr(&mut e)),
                             ));
-                            has_return = true;
                             break;
                         }
                         StmtKind::Var(var_stmt) => {
@@ -241,7 +238,7 @@ impl<'reports> AstLowering<'reports> {
                 HirExprKind::Block(hir_stmts)
             }
             ExprKind::Paren(inner) => {
-                return self.lower_expr_with_locals(inner, locals);
+                return self.lower_expr(inner);
             }
 
             ExprKind::CouldntParse(_) => {
@@ -251,19 +248,23 @@ impl<'reports> AstLowering<'reports> {
         };
 
         HirExpr {
-            kind: self.try_to_constant_fold(hir_kind),
+            kind: if context == ExprContext::Stmt && self.is_expr_pointless(&hir_kind) {
+                hir_kind
+            } else {
+                self.try_to_constant_fold(hir_kind)
+            },
             ty: ast_expr.ty.clone(),
             span: ast_expr.span.clone(),
             id: ast_expr.id,
         }
     }
 
-    fn lower_expr(&mut self, ast_expr: &mut Expr) -> HirExpr {
-        let mut locals = HashMap::new();
-        self.lower_expr_with_locals(ast_expr, &mut locals)
-    }
-
-    fn error(&mut self, message: &str, labels: Vec<(String, Range<usize>)>, notes: Vec<String>) {
+    pub fn error(
+        &mut self,
+        message: &str,
+        labels: Vec<(String, Range<usize>)>,
+        notes: Vec<String>,
+    ) {
         if let Some(file_id) = self.processed_file {
             let mut report = ReportBuilder::builder(message, ReportKind::Error);
             for note in notes {

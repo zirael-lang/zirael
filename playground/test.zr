@@ -44,5 +44,4 @@ fn main() {
     var _complex1 = (10 + 5) * (20 - 8);
     var _complex2 = ((3 + 7) * 2) + (15 / 3);
     var _complex3 = 100 - (25 + (10 * 3));
-
 }

@@ -29,12 +29,3 @@ pub enum HirStmt {
     Var { symbol_id: SymbolId, init: HirExpr },
     Return(Option<HirExpr>),
 }
-
-impl HirExprKind {
-    pub fn can_be_wrapped_in_return(&self) -> bool {
-        match self {
-            HirExprKind::Assign { .. } | HirExprKind::Block(_) => false,
-            _ => true,
-        }
-    }
-}
