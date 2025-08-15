@@ -20,6 +20,7 @@ colored = { workspace = true }
 fs-err = { workspace = true }
 rayon = { workspace = true }
 env_logger = { workspace = true }
+serde = { version = "1.0.219", features = ["derive"] }
 
 [lints]
 workspace = true

@@ -10,6 +10,8 @@ clap = { workspace = true }
 env_logger = { workspace = true }
 log = { workspace = true }
 zirael_core = { workspace = true }
+fs-err = { workspace = true }
+anyhow = { workspace = true }
 
 [lints]
 workspace = true

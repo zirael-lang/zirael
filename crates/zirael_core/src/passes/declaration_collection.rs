@@ -1,16 +1,19 @@
 use crate::prelude::{ReportKind, WalkerContext, debug};
 use std::{any::Any, env::var, fmt::format, path::PathBuf};
 use zirael_parser::{
-    Ast, AstId, AstWalker, Dependency, DependencyGraph, Expr, ExprKind, Function, ImportConflict,
-    ImportKind, ItemKind, LexedModule, ModuleId, Parameter, ParameterKind, ScopeType, Stmt, Symbol,
-    SymbolId, SymbolKind, SymbolTable, SymbolTableError, VarDecl, impl_ast_walker, item::Item,
+    Ast, AstId, AstWalker, Dependencies, Dependency, DependencyGraph, Expr, ExprKind, Function,
+    ImportConflict, ImportKind, ItemKind, LexedModule, ModuleId, Parameter, ParameterKind,
+    ScopeType, Stmt, Symbol, SymbolId, SymbolKind, SymbolTable, SymbolTableError, VarDecl,
+    impl_ast_walker, item::Item,
 };
 use zirael_utils::{
     prelude::{Colorize, Identifier, ReportBuilder, Reports, Sources, Span, resolve},
     sources::SourceFileId,
 };
 
-impl_ast_walker!(DeclarationCollection);
+impl_ast_walker!(DeclarationCollection, {
+    packages: Dependencies,
+});
 
 impl<'reports> DeclarationCollection<'reports> {
     pub fn collect(&mut self, modules: &mut Vec<LexedModule>) {
@@ -56,16 +59,46 @@ impl<'reports> DeclarationCollection<'reports> {
                 self.process_path_import(path, span, current_file_id);
             }
             ImportKind::ExternalModule(module) => {
-                todo!("importing from external modules is not supported yet")
+                let mut parts = module.clone();
+                let name = resolve(&parts[0]);
+                let pkg = self.packages.get(&name);
+
+                if let Some(pkg) = pkg {
+                    if module.len() == 1 {
+                        self.process_path_import(pkg.entrypoint(), span, current_file_id);
+                    } else {
+                        parts.remove(0);
+                        let mut path = pkg.entrypoint().parent().unwrap().to_path_buf();
+
+                        for part in parts {
+                            let part = resolve(&part);
+                            path = path.join(part);
+                        }
+
+                        self.process_path_import(&path.with_extension("zr"), span, current_file_id);
+                    }
+                } else {
+                    self.error(
+                        &format!("couldn't find package: {}", name.dimmed().bold()),
+                        vec![("in this import statement".to_string(), span.clone())],
+                        vec![],
+                    );
+                }
             }
         }
     }
 
     fn process_path_import(&mut self, path: &PathBuf, span: &Span, current_file_id: SourceFileId) {
-        let source_module = self
-            .sources
-            .get_by_path(path)
-            .expect("this should be checked before collection of declarations");
+        let source_module = self.sources.get_by_path(path);
+
+        let Some(source_module) = source_module else {
+            self.error(
+                &format!("couldn't find module: {}", path.display().to_string().dimmed().bold()),
+                vec![("in this import statement".to_string(), span.clone())],
+                vec!["if the file exists, make sure it was discovered by the compiler".to_string()],
+            );
+            return;
+        };
 
         let import_result =
             self.symbol_table.import_all_from_module(source_module, current_file_id);

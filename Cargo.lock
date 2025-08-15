@@ -1402,8 +1402,10 @@ checksum = "ced3678a2879b30306d323f4542626697a464a97c0a07c9aebf7ebca65cd4dde"
 name = "zirael"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "clap 4.5.41",
  "env_logger",
+ "fs-err",
  "log",
  "zirael_core",
 ]
@@ -1485,4 +1487,5 @@ dependencies = [
  "once_cell",
  "parking_lot",
  "rayon",
+ "serde",
 ]

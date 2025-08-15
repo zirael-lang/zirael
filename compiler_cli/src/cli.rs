@@ -11,7 +11,7 @@ pub struct Cli {
     entrypoint: PathBuf,
 
     #[arg(value_name = "type", help = "Type of the project", default_value = "library")]
-    ty: ProjectType,
+    ty: PackageType,
 
     #[arg(
         value_name = "verbose",
@@ -26,12 +26,11 @@ pub struct Cli {
         short = 'd',
         long = "packages",
         help = "Add packages that will be resolved by the compiler. \
-    Each dependency should be a path to its entry point, with all imports \
-    resolved relative to this path. Example: -d std=./std/lib.zr allows \
-    the compiler to resolve 'import \"std/io\"'. \
-    Order is important, because if one dependency depends on another, but it isn't compiled yet, the compiler will fail."
+        Format: name:root=entrypoint \
+        Example: -d std:/path/to/std=./std/lib.zr \
+        Order is important, because if one dependency depends on another, but it isn't compiled yet, the compiler will fail."
     )]
-    packages: Vec<String>,
+    packages: Vec<Dependency>,
 
     #[arg(
         value_name = "mode",
@@ -69,30 +68,31 @@ pub fn try_cli() -> Result<()> {
 
     let mut context = Context::new();
 
-    for package in &cli.packages {
-        let text = package.split('=').collect::<Vec<&str>>();
-        if text.len() != 2 {
-            error!(
-                "Invalid package: {}. The correct format is: {{name}}={{entrypoint of package}}",
-                package
-            );
-            continue;
-        }
-        let dep = Dependency::new(text[0].to_string(), PathBuf::from(text[1]));
-
+    for dep in &cli.packages {
         if context.packages().contains(&dep) {
-            error!("Found multiple packages with the same name: {}", text[0]);
+            error!("Found multiple packages with the same name: {}", dep.name);
             continue;
         }
-        context.add_package(dep);
+        context.packages().add(dep.clone());
+
+        let entrypoint = fs_err::read_to_string(&dep.entrypoint)?;
+        let file = context.sources().add_owned(entrypoint, dep.entrypoint.clone());
+
+        let mut unit = CompilationUnit::new(
+            file,
+            context.clone(),
+            CompilationInfo { mode: cli.mode, name: dep.name.clone(), root: dep.root.clone() },
+        );
+        unit.compile()?;
     }
+
     info!(
         "linked packages: {}",
-        context.packages().iter().map(|dep| dep.name()).collect::<Vec<&str>>().join(", ")
+        context.packages().all().iter().map(|dep| dep.name()).collect::<Vec<&str>>().join(", ")
     );
 
     let file = cli.entrypoint;
-    info!("processing entrypoint: {} with {:?} mode", file.display(), cli.mode);
+    info!("processing entrypoint: {} with {} mode", file.display(), cli.mode);
 
     if let Some(ext) = file.extension() {
         if ext != FILE_EXTENSION {
@@ -106,7 +106,7 @@ pub fn try_cli() -> Result<()> {
 
     let root = current_dir()?;
     let file = root.join(file);
-    let contents = fs::read_to_string(file.clone())?;
+    let contents = fs_err::read_to_string(file.clone())?;
 
     let file = context.sources().add_owned(contents, file);
     let mut unit = CompilationUnit::new(

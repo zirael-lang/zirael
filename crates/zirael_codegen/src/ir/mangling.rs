@@ -14,7 +14,12 @@ impl<'reports> HirLowering<'reports> {
             let mut result = String::from("_ZN");
             let symbol = self.symbol_table.get_symbol_unchecked(&sym_id);
             let symbol_name = resolve(&symbol.name);
-            let symbol_file = self.symbol_table.get_symbol_module(symbol.scope).unwrap();
+            let symbol_file = if let Some(imported_from) = symbol.imported_from {
+                imported_from
+            } else {
+                symbol.scope
+            };
+            let symbol_file = self.symbol_table.get_symbol_module(symbol_file).unwrap();
             let file_path = self.sources.get_unchecked(symbol_file).path();
             let base_path = strip_same_root(file_path, self.root.clone()).with_extension("");
             result.push_str(&format!("{}{}", symbol_name.len(), symbol_name));

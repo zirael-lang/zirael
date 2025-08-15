@@ -34,7 +34,13 @@ impl<'ctx> CompilationUnit<'ctx> {
         let mut result = determine_lexed_modules(self.entry_point, sources, reports);
         self.module_graph = result.dependency_graph;
 
-        DeclarationCollection::new(symbols, reports, sources).collect(&mut result.modules);
+        DeclarationCollection::new_no_defaults(
+            symbols,
+            reports,
+            sources,
+            self.context.packages().clone(),
+        )
+        .collect(&mut result.modules);
         NameResolution::new(symbols, reports, sources).walk_modules(&mut result.modules);
         reports.print(sources);
 
