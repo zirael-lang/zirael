@@ -6,7 +6,7 @@ use zirael_utils::prelude::*;
 pub struct Context<'reports> {
     sources: Sources,
     reports: Reports<'reports>,
-    dependencies: Vec<Dependency>,
+    packages: Vec<Dependency>,
     symbols: SymbolTable,
 }
 
@@ -26,12 +26,12 @@ impl<'reports> Context<'reports> {
         &self.reports
     }
 
-    pub fn add_dependency(&mut self, dependency: Dependency) {
-        self.dependencies.push(dependency);
+    pub fn add_package(&mut self, dependency: Dependency) {
+        self.packages.push(dependency);
     }
 
-    pub fn dependencies(&self) -> &Vec<Dependency> {
-        &self.dependencies
+    pub fn packages(&self) -> &Vec<Dependency> {
+        &self.packages
     }
 
     pub fn symbols(&self) -> &SymbolTable {

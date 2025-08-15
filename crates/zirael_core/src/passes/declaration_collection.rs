@@ -55,7 +55,7 @@ impl<'reports> DeclarationCollection<'reports> {
             ImportKind::Path(path) => {
                 self.process_path_import(path, span, current_file_id);
             }
-            ImportKind::ExternalModule(_) => {
+            ImportKind::ExternalModule(module) => {
                 todo!("importing from external modules is not supported yet")
             }
         }

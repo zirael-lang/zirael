@@ -69,6 +69,10 @@ impl<'reports> AstWalker<'reports> for TypeInference<'reports> {
 
         self.walk_function_modifiers(&mut func.modifiers);
         self.walk_function_signature(&mut func.signature);
+        
+        for param in &func.signature.parameters {
+            self.ctx.add_variable(param.symbol_id.unwrap(), param.ty.clone())
+        }
 
         if let Some(body) = &mut func.body {
             let body_ty = self.infer_expr(body);

@@ -1,4 +1,3 @@
-use crate::logger::setup_logger;
 use clap::{Parser, builder::Styles};
 use std::env::current_dir;
 use zirael_core::prelude::*;
@@ -8,8 +7,11 @@ use zirael_core::prelude::*;
 #[command(bin_name = "zr")]
 #[command(styles = CLAP_STYLING)]
 pub struct Cli {
-    #[arg(value_name = "input", help = "Each input file is compiled as its own project.")]
-    files: Vec<PathBuf>,
+    #[arg(value_name = "entrypoint", help = "Entrypoint of the project")]
+    entrypoint: PathBuf,
+
+    #[arg(value_name = "type", help = "Type of the project", default_value = "library")]
+    ty: ProjectType,
 
     #[arg(
         value_name = "verbose",
@@ -20,16 +22,16 @@ pub struct Cli {
     verbose: bool,
 
     #[arg(
-        value_name = "dependencies",
+        value_name = "packages",
         short = 'd',
-        long = "dependencies",
-        help = "Add dependencies that will be resolved by the compiler. \
+        long = "packages",
+        help = "Add packages that will be resolved by the compiler. \
     Each dependency should be a path to its entry point, with all imports \
     resolved relative to this path. Example: -d std=./std/lib.zr allows \
     the compiler to resolve 'import \"std/io\"'. \
     Order is important, because if one dependency depends on another, but it isn't compiled yet, the compiler will fail."
     )]
-    dependencies: Vec<String>,
+    packages: Vec<String>,
 
     #[arg(
         value_name = "mode",
@@ -42,6 +44,14 @@ pub struct Cli {
 
     #[arg(value_name = "name", long = "name", help = "Name of the project")]
     name: String,
+
+    #[arg(
+        value_name = "lib-type",
+        long = "lib",
+        help = "Type of the library to generate",
+        default_value = "static"
+    )]
+    lib_type: LibType,
 }
 
 pub const CLAP_STYLING: Styles = Styles::styled()
@@ -55,57 +65,56 @@ pub const CLAP_STYLING: Styles = Styles::styled()
 
 pub fn try_cli() -> Result<()> {
     let cli = Cli::parse();
-    setup_logger(cli.verbose);
+    setup_logger(cli.verbose, false);
 
-    if cli.files.is_empty() {
-        bail!("No input files provided.")
-    }
     let mut context = Context::new();
 
-    for dependency in &cli.dependencies {
-        let text = dependency.split('=').collect::<Vec<&str>>();
+    for package in &cli.packages {
+        let text = package.split('=').collect::<Vec<&str>>();
         if text.len() != 2 {
             error!(
-                "Invalid dependency: {}. The correct format is: {{name}}={{entrypoint of dependency}}",
-                dependency
+                "Invalid package: {}. The correct format is: {{name}}={{entrypoint of package}}",
+                package
             );
             continue;
         }
         let dep = Dependency::new(text[0].to_string(), PathBuf::from(text[1]));
 
-        if context.dependencies().contains(&dep) {
-            error!("Found multiple dependencies with the same name: {}", text[0]);
+        if context.packages().contains(&dep) {
+            error!("Found multiple packages with the same name: {}", text[0]);
             continue;
         }
-        context.add_dependency(dep);
+        context.add_package(dep);
     }
     info!(
-        "linked dependencies: {}",
-        context.dependencies().iter().map(|dep| dep.name()).collect::<Vec<&str>>().join(", ")
+        "linked packages: {}",
+        context.packages().iter().map(|dep| dep.name()).collect::<Vec<&str>>().join(", ")
     );
 
-    for file in &cli.files {
-        info!("processing entrypoint: {} with {:?} mode", file.display(), cli.mode);
+    let file = cli.entrypoint;
+    info!("processing entrypoint: {} with {:?} mode", file.display(), cli.mode);
 
-        if let Some(ext) = file.extension() {
-            if ext != FILE_EXTENSION {
-                bail!(
-                    "Found an entry point with invalid extension: {}. It must be {}",
-                    file.display().to_string().dimmed(),
-                    FILE_EXTENSION.dimmed()
-                );
-            }
+    if let Some(ext) = file.extension() {
+        if ext != FILE_EXTENSION {
+            bail!(
+                "Found an entry point with invalid extension: {}. It must be {}",
+                file.display().to_string().dimmed(),
+                FILE_EXTENSION.dimmed()
+            );
         }
-
-        let root = current_dir()?;
-        let file = root.join(file);
-        let contents = fs::read_to_string(file.clone())?;
-
-        let file = context.sources().add_owned(contents, file);
-        let mut unit =
-            CompilationUnit::new(file, context.clone(), cli.mode, root, cli.name.clone());
-        unit.compile()?;
     }
+
+    let root = current_dir()?;
+    let file = root.join(file);
+    let contents = fs::read_to_string(file.clone())?;
+
+    let file = context.sources().add_owned(contents, file);
+    let mut unit = CompilationUnit::new(
+        file,
+        context.clone(),
+        CompilationInfo { mode: cli.mode, name: cli.name.clone(), root },
+    );
+    unit.compile()?;
 
     Ok(())
 }

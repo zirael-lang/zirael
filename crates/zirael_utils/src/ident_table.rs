@@ -30,7 +30,6 @@ impl IdentTable {
     }
 }
 
-#[cfg(debug_assertions)]
 impl Debug for Identifier {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", resolve(self))

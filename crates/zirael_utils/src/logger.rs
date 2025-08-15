@@ -1,10 +1,23 @@
 use log::LevelFilter;
 
-pub fn setup_logger(verbose: bool) {
+pub fn setup_logger(verbose: bool, test_logger: bool) {
     let level = if verbose { LevelFilter::Debug } else { LevelFilter::Info };
-    env_logger::Builder::from_default_env()
-        .filter_level(level)
-        .format(|buf, record| {
+
+    let mut builder = env_logger::Builder::from_default_env();
+    builder.filter_level(level);
+
+    if test_logger {
+        builder.format(|buf, record| {
+            use std::io::Write as _;
+            writeln!(
+                buf,
+                "{} {}",
+                record.level().to_string().to_lowercase(),
+                record.args()
+            )
+        });
+    } else {
+        builder.format(|buf, record| {
             use std::io::Write as _;
 
             let level_color = match record.level() {
@@ -23,6 +36,8 @@ pub fn setup_logger(verbose: bool) {
                 record.module_path().unwrap_or("unknown"),
                 record.args()
             )
-        })
-        .init();
+        });
+    }
+
+    builder.init();
 }

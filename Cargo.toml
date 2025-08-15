@@ -33,6 +33,7 @@ ordinal = "0.4.0"
 convert_case = "0.8.0"
 strsim = "0.11.1"
 dirs = "6.0.0"
+strum = { version = "0.27.2", features = ["derive"] }
 
 zirael_core = { path = "crates/zirael_core", version = "0.1.0" }
 zirael_parser = { path = "crates/zirael_parser", version = "0.1.0" }

@@ -6,25 +6,24 @@ use zirael_codegen::{codegen::run_codegen, ir::lower_hir_to_ir};
 use zirael_hir::hir::lowering::lower_ast_to_hir;
 use zirael_type_checker::TypeInference;
 
-#[derive(Debug)]
-pub struct CompilationUnit<'ctx> {
-    pub entry_point: SourceFileId,
-    pub context: Context<'ctx>,
-    pub module_graph: DependencyGraph,
+#[derive(Debug, Clone)]
+pub struct CompilationInfo {
     pub mode: Mode,
     pub root: PathBuf,
     pub name: String,
 }
 
+#[derive(Debug)]
+pub struct CompilationUnit<'ctx> {
+    pub entry_point: SourceFileId,
+    pub context: Context<'ctx>,
+    pub module_graph: DependencyGraph,
+    pub info: CompilationInfo,
+}
+
 impl<'ctx> CompilationUnit<'ctx> {
-    pub fn new(
-        entry_point: SourceFileId,
-        context: Context<'ctx>,
-        mode: Mode,
-        root: PathBuf,
-        name: String,
-    ) -> Self {
-        Self { entry_point, context, module_graph: Default::default(), mode, root, name }
+    pub fn new(entry_point: SourceFileId, context: Context<'ctx>, info: CompilationInfo) -> Self {
+        Self { entry_point, context, module_graph: Default::default(), info }
     }
 
     pub fn compile(&mut self) -> Result<()> {
@@ -46,10 +45,17 @@ impl<'ctx> CompilationUnit<'ctx> {
         let mut hir = lower_ast_to_hir(&mut result.modules, symbols, reports, sources);
         // TODO: optimizations on HIR
 
-        let ir = lower_hir_to_ir(&mut hir, symbols, reports, sources, self.mode, self.root.clone());
+        let ir = lower_hir_to_ir(
+            &mut hir,
+            symbols,
+            reports,
+            sources,
+            self.info.mode,
+            self.info.root.clone(),
+        );
         reports.print(sources);
 
         let order = symbols.build_symbol_relations()?;
-        run_codegen(ir, self.name.clone(), order)
+        run_codegen(ir, self.info.name.clone(), order)
     }
 }

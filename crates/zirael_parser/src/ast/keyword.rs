@@ -1,32 +1,46 @@
-use std::{
-    collections::HashMap,
-    fmt::{Display, Formatter},
-    sync::OnceLock,
-};
+use std::fmt::{Display, Formatter};
+use strum::{EnumIter, EnumProperty, EnumString, IntoEnumIterator};
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Copy)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Copy, EnumIter, EnumString, EnumProperty)]
+#[strum(serialize_all = "lowercase")]
 pub enum Keyword {
+    #[strum(props(category = "declaration"))]
     Fn,
+    #[strum(props(category = "declaration"))]
     Class,
+    #[strum(props(category = "declaration"))]
     Enum,
+    #[strum(props(category = "declaration"))]
     Import,
+    #[strum(props(category = "declaration"))]
     Var,
+    #[strum(props(category = "control"))]
     Box,
+    #[strum(props(category = "control"))]
     Return,
 
+    #[strum(props(category = "modifier"))]
     Extern,
+    #[strum(props(category = "modifier"))]
     Const,
+    #[strum(props(category = "modifier"))]
     Async,
 
     // types
+    #[strum(props(category = "type"))]
     Int,
+    #[strum(props(category = "type"))]
     Uint,
+    #[strum(props(category = "type"))]
     Float,
+    #[strum(props(category = "type"))]
     Bool,
+    #[strum(props(category = "type"))]
     String,
+    #[strum(props(category = "type"))]
     Char,
+    #[strum(props(category = "type"))]
     Void,
-    Mut,
 }
 
 impl Display for Keyword {
@@ -36,26 +50,9 @@ impl Display for Keyword {
 }
 
 impl Keyword {
-    pub const ALL: &'static [Self] = &[
-        Self::Fn,
-        Self::Class,
-        Self::Enum,
-        Self::Import,
-        Self::Var,
-        Self::Box,
-        Self::Return,
-        Self::Extern,
-        Self::Const,
-        Self::Async,
-        Self::Int,
-        Self::Uint,
-        Self::Float,
-        Self::Bool,
-        Self::String,
-        Self::Char,
-        Self::Void,
-        Self::Mut,
-    ];
+    pub fn all() -> impl Iterator<Item = Self> {
+        Self::iter()
+    }
 
     pub const fn as_str(&self) -> &'static str {
         match self {
@@ -76,50 +73,30 @@ impl Keyword {
             Self::String => "string",
             Self::Char => "char",
             Self::Void => "void",
-            Self::Mut => "mut",
         }
     }
 
     pub fn from_str(s: &str) -> Option<Self> {
-        static KEYWORD_MAP: OnceLock<HashMap<&'static str, Keyword>> = OnceLock::new();
-
-        let map = KEYWORD_MAP.get_or_init(|| {
-            let mut map = HashMap::new();
-
-            for &keyword in Self::ALL {
-                map.insert(keyword.as_str(), keyword);
-            }
-
-            map
-        });
-
-        map.get(s).copied()
+        s.parse().ok()
     }
 
     pub fn is_valid(s: &str) -> bool {
-        Self::from_str(s).is_some()
+        s.parse::<Self>().is_ok()
     }
 
-    pub const fn is_type(&self) -> bool {
-        matches!(
-            self,
-            Self::Int | Self::Float | Self::Bool | Self::String | Self::Char | Self::Void
-        )
+    pub fn types() -> impl Iterator<Item = Self> {
+        Self::iter().filter(|keyword| keyword.get_str("category") == Some("type"))
     }
 
-    pub const fn is_declaration(&self) -> bool {
-        matches!(self, Self::Fn | Self::Class | Self::Enum | Self::Import | Self::Var)
+    pub fn declarations() -> impl Iterator<Item = Self> {
+        Self::iter().filter(|keyword| keyword.get_str("category") == Some("declaration"))
     }
 
-    pub const fn is_modifier(&self) -> bool {
-        matches!(self, Self::Extern | Self::Const | Self::Async)
+    pub fn control() -> impl Iterator<Item = Self> {
+        Self::iter().filter(|keyword| keyword.get_str("category") == Some("control"))
     }
-}
 
-impl TryFrom<&str> for Keyword {
-    type Error = ();
-
-    fn try_from(s: &str) -> Result<Self, Self::Error> {
-        Self::from_str(s).ok_or(())
+    pub fn modifier() -> impl Iterator<Item = Self> {
+        Self::iter().filter(|keyword| keyword.get_str("category") == Some("modifier"))
     }
 }

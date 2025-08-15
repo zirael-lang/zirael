@@ -19,6 +19,7 @@ log = { workspace = true }
 colored = { workspace = true }
 fs-err = { workspace = true }
 rayon = { workspace = true }
+env_logger = { workspace = true }
 
 [lints]
 workspace = true

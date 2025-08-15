@@ -29,7 +29,6 @@ pub enum TokenKind {
     #[token("string", |_| Keyword::String)]
     #[token("char", |_| Keyword::Char)]
     #[token("void", |_| Keyword::Void)]
-    #[token("mut", |_| Keyword::Mut)]
     #[token("box", |_| Keyword::Box)]
     #[token("return", |_| Keyword::Return)]
     #[token("uint", |_| Keyword::Uint)]

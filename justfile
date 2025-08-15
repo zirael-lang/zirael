@@ -25,4 +25,4 @@ fmt:
     dprint fmt
 
 comp-run args='':
-    cargo run -p zirael playground/test.zr -d std=./std/src/lib.zr {{ args }}
+    cargo run -p zirael playground/test.zr -d std=./std/src/lib.zr {{ args }} --name playground
