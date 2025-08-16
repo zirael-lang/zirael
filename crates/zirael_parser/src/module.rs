@@ -1,9 +1,5 @@
 use crate::ast::Ast;
-use petgraph::{
-    Directed, Graph,
-    algo::{is_cyclic_directed, toposort},
-    prelude::EdgeRef,
-};
+use petgraph::{Directed, Graph, prelude::EdgeRef as _};
 use zirael_utils::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -15,15 +11,15 @@ pub enum ModuleId {
 impl ModuleId {
     pub fn as_file(&self) -> Option<SourceFileId> {
         match self {
-            ModuleId::File(id) => Some(*id),
-            ModuleId::External(_) => None,
+            Self::File(id) => Some(*id),
+            Self::External(_) => None,
         }
     }
 }
 
-impl Into<ModuleId> for SourceFileId {
-    fn into(self) -> ModuleId {
-        ModuleId::File(self)
+impl From<SourceFileId> for ModuleId {
+    fn from(val: SourceFileId) -> Self {
+        Self::File(val)
     }
 }
 

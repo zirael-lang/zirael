@@ -13,8 +13,8 @@ impl Display for Mode {
             f,
             "{}",
             match self {
-                Mode::Debug => "debug",
-                Mode::Release => "release",
+                Self::Debug => "debug",
+                Self::Release => "release",
             }
         )
     }

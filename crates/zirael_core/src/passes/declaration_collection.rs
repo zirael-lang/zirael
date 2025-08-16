@@ -1,13 +1,12 @@
 use crate::prelude::{ReportKind, WalkerContext, debug};
-use std::{any::Any, env::var, fmt::format, path::PathBuf};
+use std::path::{Path, PathBuf};
 use zirael_parser::{
-    Ast, AstId, AstWalker, Dependencies, Dependency, DependencyGraph, Expr, ExprKind, Function,
-    ImportConflict, ImportKind, ItemKind, LexedModule, ModuleId, Parameter, ParameterKind,
-    ScopeType, Stmt, Symbol, SymbolId, SymbolKind, SymbolTable, SymbolTableError, VarDecl,
-    impl_ast_walker, item::Item,
+    Ast, AstId, AstWalker, Dependencies, ImportConflict, ImportKind, ItemKind, LexedModule,
+    ModuleId, Parameter, ParameterKind, ScopeType, Stmt, Symbol, SymbolId, SymbolKind, SymbolTable,
+    SymbolTableError, VarDecl, impl_ast_walker, item::Item,
 };
 use zirael_utils::{
-    prelude::{Colorize, Identifier, ReportBuilder, Reports, Sources, Span, resolve},
+    prelude::{Colorize as _, Identifier, ReportBuilder, Reports, Sources, Span, resolve},
     sources::SourceFileId,
 };
 
@@ -79,11 +78,11 @@ impl<'reports> DeclarationCollection<'reports> {
                         self.process_path_import(&path.with_extension("zr"), span, current_file_id);
                     }
 
-                    self.used_externals.push(name.to_string());
+                    self.used_externals.push(name.clone());
                 } else {
                     self.error(
                         &format!("couldn't find package: {}", name.dimmed().bold()),
-                        vec![("in this import statement".to_string(), span.clone())],
+                        vec![("in this import statement".to_owned(), span.clone())],
                         vec![],
                     );
                 }
@@ -97,8 +96,8 @@ impl<'reports> DeclarationCollection<'reports> {
         let Some(source_module) = source_module else {
             self.error(
                 &format!("couldn't find module: {}", path.display().to_string().dimmed().bold()),
-                vec![("in this import statement".to_string(), span.clone())],
-                vec!["if the file exists, make sure it was discovered by the compiler".to_string()],
+                vec![("in this import statement".to_owned(), span.clone())],
+                vec!["if the file exists, make sure it was discovered by the compiler".to_owned()],
             );
             return;
         };
@@ -108,7 +107,7 @@ impl<'reports> DeclarationCollection<'reports> {
 
         match import_result {
             Ok(symbols) => {
-                debug!("Successfully imported symbols from module {:?}: {:?}", path, symbols);
+                debug!("Successfully imported symbols from module {path:?}: {symbols:?}");
             }
             Err(error) => {
                 self.handle_import_error(error, path, span, current_file_id);
@@ -124,14 +123,14 @@ impl<'reports> DeclarationCollection<'reports> {
         file_id: SourceFileId,
     ) {
         let base_report = ReportBuilder::builder(
-            &format!("failed to import symbols from module: {:?}", error),
+            format!("failed to import symbols from module: {error:?}"),
             ReportKind::Error,
         )
         .label("while processing this import", span.clone());
 
         match error {
             SymbolTableError::ImportConflict(conflicts) => {
-                self.handle_import_conflicts(conflicts, path, base_report, file_id);
+                self.handle_import_conflicts(conflicts, path, &base_report, file_id);
             }
             _ => {
                 self.reports.add(file_id, base_report);
@@ -140,10 +139,10 @@ impl<'reports> DeclarationCollection<'reports> {
     }
 
     fn handle_import_conflicts(
-        &mut self,
+        &self,
         conflicts: Vec<ImportConflict>,
-        path: &PathBuf,
-        base_report: ReportBuilder<'reports>,
+        path: &Path,
+        base_report: &ReportBuilder<'reports>,
         file_id: SourceFileId,
     ) {
         for conflict in conflicts {
@@ -177,7 +176,7 @@ impl<'reports> DeclarationCollection<'reports> {
     pub fn register_symbol(
         &mut self,
         name: Identifier,
-        kind: SymbolKind,
+        kind: &SymbolKind,
         span: Span,
     ) -> Option<SymbolId> {
         let file_id =
@@ -192,7 +191,7 @@ impl<'reports> DeclarationCollection<'reports> {
                     self.reports.add(
                         file_id,
                         ReportBuilder::builder(
-                            &format!("{} already declared", symbol_name.dimmed().bold()),
+                            format!("{} already declared", symbol_name.dimmed().bold()),
                             ReportKind::Error,
                         )
                         .label(
@@ -214,7 +213,7 @@ impl<'reports> DeclarationCollection<'reports> {
                 self.reports.add(
                     file_id,
                     ReportBuilder::builder(
-                        &format!(
+                        format!(
                             "failed to register {}: {:?}",
                             symbol_name.dimmed().bold(),
                             other_error
@@ -230,12 +229,25 @@ impl<'reports> DeclarationCollection<'reports> {
 }
 
 impl<'reports> AstWalker<'reports> for DeclarationCollection<'reports> {
+    fn walk_modules(&mut self, modules: &mut Vec<LexedModule>) {
+        for module in modules {
+            let ModuleId::File(file_id) = module.id else {
+                continue;
+            };
+
+            self.symbol_table.create_scope(ScopeType::Module(file_id));
+            self.set_processed_file(file_id);
+            self.walk_ast(&mut module.ast);
+            self.symbol_table.exit_scope().unwrap();
+        }
+    }
+
     fn walk_item(&mut self, item: &mut Item) {
         let id = match &mut item.kind {
             ItemKind::Function(func) => {
                 let sym = self.register_symbol(
                     func.name,
-                    SymbolKind::Function {
+                    &SymbolKind::Function {
                         signature: func.signature.clone(),
                         modifiers: func.modifiers.clone(),
                     },
@@ -258,7 +270,7 @@ impl<'reports> AstWalker<'reports> for DeclarationCollection<'reports> {
             ItemKind::Struct(struct_def) => {
                 let sym = self.register_symbol(
                     struct_def.name,
-                    SymbolKind::Struct {
+                    &SymbolKind::Struct {
                         generics: struct_def.generics.clone(),
                         fields: struct_def.fields.clone(),
                     },
@@ -266,7 +278,7 @@ impl<'reports> AstWalker<'reports> for DeclarationCollection<'reports> {
                 );
                 self.symbol_table.create_scope(ScopeType::Struct(struct_def.id));
 
-                for func in struct_def.methods.iter_mut() {
+                for func in &mut struct_def.methods {
                     self.walk_item(func);
                 }
                 self.symbol_table.exit_scope().unwrap();
@@ -293,7 +305,7 @@ impl<'reports> AstWalker<'reports> for DeclarationCollection<'reports> {
         let p = param.clone();
         let sym_id = self.register_symbol(
             p.name,
-            SymbolKind::Parameter {
+            &SymbolKind::Parameter {
                 ty: p.ty,
                 is_variadic: p.kind == ParameterKind::Variadic,
                 default_value: p.default_value,
@@ -308,22 +320,9 @@ impl<'reports> AstWalker<'reports> for DeclarationCollection<'reports> {
 
         let sym_id = self.register_symbol(
             v.name,
-            SymbolKind::Variable { ty: v.ty, is_heap: false, is_moved: None },
+            &SymbolKind::Variable { ty: v.ty, is_heap: false, is_moved: None },
             v.span,
         );
         var_decl.symbol_id = sym_id;
-    }
-
-    fn walk_modules(&mut self, modules: &mut Vec<LexedModule>) {
-        for module in modules {
-            let ModuleId::File(file_id) = module.id else {
-                continue;
-            };
-
-            self.symbol_table.create_scope(ScopeType::Module(file_id));
-            self.set_processed_file(file_id);
-            self.walk_ast(&mut module.ast);
-            self.symbol_table.exit_scope().unwrap();
-        }
     }
 }

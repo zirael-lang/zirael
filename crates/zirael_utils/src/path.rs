@@ -1,7 +1,7 @@
 use anyhow::Result;
 use std::path::{Path, PathBuf};
 
-/// strips the same root from a path using reference_path as the common base
+/// strips the same root from a path using `reference_path` as the common base
 pub fn strip_same_root(path: PathBuf, reference_path: PathBuf) -> PathBuf {
     let path_components: Vec<_> = path.components().collect();
     let reference_components: Vec<_> = reference_path.components().collect();
@@ -29,14 +29,13 @@ pub fn canonicalize_with_strip<P: AsRef<Path>>(path: P) -> Result<PathBuf> {
 /// Strips the Windows long path prefix `\\?\` from a path if present.
 ///
 /// On Windows, paths longer than 260 characters are prefixed with `\\?\` to bypass
-/// the MAX_PATH limitation. This function removes that prefix to make paths more readable.
+/// the `MAX_PATH` limitation. This function removes that prefix to make paths more readable.
 fn strip_windows_long_path_prefix(path: PathBuf) -> PathBuf {
     #[cfg(windows)]
     {
         let path_str = path.to_string_lossy();
 
-        if path_str.starts_with(r"\\?\") {
-            let stripped = &path_str[4..];
+        if let Some(stripped) = path_str.strip_prefix(r"\\?\") {
             PathBuf::from(stripped)
         } else {
             path

@@ -7,12 +7,11 @@ repository.workspace = true
 description = "Zirael Core"
 
 [dependencies]
-zirael_parser = { workspace = true }
-zirael_utils = { workspace = true }
-zirael_type_checker = { workspace = true }
-zirael_hir = { workspace = true }
 zirael_codegen = { workspace = true }
-anyhow = { workspace = true }
+zirael_hir = { workspace = true }
+zirael_parser = { workspace = true }
+zirael_type_checker = { workspace = true }
+zirael_utils = { workspace = true }
 
 [lints]
 workspace = true

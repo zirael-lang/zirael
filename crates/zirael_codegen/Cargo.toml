@@ -6,14 +6,13 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+anyhow = { workspace = true }
+fs-err = { workspace = true }
+itertools = { workspace = true }
 zirael_hir = { workspace = true }
 zirael_parser = { workspace = true }
-zirael_utils = { workspace = true }
-anyhow = { workspace = true }
-dirs = { workspace = true }
-itertools = { workspace = true }
-fs-err = { workspace = true }
 zirael_type_checker = { workspace = true }
+zirael_utils = { workspace = true }
 
 [lints]
 workspace = true

@@ -157,14 +157,14 @@ impl<'reports> AstLowering<'reports> {
             BinaryOp::BitOr => Some(left | right),
             BinaryOp::BitXor => Some(left ^ right),
             BinaryOp::Shl => {
-                if right < 0 || right >= 64 {
+                if !(0..64).contains(&right) {
                     None
                 } else {
                     left.checked_shl(right as u32)
                 }
             }
             BinaryOp::Shr => {
-                if right < 0 || right >= 64 {
+                if !(0..64).contains(&right) {
                     None
                 } else {
                     Some(left >> right)
@@ -201,13 +201,13 @@ impl<'reports> AstLowering<'reports> {
                 ((left as i64) ^ (right as i64)) as f64
             }
             BinaryOp::Shl => {
-                if left.fract() != 0.0 || right.fract() != 0.0 || right < 0.0 || right >= 64.0 {
+                if left.fract() != 0.0 || right.fract() != 0.0 || !(0.0..64.0).contains(&right) {
                     return None;
                 }
                 ((left as i64).checked_shl(right as u32)?) as f64
             }
             BinaryOp::Shr => {
-                if left.fract() != 0.0 || right.fract() != 0.0 || right < 0.0 || right >= 64.0 {
+                if left.fract() != 0.0 || right.fract() != 0.0 || !(0.0..64.0).contains(&right) {
                     return None;
                 }
                 ((left as i64) >> (right as i64)) as f64

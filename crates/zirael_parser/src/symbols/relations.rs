@@ -1,4 +1,4 @@
-use crate::{Symbol, SymbolId};
+use crate::SymbolId;
 use std::hash::RandomState;
 
 use anyhow::{Result, anyhow};
@@ -20,6 +20,12 @@ pub struct SymbolRelationEntry {
 impl SymbolRelationEntry {
     pub fn new(referer: SymbolId, referred: SymbolId) -> Self {
         Self { referer, referred }
+    }
+}
+
+impl Default for SymbolRelations {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

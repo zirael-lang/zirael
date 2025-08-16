@@ -1,4 +1,4 @@
-use crate::cli::{Cli, try_cli};
+use crate::cli::try_cli;
 use std::process::exit;
 use zirael_core::prelude::*;
 

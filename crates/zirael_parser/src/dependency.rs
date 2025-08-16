@@ -1,6 +1,5 @@
 use anyhow::bail;
-use std::{path::PathBuf, str::FromStr};
-use std::sync::Arc;
+use std::{path::PathBuf, str::FromStr, sync::Arc};
 use zirael_utils::prelude::RwLock;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -34,22 +33,25 @@ impl FromStr for Dependency {
     fn from_str(s: &str) -> anyhow::Result<Self, Self::Err> {
         let (name, rest) = match s.split_once(':') {
             Some((n, r)) => (n, r),
-            None => bail!("Invalid dependency format. Expected 'name:root=entrypoint', got '{}'", s),
+            None => {
+                bail!("Invalid dependency format. Expected 'name:root=entrypoint', got '{}'", s)
+            }
         };
 
         let (root, entrypoint) = match rest.split_once('=') {
             Some((r, e)) => (r, e),
-            None => bail!("Invalid dependency format. Expected 'name:root=entrypoint', got '{}'", s),
+            None => {
+                bail!("Invalid dependency format. Expected 'name:root=entrypoint', got '{}'", s)
+            }
         };
 
-        Ok(Dependency {
-            name: name.to_string(),
+        Ok(Self {
+            name: name.to_owned(),
             root: PathBuf::from(root),
             entrypoint: PathBuf::from(entrypoint),
         })
     }
 }
-
 
 #[derive(Debug, Clone, Default)]
 pub struct Dependencies(Arc<RwLock<Vec<Dependency>>>);
@@ -72,7 +74,7 @@ impl Dependencies {
     }
 
     pub fn add(&self, dependency: Dependency) {
-        self.write(|deps| deps.push(dependency))
+        self.write(|deps| deps.push(dependency));
     }
 
     pub fn all(&self) -> Vec<Dependency> {

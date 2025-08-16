@@ -1,11 +1,13 @@
-use crate::prelude::{AstId, Color, ReportKind, WalkerContext, debug};
+use crate::prelude::{Color, ReportKind, WalkerContext, debug};
 use zirael_parser::{
     AstWalker, Expr, ExprKind, Return, SymbolId, SymbolKind, SymbolTable, UnaryOp, VarDecl,
     VariableMove, impl_ast_walker,
 };
 use zirael_utils::{
     ident_table::Identifier,
-    prelude::{Colorize, ReportBuilder, Reports, SourceFileId, Sources, Span, article, resolve},
+    prelude::{
+        Colorize as _, ReportBuilder, Reports, SourceFileId, Sources, Span, article, resolve,
+    },
 };
 
 impl_ast_walker!(MemoryAnalysis);
@@ -45,9 +47,9 @@ impl<'reports> MemoryAnalysis<'reports> {
         if !expr.kind.can_be_borrowed() {
             self.error(
                 &format!("cannot borrow {}", article(expr.kind.name())),
-                vec![("attempted to borrow here".to_string(), expr.span.clone())],
+                vec![("attempted to borrow here".to_owned(), expr.span.clone())],
                 vec![
-                    "you can only borrow: variables, fields, array elements, and function parameters".to_string()
+                    "you can only borrow: variables, fields, array elements, and function parameters".to_owned()
                 ],
             );
             return;
@@ -62,18 +64,18 @@ impl<'reports> MemoryAnalysis<'reports> {
         };
     }
 
-    fn handle_invalid_box_operation(&mut self, expr: &mut Expr) {
+    fn handle_invalid_box_operation(&mut self, expr: &Expr) {
         self.error(
             "can only use box on variable declarations",
-            vec![("attempted to box here".to_string(), expr.span.clone())],
+            vec![("attempted to box here".to_owned(), expr.span.clone())],
             vec![
-                "box expressions create heap-allocated values and can only be used when declaring variables".to_string(),
-                "try assigning this to a variable first".to_string(),
+                "box expressions create heap-allocated values and can only be used when declaring variables".to_owned(),
+                "try assigning this to a variable first".to_owned(),
             ],
         );
     }
 
-    fn handle_move_semantics(&mut self, expr: &mut Expr) -> bool {
+    fn handle_move_semantics(&mut self, expr: &Expr) -> bool {
         if let Some((mut symbol, sym_id)) = self.symbol_table.symbol_from_expr(expr) {
             if let SymbolKind::Variable { ref mut is_moved, .. } = symbol.kind {
                 if let Some(entry) = self.symbol_table.is_borrowed(sym_id) {
@@ -87,7 +89,7 @@ impl<'reports> MemoryAnalysis<'reports> {
                 }
 
                 debug!("moving variable {}", resolve(&symbol.name));
-                self.mark_variable_as_moved(&mut symbol, sym_id, expr);
+                self.mark_variable_as_moved(&mut symbol, expr);
             }
 
             self.symbol_table
@@ -110,12 +112,7 @@ impl<'reports> MemoryAnalysis<'reports> {
         self.report(report);
     }
 
-    fn mark_variable_as_moved(
-        &mut self,
-        symbol: &mut zirael_parser::Symbol,
-        sym_id: SymbolId,
-        expr: &Expr,
-    ) {
+    fn mark_variable_as_moved(&self, symbol: &mut zirael_parser::Symbol, expr: &Expr) {
         if let SymbolKind::Variable { ref mut is_moved, .. } = symbol.kind {
             *is_moved = Some(VariableMove {
                 from: symbol.source_location.clone().unwrap(),
@@ -126,7 +123,7 @@ impl<'reports> MemoryAnalysis<'reports> {
 
     fn extract_symbol_from_return_value(&self, value: &Expr) -> Option<SymbolId> {
         match &value.kind {
-            ExprKind::Identifier(_, sym_id) => sym_id.as_ref().cloned(),
+            ExprKind::Identifier(_, sym_id) => *sym_id,
             ExprKind::Unary(op, expr) => {
                 if **op == UnaryOp::Ref {
                     self.symbol_table.symbol_from_expr(expr).map(|(_, sym_id)| sym_id)
@@ -191,7 +188,7 @@ impl<'reports> AstWalker<'reports> for MemoryAnalysis<'reports> {
         if let ExprKind::Unary(op, expr) = &mut var.value.kind {
             self.visit_unary_impl(op, expr, ExprContext::VarDecl, is_heap);
 
-            if is_heap.clone() {
+            if *is_heap {
                 let sym_id = var.symbol_id.unwrap();
                 self.symbol_table.mark_heap_variable(sym_id).unwrap();
                 self.symbol_table.mark_drop(sym_id, expr.span.clone());

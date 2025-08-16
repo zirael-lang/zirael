@@ -13,8 +13,8 @@ impl Display for LibType {
             f,
             "{:?}",
             match self {
-                LibType::Static => "static",
-                LibType::Dynamic => "dynamic",
+                Self::Static => "static",
+                Self::Dynamic => "dynamic",
             }
         )
     }

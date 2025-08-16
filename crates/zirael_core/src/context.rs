@@ -1,4 +1,4 @@
-use zirael_parser::{Dependencies, Dependency, SymbolTable};
+use zirael_parser::{Dependencies, SymbolTable};
 use zirael_utils::prelude::*;
 
 /// Main compiler struct. It holds data that is read and written throughout the whole compilation process.
@@ -36,8 +36,8 @@ impl<'reports> Context<'reports> {
 }
 
 mod tests {
-    use super::*;
     use std::path::PathBuf;
+    use crate::context::Context;
 
     #[test]
     fn test_context() {

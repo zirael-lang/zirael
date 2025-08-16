@@ -74,11 +74,11 @@ pub fn try_cli() -> Result<()> {
     let cli = Cli::parse();
     setup_logger(cli.verbose, false);
 
-    let mut context = Context::new();
+    let context = Context::new();
     let write_to = cli.output;
 
     for dep in &cli.packages {
-        if context.packages().contains(&dep) {
+        if context.packages().contains(dep) {
             error!("Found multiple packages with the same name: {}", dep.name);
             continue;
         }

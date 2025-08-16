@@ -182,8 +182,4 @@ impl<'a> Parser<'a> {
 
         Some(Type::Function { params, return_type })
     }
-
-    pub fn parse_optional_type_annotation(&mut self) -> Option<Type> {
-        if self.match_token(TokenKind::Colon) { self.parse_type() } else { None }
-    }
 }

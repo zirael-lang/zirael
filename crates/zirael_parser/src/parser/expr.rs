@@ -2,9 +2,8 @@ use crate::{
     Keyword, TokenKind,
     ast::{BinaryOp, Expr, ExprKind, Literal, UnaryOp},
     parser::Parser,
-    span::SpanUtils,
+    span::SpanUtils as _,
 };
-use petgraph::algo::steiner_tree;
 use std::collections::HashMap;
 use zirael_utils::{ident_table::Identifier, prelude::Span};
 
@@ -297,12 +296,11 @@ impl<'a> Parser<'a> {
 
         if !self.check(&TokenKind::BraceClose) {
             loop {
-                let field_name = match self.expect_identifier() {
-                    Some(ident) => ident,
-                    None => {
-                        self.error_at_current("expected field name in struct initializer");
-                        break;
-                    }
+                let field_name = if let Some(ident) = self.expect_identifier() {
+                    ident
+                } else {
+                    self.error_at_current("expected field name in struct initializer");
+                    break;
                 };
 
                 if !self.match_token(TokenKind::Colon) {

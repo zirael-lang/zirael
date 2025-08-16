@@ -4,9 +4,9 @@ pub use generator::*;
 
 use anyhow::Result;
 use std::{
-    fs::{self, File, create_dir_all},
-    io::{BufWriter, Write},
-    path::{Path, PathBuf},
+    fs::{File, create_dir_all},
+    io::{BufWriter, Write as _},
+    path::PathBuf,
 };
 
 #[derive(Debug)]
@@ -15,6 +15,12 @@ pub struct Codegen {
     indent_level: usize,
     indent_size: usize,
     pub top_level: bool,
+}
+
+impl Default for Codegen {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Codegen {
@@ -39,12 +45,12 @@ impl Codegen {
 
     pub fn writeln(&mut self, text: &str) {
         let indent = " ".repeat(self.indent_level * self.indent_size);
-        writeln!(self.content, "{}{}", indent, text).unwrap();
+        writeln!(self.content, "{indent}{text}").unwrap();
     }
 
     pub fn write_indented(&mut self, text: &str) {
         let indent = " ".repeat(self.indent_level * self.indent_size);
-        write!(self.content, "{}{}", indent, text).unwrap();
+        write!(self.content, "{indent}{text}").unwrap();
     }
 
     pub fn block<F>(&mut self, f: F) -> &mut Self

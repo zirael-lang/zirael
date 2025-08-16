@@ -3,7 +3,6 @@ use crate::hir::{
     HirParam,
     expr::{HirExpr, HirExprKind, HirStmt},
 };
-use id_arena::Arena;
 use std::{collections::HashMap, ops::Range};
 use zirael_parser::{ast::item::Item, *};
 use zirael_utils::prelude::*;
@@ -11,17 +10,15 @@ use zirael_utils::prelude::*;
 pub struct AstLowering<'reports> {
     symbol_table: SymbolTable,
     reports: Reports<'reports>,
-    sources: Sources,
     processed_file: Option<SourceFileId>,
     pub folded_vars: HashMap<SymbolId, HirExprKind>,
 }
 
 impl<'reports> AstLowering<'reports> {
-    pub fn new(symbol_table: &SymbolTable, reports: &Reports<'reports>, sources: &Sources) -> Self {
+    pub fn new(symbol_table: &SymbolTable, reports: &Reports<'reports>) -> Self {
         Self {
             symbol_table: symbol_table.clone(),
             reports: reports.clone(),
-            sources: sources.clone(),
             processed_file: None,
             folded_vars: HashMap::new(),
         }
@@ -32,12 +29,12 @@ impl<'reports> AstLowering<'reports> {
     }
 
     fn push_scope(&mut self, scope_type: ScopeType) {
-        self.symbol_table.push_scope(scope_type);
+        let _ = self.symbol_table.push_scope(scope_type);
     }
 
     fn pop_scope(&mut self) {
         if let Err(err) = self.symbol_table.pop_scope() {
-            self.error(&format!("Failed to pop scope: {:?}", err), vec![], vec![]);
+            self.error(&format!("Failed to pop scope: {err:?}"), vec![], vec![]);
         }
     }
 
@@ -197,14 +194,14 @@ impl<'reports> AstLowering<'reports> {
                 let name_expr = Box::new(self.lower_expr(name));
 
                 let mut fields_map = HashMap::new();
-                for (ident, mut val) in fields {
-                    fields_map.insert(*ident, self.lower_expr(&mut val));
+                for (ident, val) in fields {
+                    fields_map.insert(*ident, self.lower_expr(val));
                 }
 
                 HirExprKind::StructInit { name: name_expr, fields: fields_map }
             }
 
-            ExprKind::FieldAccess(exprs) => {
+            ExprKind::FieldAccess(_) => {
                 todo!("Implement field access lowering")
             }
 
@@ -290,7 +287,7 @@ impl<'reports> AstLowering<'reports> {
             }
             self.reports.add(file_id, report);
         } else {
-            warn!("Report outside of a file: {}", message);
+            warn!("Report outside of a file: {message}");
         }
     }
 }
@@ -299,8 +296,7 @@ pub fn lower_ast_to_hir<'reports>(
     lexed_modules: &mut Vec<LexedModule>,
     symbol_table: &SymbolTable,
     reports: &Reports<'reports>,
-    sources: &Sources,
 ) -> Vec<HirModule> {
-    let mut lowering = AstLowering::new(symbol_table, reports, sources);
+    let mut lowering = AstLowering::new(symbol_table, reports);
     lowering.lower_modules(lexed_modules)
 }

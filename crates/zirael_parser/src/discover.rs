@@ -11,7 +11,7 @@ pub fn determine_lexed_modules<'a>(
     sources: &Sources,
     reports: &Reports<'a>,
 ) -> ModuleDiscoveryResult {
-    debug!("starting module discovery from entrypoint: {:?}", entrypoint);
+    debug!("starting module discovery from entrypoint: {entrypoint:?}");
 
     let mut all_modules = Vec::new();
     let mut graph = Graph::new();
@@ -33,7 +33,7 @@ pub fn determine_lexed_modules<'a>(
                 {
                     let mut proc = processed.lock();
                     if proc.contains(&module_id) {
-                        debug!("module {:?} already processed, skipping", module_id);
+                        debug!("module {module_id:?} already processed, skipping");
                         return None;
                     }
                     proc.insert(module_id.clone());
@@ -70,7 +70,7 @@ pub fn determine_lexed_modules<'a>(
 
                 let external_deps = extract_external_dependencies(&result.ast);
                 for ext_module in external_deps {
-                    debug!("discovered external dependency: {:?}", ext_module);
+                    debug!("discovered external dependency: {ext_module:?}");
                     discovered_modules.push(ModuleId::External(ext_module));
                 }
 
@@ -108,7 +108,7 @@ pub fn determine_lexed_modules<'a>(
             all_modules.push(module);
         }
 
-        next_wave.sort_unstable_by(|a, b| format!("{:?}", a).cmp(&format!("{:?}", b)));
+        next_wave.sort_unstable_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
         next_wave.dedup();
 
         debug!(

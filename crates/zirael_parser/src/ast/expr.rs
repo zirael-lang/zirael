@@ -93,27 +93,25 @@ impl Expr {
 impl ExprKind {
     pub fn name(&self) -> &'static str {
         match self {
-            ExprKind::Literal(_) => "literal",
-            ExprKind::Identifier(_, _) => "identifier",
-            ExprKind::Binary { .. } => "binary expression",
-            ExprKind::Block(_) => "block",
-            ExprKind::Assign(_, _) => "assign",
-            ExprKind::AssignOp(_, _, _) => "assign with operator",
-            ExprKind::Unary(_, _) => "unary",
-            ExprKind::Paren(_) => "parenthesized expression",
-            ExprKind::Call { .. } => "call",
-            ExprKind::FieldAccess(_) => "field access",
-            ExprKind::IndexAccess(_, _) => "index access",
-            ExprKind::StructInit { .. } => "struct constructor",
-            ExprKind::CouldntParse(_) => "couldnt parse",
+            Self::Literal(_) => "literal",
+            Self::Identifier(_, _) => "identifier",
+            Self::Binary { .. } => "binary expression",
+            Self::Block(_) => "block",
+            Self::Assign(_, _) => "assign",
+            Self::AssignOp(_, _, _) => "assign with operator",
+            Self::Unary(_, _) => "unary",
+            Self::Paren(_) => "parenthesized expression",
+            Self::Call { .. } => "call",
+            Self::FieldAccess(_) => "field access",
+            Self::IndexAccess(_, _) => "index access",
+            Self::StructInit { .. } => "struct constructor",
+            Self::CouldntParse(_) => "couldnt parse",
         }
     }
 
     pub fn can_be_borrowed(&self) -> bool {
         match self {
-            ExprKind::Identifier(_, _) | ExprKind::FieldAccess(_) | ExprKind::IndexAccess(_, _) => {
-                true
-            }
+            Self::Identifier(_, _) | Self::FieldAccess(_) | Self::IndexAccess(_, _) => true,
             _ => false,
         }
     }

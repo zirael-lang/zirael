@@ -1,5 +1,5 @@
 use crate::{
-    Ast, ScopeId, SymbolId,
+    SymbolId,
     ast::{
         expr::Expr,
         types::{GenericParameter, Type},

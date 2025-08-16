@@ -1,5 +1,5 @@
 use std::fmt::{Display, Formatter};
-use strum::{EnumIter, EnumProperty, EnumString, IntoEnumIterator};
+use strum::{EnumIter, EnumProperty, EnumString, IntoEnumIterator as _};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Copy, EnumIter, EnumString, EnumProperty)]
 #[strum(serialize_all = "lowercase")]

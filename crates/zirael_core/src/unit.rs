@@ -43,7 +43,7 @@ impl<'ctx> CompilationUnit<'ctx> {
         inference.walk_modules(&mut result.modules);
         reports.print(sources);
 
-        let mut hir = lower_ast_to_hir(&mut result.modules, symbols, reports, sources);
+        let mut hir = lower_ast_to_hir(&mut result.modules, symbols, reports);
         let ir = lower_hir_to_ir(
             &mut hir,
             symbols,

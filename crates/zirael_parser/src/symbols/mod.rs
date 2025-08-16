@@ -56,25 +56,25 @@ pub enum SymbolKind {
 impl SymbolKind {
     pub fn name(&self) -> &str {
         match self {
-            SymbolKind::Variable { .. } => "variable",
-            SymbolKind::Constant { .. } => "constant",
-            SymbolKind::Function { .. } => "function",
-            SymbolKind::Parameter { .. } => "parameter",
-            SymbolKind::Struct { .. } => "struct",
-            SymbolKind::Enum { .. } => "enum",
-            SymbolKind::Temporary { .. } => "temporary",
+            Self::Variable { .. } => "variable",
+            Self::Constant { .. } => "constant",
+            Self::Function { .. } => "function",
+            Self::Parameter { .. } => "parameter",
+            Self::Struct { .. } => "struct",
+            Self::Enum { .. } => "enum",
+            Self::Temporary { .. } => "temporary",
         }
     }
 
     pub fn is_value(&self) -> bool {
         match self {
-            SymbolKind::Variable { .. } | SymbolKind::Parameter { .. } => true,
+            Self::Variable { .. } | Self::Parameter { .. } => true,
             _ => false,
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TemporaryLifetime {
     Expression,
     Statement,

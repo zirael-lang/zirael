@@ -4,15 +4,15 @@ use crate::ir::{
 };
 use std::{
     collections::HashMap,
-    hash::{DefaultHasher, Hash},
+    hash::{DefaultHasher, Hash as _},
 };
-use zirael_parser::{MonomorphizationId, SymbolId, SymbolKind, Type};
+use zirael_parser::{MonomorphizationId, SymbolKind, Type};
 use zirael_type_checker::MonomorphizationEntry;
 use zirael_utils::prelude::{Identifier, resolve, warn};
 
 impl<'reports> HirLowering<'reports> {
     pub fn process_monomorphization_entries(&mut self, module: &mut IrModule) {
-        for (_, entry) in &self.mono_table.entries {
+        for entry in self.mono_table.entries.values() {
             if let Some(monomorphized_item) = self.create_monomorphized_item(entry, module) {
                 module.mono_items.push(monomorphized_item);
             }
@@ -29,43 +29,39 @@ impl<'reports> HirLowering<'reports> {
 
         let original_item = module.items.iter().find(|item| item.sym_id == original_id)?;
 
-        match &original_item.kind {
-            IrItemKind::Function(func) => {
-                let original_symbol = self.symbol_table.get_symbol_unchecked(&original_id);
+        if let IrItemKind::Function(func) = &original_item.kind {
+            let original_symbol = self.symbol_table.get_symbol_unchecked(&original_id);
 
-                if let SymbolKind::Function { signature, .. } = &original_symbol.kind {
-                    let all_generics_mapped =
-                        signature.generics.iter().all(|g| concrete_types.contains_key(&g.name));
+            if let SymbolKind::Function { signature, .. } = &original_symbol.kind {
+                let all_generics_mapped =
+                    signature.generics.iter().all(|g| concrete_types.contains_key(&g.name));
 
-                    if !all_generics_mapped {
-                        return None;
-                    }
-
-                    let type_arguments = signature
-                        .generics
-                        .iter()
-                        .filter_map(|param| concrete_types.get(&param.name))
-                        .cloned()
-                        .collect::<Vec<_>>();
-
-                    let mangled_name =
-                        self.mangle_monomorphized_function(original_id, &type_arguments);
-
-                    let monomorphized_function = self.monomorphize_function(func, concrete_types);
-
-                    Some(IrItem {
-                        name: mangled_name,
-                        kind: IrItemKind::Function(monomorphized_function),
-                        sym_id: original_id,
-                    })
-                } else {
-                    None
+                if !all_generics_mapped {
+                    return None;
                 }
-            }
-            _ => {
-                warn!("Unsupported item kind for monomorphization: {:?}", original_item.kind);
+
+                let type_arguments = signature
+                    .generics
+                    .iter()
+                    .filter_map(|param| concrete_types.get(&param.name))
+                    .cloned()
+                    .collect::<Vec<_>>();
+
+                let mangled_name = self.mangle_monomorphized_function(original_id, &type_arguments);
+
+                let monomorphized_function = self.monomorphize_function(func, concrete_types);
+
+                Some(IrItem {
+                    name: mangled_name,
+                    kind: IrItemKind::Function(monomorphized_function),
+                    sym_id: original_id,
+                })
+            } else {
                 None
             }
+        } else {
+            warn!("Unsupported item kind for monomorphization: {:?}", original_item.kind);
+            None
         }
     }
 
@@ -85,11 +81,7 @@ impl<'reports> HirLowering<'reports> {
 
         let return_type = self.substitute_type(&original.return_type, type_map);
 
-        let body = if let Some(body) = &original.body {
-            Some(self.monomorphize_block(body, type_map))
-        } else {
-            None
-        };
+        let body = original.body.as_ref().map(|body| self.monomorphize_block(body, type_map));
 
         IrFunction {
             parameters,
@@ -289,6 +281,6 @@ impl<'reports> HirLowering<'reports> {
             }
         }
 
-        panic!("Monomorphization ID {:?} not found in mono_id_map", mono_id)
+        panic!("Monomorphization ID {mono_id:?} not found in mono_id_map")
     }
 }

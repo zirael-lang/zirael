@@ -1,14 +1,14 @@
 use crate::{
     AstId, Expr, ExprKind, Symbol,
-    symbols::{SymbolId, SymbolTable, SymbolTableError, relations::SymbolRelations},
+    symbols::{SymbolId, SymbolTable, SymbolTableError},
 };
-use id_arena::{Arena, Id};
+use id_arena::Id;
 use std::collections::HashMap;
 use zirael_utils::prelude::*;
 
 pub type ScopeId = Id<Scope>;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Scope {
     pub parent: Option<ScopeId>,
     pub children: Vec<ScopeId>,
@@ -103,7 +103,7 @@ impl SymbolTable {
                     table.current_traversal_scope = target_child;
                     Ok(target_child)
                 } else {
-                    debug!("No child scope of type {:?} found in {:?}", scope_type, scope);
+                    debug!("No child scope of type {scope_type:?} found in {scope:?}");
                     Err(SymbolTableError::InvalidScope(current_scope))
                 }
             } else {
@@ -172,13 +172,13 @@ impl SymbolTable {
     pub fn reset_to_global(&self) {
         self.write(|table| {
             table.current_traversal_scope = table.global_scope;
-        })
+        });
     }
 
     pub fn reset_construction_to_global(&self) {
         self.write(|table| {
             table.current_scope_creation_id = table.global_scope;
-        })
+        });
     }
 
     pub fn get_scope_path(&self) -> Vec<ScopeId> {
@@ -243,7 +243,7 @@ impl SymbolTable {
                 .unwrap()
                 .drop_stack
                 .push(DropStackEntry::new(symbol_id, span));
-        })
+        });
     }
 
     pub fn is_borrowed(&self, symbol_id: SymbolId) -> Option<DropStackEntry> {

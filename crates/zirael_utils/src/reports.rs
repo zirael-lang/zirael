@@ -1,5 +1,5 @@
 use crate::prelude::{SourceFileId, Sources};
-use ariadne::{CharSet, Color, Config, IndexType, Label, LabelAttach, ReportKind, Source, sources};
+use ariadne::{CharSet, Color, Config, IndexType, Label, LabelAttach, ReportKind, sources};
 use log::error;
 use parking_lot::RwLock;
 use std::{collections::HashMap, ops::Range, path::PathBuf, process::exit, sync::Arc};
@@ -28,7 +28,7 @@ impl<'a> Reports<'a> {
 
     pub fn add(&self, source_id: SourceFileId, report: ReportBuilder<'a>) {
         self.write(|reports| {
-            reports.reports.entry(source_id).or_insert_with(Vec::new).push(report);
+            reports.reports.entry(source_id).or_default().push(report);
         });
     }
 
@@ -59,7 +59,7 @@ impl<'a> Reports<'a> {
         } else {
             self.write(|reports| {
                 reports.reports.clear();
-            })
+            });
         }
     }
 
@@ -130,7 +130,7 @@ impl<'a> ReportBuilder<'a> {
     }
 
     pub fn note(mut self, note: &str) -> Self {
-        self.notes.push(note.to_string());
+        self.notes.push(note.to_owned());
         self
     }
 
@@ -149,7 +149,7 @@ impl<'a> ReportBuilder<'a> {
     }
 
     pub fn build(self, path: &str) -> Report<'a> {
-        let mut report = Report::build(self.custom_kind(), (path.to_string(), 0usize..0usize))
+        let mut report = Report::build(self.custom_kind(), (path.to_owned(), 0usize..0usize))
             .with_message(self.message);
 
         let labels = self
@@ -159,7 +159,7 @@ impl<'a> ReportBuilder<'a> {
                 let path = l
                     .custom_file
                     .map(|p| p.display().to_string())
-                    .unwrap_or_else(|| path.to_string());
+                    .unwrap_or_else(|| path.to_owned());
 
                 Label::new((path, l.span)).with_message(l.msg).with_color(l.color)
             })

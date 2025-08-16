@@ -1,24 +1,15 @@
 use crate::ir::{
     IrBlock, IrExpr, IrExprKind, IrFunction, IrItem, IrItemKind, IrModule, IrParam, IrStmt,
 };
-use std::{
-    collections::HashMap,
-    hash::{DefaultHasher, Hash, Hasher},
-    path::PathBuf,
-};
+use std::path::PathBuf;
 use zirael_hir::hir::{
     HirBody, HirFunction, HirItem, HirItemKind, HirModule,
     expr::{HirExpr, HirExprKind, HirStmt},
-    lowering::AstLowering,
 };
-use zirael_parser::{
-    AstId, DropStackEntry, ItemKind, LexedModule, MonomorphizationId, ScopeId, ScopeType, SymbolId,
-    SymbolKind, SymbolTable, Type, UnaryOp, item::Item,
-};
+use zirael_parser::{AstId, DropStackEntry, ScopeType, SymbolKind, SymbolTable, Type, UnaryOp};
 use zirael_type_checker::MonomorphizationTable;
 use zirael_utils::prelude::{
-    Colorize, Identifier, Mode, ReportBuilder, ReportKind, Reports, SourceFileId, Sources, Span,
-    debug, resolve, strip_same_root, warn,
+    Colorize as _, Mode, ReportBuilder, ReportKind, Reports, SourceFileId, Sources, debug, resolve,
 };
 
 pub fn lower_hir_to_ir<'reports>(
@@ -65,14 +56,11 @@ impl<'reports> HirLowering<'reports> {
     }
 
     pub fn lower_modules(&mut self, lexed_modules: &mut Vec<HirModule>) -> Vec<IrModule> {
-        let mut ir_modules =
-            lexed_modules.iter_mut().map(|module| self.lower_module(module)).collect::<Vec<_>>();
-
-        ir_modules
+        lexed_modules.iter_mut().map(|module| self.lower_module(module)).collect::<Vec<_>>()
     }
 
     fn push_scope(&mut self, scope_type: ScopeType) {
-        self.symbol_table.push_scope(scope_type);
+        let _ = self.symbol_table.push_scope(scope_type);
     }
 
     fn pop_scope(&mut self) -> Vec<DropStackEntry> {
@@ -105,7 +93,7 @@ impl<'reports> HirLowering<'reports> {
 
         match &mut item.kind {
             HirItemKind::Function(func) => {
-                if let SymbolKind::Function { signature, .. } = &sym.kind {
+                if let SymbolKind::Function { .. } = &sym.kind {
                     let hir_function = self.lower_function(func);
 
                     Some(IrItem {
@@ -163,11 +151,11 @@ impl<'reports> HirLowering<'reports> {
             IrExpr::new(
                 Type::Pointer(Box::new(ty.clone())),
                 IrExprKind::CCall(
-                    "malloc".to_string(),
+                    "malloc".to_owned(),
                     vec![IrExpr::new(
                         Type::Int,
                         IrExprKind::CCall(
-                            "sizeof".to_string(),
+                            "sizeof".to_owned(),
                             vec![IrExpr::new(ty.clone(), IrExprKind::Type(ty))],
                         ),
                     )],
@@ -184,10 +172,7 @@ impl<'reports> HirLowering<'reports> {
                     Type::Inferred,
                     IrExprKind::Unary(
                         UnaryOp::Deref,
-                        Box::new(IrExpr::new(
-                            expr.ty.clone(),
-                            IrExprKind::Symbol(name.to_string()),
-                        )),
+                        Box::new(IrExpr::new(expr.ty.clone(), IrExprKind::Symbol(name.clone()))),
                     ),
                 )),
                 Box::new(expr),
@@ -209,12 +194,12 @@ impl<'reports> HirLowering<'reports> {
                     let SymbolKind::Variable { is_heap, .. } = symbol.kind else { unreachable!() };
 
                     let var_name = resolve(&symbol.name);
-                    if !symbol.is_used && !var_name.starts_with("_") {
-                        debug!("eliminating unused variable: {}", var_name);
+                    if !symbol.is_used && !var_name.starts_with('_') {
+                        debug!("eliminating unused variable: {var_name}");
 
                         self.warn(
                             ReportBuilder::builder(
-                                &format!("unused variable: {}", var_name.dimmed().bold()),
+                                format!("unused variable: {}", var_name.dimmed().bold()),
                                 ReportKind::Warning,
                             )
                             .label("declared here", symbol.source_location.unwrap()),
@@ -236,7 +221,7 @@ impl<'reports> HirLowering<'reports> {
 
                         ir_block.push(self.after_heap_assigment(name, ir_expr));
                     } else {
-                        ir_block.push(IrStmt::Var(name, self.lower_expr(init)))
+                        ir_block.push(IrStmt::Var(name, self.lower_expr(init)));
                     }
 
                     continue;
@@ -294,7 +279,7 @@ impl<'reports> HirLowering<'reports> {
                 op,
                 Box::new(self.lower_expr(*right)),
             ),
-            _ => IrExprKind::Symbol("".to_string()),
+            _ => IrExprKind::Symbol(String::new()),
         };
 
         IrExpr { ty: expr.ty, kind }

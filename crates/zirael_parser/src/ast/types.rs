@@ -26,15 +26,15 @@ pub enum Type {
 
 impl Type {
     pub fn is_numeric(&self) -> bool {
-        matches!(self, Type::Int | Type::Float | Type::Uint)
+        matches!(self, Self::Int | Self::Float | Self::Uint)
     }
 
     pub fn is_int(&self) -> bool {
-        matches!(self, Type::Int | Type::Uint)
+        matches!(self, Self::Int | Self::Uint)
     }
 
     pub fn is_float(&self) -> bool {
-        matches!(self, Type::Float)
+        matches!(self, Self::Float)
     }
 }
 

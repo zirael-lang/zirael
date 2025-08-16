@@ -2,10 +2,10 @@ use crate::{
     codegen::{Codegen, Gen},
     ir::{IrBlock, IrExpr, IrExprKind, IrFunction, IrItem, IrItemKind, IrModule, IrParam, IrStmt},
 };
-use itertools::Itertools;
+use itertools::Itertools as _;
 use std::path::PathBuf;
-use zirael_parser::{BinaryOp, Literal, Stmt, SymbolId, Type, UnaryOp};
-use zirael_utils::prelude::{CompilationInfo, warn};
+use zirael_parser::{BinaryOp, Literal, SymbolId, Type, UnaryOp};
+use zirael_utils::prelude::CompilationInfo;
 
 pub fn run_codegen(
     modules: Vec<IrModule>,
@@ -146,7 +146,7 @@ impl Gen for IrBlock {
 impl Gen for IrStmt {
     fn generate(&self, p: &mut Codegen) {
         match &self {
-            IrStmt::Var(name, init) => {
+            Self::Var(name, init) => {
                 p.write_indented("");
                 init.ty.generate(p);
                 p.write(" ");
@@ -155,7 +155,7 @@ impl Gen for IrStmt {
                 init.generate(p);
                 p.write(";\n");
             }
-            IrStmt::Expr(expr) => {
+            Self::Expr(expr) => {
                 if let IrExprKind::Block(block) = &expr.kind
                     && block.stmts.is_empty()
                 {
@@ -166,7 +166,7 @@ impl Gen for IrStmt {
                 expr.generate(p);
                 p.write(";\n");
             }
-            IrStmt::Return(expr) => {
+            Self::Return(expr) => {
                 if let Some(expr) = expr {
                     p.write_indented("return ");
                     expr.generate(p);
@@ -188,13 +188,13 @@ impl Gen for IrExpr {
                 let lit = match lit {
                     Literal::Integer(int) => int.to_string(),
                     Literal::Float(float) => float.to_string(),
-                    Literal::Char(char) => format!("'{}'", char),
-                    Literal::String(string) => format!("\"{}\"", string),
+                    Literal::Char(char) => format!("'{char}'"),
+                    Literal::String(string) => format!("\"{string}\""),
                     Literal::Bool(bool) => {
                         if *bool {
-                            "true".to_string()
+                            "true".to_owned()
                         } else {
-                            "false".to_string()
+                            "false".to_owned()
                         }
                     }
                 };
@@ -296,18 +296,18 @@ impl Gen for IrParam {
 impl Gen for Type {
     fn generate(&self, p: &mut Codegen) {
         match self {
-            Type::Int => p.write("int64_t"),
-            Type::Uint => p.write("uint64_t"),
-            Type::Float => p.write("double"),
-            Type::Void => p.write("void"),
-            Type::Char => p.write("char32_t"),
-            Type::String => p.write("char32_t*"),
-            Type::Bool => p.write("bool"),
-            Type::Pointer(ty) | Type::Reference(ty) => {
+            Self::Int => p.write("int64_t"),
+            Self::Uint => p.write("uint64_t"),
+            Self::Float => p.write("double"),
+            Self::Void => p.write("void"),
+            Self::Char => p.write("char32_t"),
+            Self::String => p.write("char32_t*"),
+            Self::Bool => p.write("bool"),
+            Self::Pointer(ty) | Self::Reference(ty) => {
                 ty.generate(p);
                 p.write("*");
             }
-            _ => p.write(&format!("/* TODO {:?} */", self)),
+            _ => p.write(&format!("/* TODO {self:?} */")),
         }
     }
 }

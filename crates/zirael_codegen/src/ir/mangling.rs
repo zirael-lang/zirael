@@ -1,5 +1,5 @@
 use crate::ir::HirLowering;
-use std::hash::{DefaultHasher, Hash, Hasher};
+use std::hash::{DefaultHasher, Hash as _, Hasher as _};
 use zirael_parser::{SymbolId, Type};
 use zirael_utils::{
     ident_table::resolve,
@@ -60,11 +60,7 @@ impl<'reports> HirLowering<'reports> {
                 .collect::<Vec<_>>()
                 .join("_");
 
-            if type_suffix.is_empty() {
-                base_name
-            } else {
-                format!("{}__{}", base_name, type_suffix)
-            }
+            if type_suffix.is_empty() { base_name } else { format!("{base_name}__{type_suffix}") }
         } else {
             let symbol = self.symbol_table.get_symbol_unchecked(&original_sym_id);
             let canonical_id = symbol.canonical_symbol;
@@ -108,13 +104,13 @@ impl<'reports> HirLowering<'reports> {
 
     fn mangle_type_for_name(&self, ty: &Type) -> String {
         match ty {
-            Type::String => "string".to_string(),
-            Type::Char => "char".to_string(),
-            Type::Int => "int".to_string(),
-            Type::Uint => "uint".to_string(),
-            Type::Float => "float".to_string(),
-            Type::Bool => "bool".to_string(),
-            Type::Void => "void".to_string(),
+            Type::String => "string".to_owned(),
+            Type::Char => "char".to_owned(),
+            Type::Int => "int".to_owned(),
+            Type::Uint => "uint".to_owned(),
+            Type::Float => "float".to_owned(),
+            Type::Bool => "bool".to_owned(),
+            Type::Void => "void".to_owned(),
             Type::Pointer(inner) => format!("ptr{}", self.mangle_type_for_name(inner)),
             Type::Reference(inner) => format!("ref{}", self.mangle_type_for_name(inner)),
             Type::Array(inner, Some(size)) => {
@@ -141,7 +137,7 @@ impl<'reports> HirLowering<'reports> {
                     .join("_");
                 format!("fn_{}__ret_{}", param_names, self.mangle_type_for_name(return_type))
             }
-            _ => "unknown".to_string(),
+            _ => "unknown".to_owned(),
         }
     }
 

@@ -9,12 +9,7 @@ pub fn setup_logger(verbose: bool, test_logger: bool) {
     if test_logger {
         builder.format(|buf, record| {
             use std::io::Write as _;
-            writeln!(
-                buf,
-                "{} {}",
-                record.level().to_string().to_lowercase(),
-                record.args()
-            )
+            writeln!(buf, "{} {}", record.level().to_string().to_lowercase(), record.args())
         });
     } else {
         builder.format(|buf, record| {

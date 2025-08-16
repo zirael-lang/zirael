@@ -1,17 +1,15 @@
 use crate::{
-    AstId, StructDeclaration, StructField,
-    SymbolKind::Struct,
-    TokenKind, Type,
+    AstId, StructDeclaration, StructField, TokenKind, Type,
     ast::{
         Abi, Function, FunctionModifiers, FunctionSignature, ImportKind, Item, ItemKind, Keyword,
         Parameter, ParameterKind,
     },
     parser::Parser,
-    span::SpanUtils,
+    span::SpanUtils as _,
 };
-use colored::Colorize;
-use convert_case::{Case, Casing};
-use ordinal::ToOrdinal;
+use colored::Colorize as _;
+use convert_case::{Case, Casing as _};
+use ordinal::ToOrdinal as _;
 use std::{collections::HashSet, path::PathBuf};
 use zirael_utils::prelude::*;
 
@@ -96,12 +94,11 @@ impl<'a> Parser<'a> {
                     attributes: attrs,
                 });
 
-                if !self.check(&TokenKind::BraceClose) {
-                    if !self.match_token(TokenKind::Comma)
-                        && !self.match_token(TokenKind::Semicolon)
-                    {
-                        self.error_at_current("expected ',' or ';' after field");
-                    }
+                if !self.check(&TokenKind::BraceClose)
+                    && !self.match_token(TokenKind::Comma)
+                    && !self.match_token(TokenKind::Semicolon)
+                {
+                    self.error_at_current("expected ',' or ';' after field");
                 }
             } else {
                 self.error_at("struct body expected a method or field", self.prev_span());
@@ -213,7 +210,7 @@ impl<'a> Parser<'a> {
                 ReportBuilder::builder("function names must be camel case", ReportKind::Warning)
                     .label("here", self.prev_span())
                     .note(&format!("Suggested name {}", camel.dimmed().bold())),
-            )
+            );
         }
     }
 
@@ -230,7 +227,7 @@ impl<'a> Parser<'a> {
                 ReportBuilder::builder("struct names must be pascal case", ReportKind::Warning)
                     .label("here", self.prev_span())
                     .note(&format!("Suggested name {}", pascal.dimmed().bold())),
-            )
+            );
         }
     }
 

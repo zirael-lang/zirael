@@ -2,7 +2,7 @@ use crate::{
     ExprKind, Return, TokenKind,
     ast::{Keyword, Stmt, StmtKind, Type, VarDecl},
     parser::Parser,
-    span::SpanUtils,
+    span::SpanUtils as _,
 };
 use zirael_utils::prelude::*;
 

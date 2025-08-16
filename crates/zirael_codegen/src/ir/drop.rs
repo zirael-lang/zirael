@@ -1,6 +1,5 @@
 use crate::ir::{HirLowering, IrExpr, IrExprKind, IrStmt};
-use itertools::Itertools;
-use std::ops::Index;
+use itertools::Itertools as _;
 use zirael_parser::{DropStackEntry, Type, Type::Inferred};
 use zirael_utils::prelude::debug;
 
@@ -28,7 +27,7 @@ impl<'reports> HirLowering<'reports> {
             let stmt = IrStmt::Expr(IrExpr::new(
                 Type::Void,
                 IrExprKind::CCall(
-                    "free".to_string(),
+                    "free".to_owned(),
                     vec![IrExpr::new(Inferred, IrExprKind::Symbol(name.clone()))],
                 ),
             ));

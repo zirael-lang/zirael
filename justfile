@@ -14,7 +14,7 @@ fix:
     git status
 
 check:
-    cargo check --workspace --all-features --all-targets --locked
+    cargo check --workspace --all-features --all-targets
 
 lint:
     cargo clippy --workspace --all-targets --all-features --fix --allow-dirty -- --deny warnings

@@ -1,5 +1,4 @@
-use crate::hir::expr::{HirExpr, HirExprKind};
-use id_arena::Id;
+use crate::hir::expr::HirExpr;
 use std::collections::HashMap;
 use zirael_parser::{AstId, SymbolId, Type};
 use zirael_utils::prelude::{SourceFileId, Span};
@@ -90,7 +89,7 @@ pub enum HirVariantData {
     Struct(Vec<HirField>),
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub enum ExprContext {
     Stmt,
     Expr,

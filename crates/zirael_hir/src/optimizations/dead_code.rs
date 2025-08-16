@@ -2,7 +2,6 @@ use crate::hir::{
     expr::{HirExpr, HirExprKind},
     lowering::AstLowering,
 };
-use zirael_parser::Expr;
 
 impl<'reports> AstLowering<'reports> {
     /// Checks if an expression statement has no side effects and its result is unused.
@@ -34,7 +33,7 @@ impl<'reports> AstLowering<'reports> {
     pub fn result_not_used_error(&mut self, expr: &HirExpr) {
         self.error(
             "expression result is not used",
-            vec![("here".to_string(), expr.span.clone())],
+            vec![("here".to_owned(), expr.span.clone())],
             vec![],
         );
     }

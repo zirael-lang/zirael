@@ -1,11 +1,11 @@
-use crate::prelude::{AstId, WalkerContext, warn};
+use crate::prelude::{WalkerContext, warn};
 use zirael_parser::{
-    AstWalker, Expr, Function, LexedModule, ModuleId, ScopeType, Symbol, SymbolId, SymbolKind,
-    SymbolTable, impl_ast_walker, item::Item,
+    AstWalker, Expr, ScopeType, Symbol, SymbolId, SymbolKind, SymbolTable, impl_ast_walker,
+    item::Item,
 };
 use zirael_utils::prelude::*;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExpectedSymbol {
     Function,
     Variable,
@@ -21,35 +21,35 @@ pub enum ExpectedSymbol {
 impl ExpectedSymbol {
     fn matches(&self, kind: &SymbolKind) -> bool {
         match (self, kind) {
-            (ExpectedSymbol::Function, SymbolKind::Function { .. }) => true,
-            (ExpectedSymbol::Variable, SymbolKind::Variable { .. }) => true,
-            (ExpectedSymbol::Constant, SymbolKind::Constant { .. }) => true,
-            (ExpectedSymbol::Struct, SymbolKind::Struct { .. }) => true,
-            (ExpectedSymbol::Enum, SymbolKind::Enum { .. }) => true,
-            (ExpectedSymbol::Parameter, SymbolKind::Parameter { .. }) => true,
-            (ExpectedSymbol::Type, SymbolKind::Struct { .. } | SymbolKind::Enum { .. }) => true,
+            (Self::Function, SymbolKind::Function { .. }) => true,
+            (Self::Variable, SymbolKind::Variable { .. }) => true,
+            (Self::Constant, SymbolKind::Constant { .. }) => true,
+            (Self::Struct, SymbolKind::Struct { .. }) => true,
+            (Self::Enum, SymbolKind::Enum { .. }) => true,
+            (Self::Parameter, SymbolKind::Parameter { .. }) => true,
+            (Self::Type, SymbolKind::Struct { .. } | SymbolKind::Enum { .. }) => true,
             (
-                ExpectedSymbol::Value,
+                Self::Value,
                 SymbolKind::Variable { .. }
                 | SymbolKind::Constant { .. }
                 | SymbolKind::Parameter { .. },
             ) => true,
-            (ExpectedSymbol::Any, _) => true,
+            (Self::Any, _) => true,
             _ => false,
         }
     }
 
     fn name(&self) -> &'static str {
         match self {
-            ExpectedSymbol::Function => "function",
-            ExpectedSymbol::Variable => "variable",
-            ExpectedSymbol::Constant => "constant",
-            ExpectedSymbol::Struct => "struct",
-            ExpectedSymbol::Enum => "enum",
-            ExpectedSymbol::Parameter => "parameter",
-            ExpectedSymbol::Type => "type",
-            ExpectedSymbol::Value => "value",
-            ExpectedSymbol::Any => "symbol",
+            Self::Function => "function",
+            Self::Variable => "variable",
+            Self::Constant => "constant",
+            Self::Struct => "struct",
+            Self::Enum => "enum",
+            Self::Parameter => "parameter",
+            Self::Type => "type",
+            Self::Value => "value",
+            Self::Any => "symbol",
         }
     }
 }
@@ -80,14 +80,14 @@ impl<'reports> NameResolution<'reports> {
             }
             Some(id)
         } else {
-            self.report_unknown_symbol(ident, span, expected);
+            self.report_unknown_symbol(ident, span, &expected);
             None
         }
     }
 
-    fn report_unknown_symbol(&mut self, ident: &Identifier, span: Span, expected: ExpectedSymbol) {
+    fn report_unknown_symbol(&self, ident: &Identifier, span: Span, expected: &ExpectedSymbol) {
         let mut report = ReportBuilder::builder(
-            &format!("couldn't find {} named {}", expected.name(), resolve(ident).dimmed().bold()),
+            format!("couldn't find {} named {}", expected.name(), resolve(ident).dimmed().bold()),
             ReportKind::Error,
         )
         .label("not found", span);
@@ -102,7 +102,7 @@ impl<'reports> NameResolution<'reports> {
         if let Some(file_id) = self.processed_file {
             self.reports.add(file_id, report);
         } else {
-            warn!("report outside of a file: {:#?}", report);
+            warn!("report outside of a file: {report:#?}");
         }
     }
 

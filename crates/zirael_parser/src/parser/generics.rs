@@ -134,20 +134,18 @@ impl<'a> Parser<'a> {
 
                 if let Some(named_arg) = is_named_arg {
                     generic_args.push(named_arg);
+                } else if let Some(ty) = self.parse_type() {
+                    generic_args.push(GenericArg::Type(ty));
                 } else {
-                    if let Some(ty) = self.parse_type() {
-                        generic_args.push(GenericArg::Type(ty));
-                    } else {
-                        self.error_at_current(
-                            "expected type or named argument in generic parameter list",
-                        );
-                        self.synchronize(&[TokenKind::Comma, TokenKind::GreaterThan]);
-                        if self.check(&TokenKind::GreaterThan) {
-                            break;
-                        }
-                        if !self.check(&TokenKind::Comma) {
-                            break;
-                        }
+                    self.error_at_current(
+                        "expected type or named argument in generic parameter list",
+                    );
+                    self.synchronize(&[TokenKind::Comma, TokenKind::GreaterThan]);
+                    if self.check(&TokenKind::GreaterThan) {
+                        break;
+                    }
+                    if !self.check(&TokenKind::Comma) {
+                        break;
                     }
                 }
 

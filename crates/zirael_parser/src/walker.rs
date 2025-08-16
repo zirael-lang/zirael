@@ -159,24 +159,24 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
         }
     }
 
-    fn walk_enum_declaration(&mut self, enum_decl: &mut EnumDeclaration) {
+    fn walk_enum_declaration(&mut self, _: &mut EnumDeclaration) {
         todo!("Implement enum declaration");
-
-        self.visit_enum_declaration(enum_decl);
-
+        //
+        // self.visit_enum_declaration(enum_decl);
+        //
         // self.push_scope(ScopeType::Enum(enum_decl.name.clone()));
-
-        if let Some(generics) = &mut enum_decl.generics {
-            for generic in generics {
-                self.walk_generic_parameter(generic);
-            }
-        }
-
-        for variant in &mut enum_decl.variants {
-            self.walk_enum_variant(variant);
-        }
-
-        self.pop_scope();
+        //
+        // if let Some(generics) = &mut enum_decl.generics {
+        //     for generic in generics {
+        //         self.walk_generic_parameter(generic);
+        //     }
+        // }
+        //
+        // for variant in &mut enum_decl.variants {
+        //     self.walk_enum_variant(variant);
+        // }
+        //
+        // self.pop_scope();
     }
 
     fn walk_enum_variant(&mut self, variant: &mut EnumVariant) {
@@ -334,7 +334,7 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
                     self.walk_type(generic);
                 }
             }
-            _ => warn!("Unhandled type: {:?}", ty),
+            _ => warn!("Unhandled type: {ty:?}"),
         }
     }
 
@@ -370,12 +370,12 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
     }
 
     fn push_scope(&mut self, scope_type: ScopeType) {
-        self.symbol_table_mut().push_scope(scope_type);
+        let _ = self.symbol_table_mut().push_scope(scope_type);
     }
 
     fn pop_scope(&mut self) {
         if let Err(err) = self.symbol_table_mut().pop_scope() {
-            self.error(&format!("Failed to pop scope: {:?}", err), vec![], vec![]);
+            self.error(&format!("Failed to pop scope: {err:?}"), vec![], vec![]);
         }
     }
 
@@ -390,7 +390,7 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
             }
             self.reports().add(file_id, report);
         } else {
-            warn!("Report outside of a file: {}", message);
+            warn!("Report outside of a file: {message}");
         }
     }
 
@@ -398,7 +398,7 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
         if let Some(file_id) = self.processed_file() {
             self.reports().add(file_id, report);
         } else {
-            warn!("Report outside of a file: {:?}", report);
+            warn!("Report outside of a file: {report:?}");
         }
     }
 

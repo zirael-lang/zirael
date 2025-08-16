@@ -17,8 +17,8 @@ impl Display for PackageType {
             f,
             "{}",
             match self {
-                PackageType::Binary => "binary",
-                PackageType::Library => "library",
+                Self::Binary => "binary",
+                Self::Library => "library",
             }
         )
     }

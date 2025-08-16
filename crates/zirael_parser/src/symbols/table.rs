@@ -1,16 +1,16 @@
 use crate::{
-    AstId, AstWalker, LexedModule, ModuleId, Type,
+    Type,
     symbols::{
         Scope, ScopeId, ScopeType, Symbol, SymbolId, SymbolKind, TemporaryLifetime,
         relations::SymbolRelations,
     },
 };
-use id_arena::{Arena, Id};
-use std::{collections::HashMap, fmt::Formatter, ops::Range, sync::Arc};
+use id_arena::Arena;
+use std::{collections::HashMap, sync::Arc};
 use strsim::levenshtein;
 use zirael_utils::prelude::*;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SymbolTableError {
     SymbolAlreadyExists { name: Identifier, existing_id: SymbolId, scope: ScopeId },
     SymbolNotFound { name: Identifier, scope: ScopeId },
@@ -23,7 +23,7 @@ pub enum SymbolTableError {
     ModuleNotFound(SourceFileId),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImportConflict {
     pub name: Identifier,
     pub existing_id: SymbolId,
@@ -48,7 +48,7 @@ pub struct SymbolTable(Arc<RwLock<SymbolTableImpl>>);
 
 impl Default for SymbolTableImpl {
     fn default() -> Self {
-        let mut symbols = Arena::new();
+        let symbols = Arena::new();
         let mut scopes = Arena::new();
 
         let global_scope = Scope {
@@ -340,13 +340,12 @@ impl SymbolTable {
 
     pub fn get_c_identifier(&self, id: SymbolId) -> Option<String> {
         self.read(|table| {
-            table.symbols.get(id).map(|symbol| match &symbol.kind {
-                SymbolKind::Temporary { .. } => {
+            table.symbols.get(id).map(|symbol| {
+                if let SymbolKind::Temporary { .. } = &symbol.kind {
                     format!("__zirael_temp_{}", id.index())
-                }
-                _ => {
+                } else {
                     let base_name = resolve(&symbol.name);
-                    format!("__zirael_{}", base_name)
+                    format!("__zirael_{base_name}")
                 }
             })
         })
@@ -372,7 +371,7 @@ impl SymbolTable {
     pub fn clear(&self) {
         self.write(|table| {
             *table = SymbolTableImpl::default();
-        })
+        });
     }
 
     pub fn insert_temporary(
@@ -387,7 +386,7 @@ impl SymbolTable {
                 .iter()
                 .filter(|(_, s)| matches!(s.kind, SymbolKind::Temporary { .. }))
                 .count();
-            get_or_intern(&format!("__temp_{}", temp_count))
+            get_or_intern(&format!("__temp_{temp_count}"))
         });
 
         let kind = SymbolKind::Temporary { ty, lifetime };
@@ -432,7 +431,7 @@ impl SymbolTable {
             while let Some(scope_id) = current_scope {
                 let scope = table.scopes_arena.get(scope_id)?;
                 if let ScopeType::Module(id) = &scope.scope_type {
-                    return Some(id.clone());
+                    return Some(*id);
                 }
                 current_scope = scope.parent;
             }
@@ -444,7 +443,7 @@ impl SymbolTable {
     pub fn new_relation(&self, referrer: SymbolId, referred: SymbolId) {
         self.write(|table| {
             table.symbol_relations.entry(referrer, referred);
-        })
+        });
     }
 
     pub fn build_symbol_relations(&self) -> Result<Vec<SymbolId>> {
@@ -458,7 +457,7 @@ impl SymbolTable {
     pub fn add_mangled_name(&self, id: SymbolId, name: String) {
         self.write(|table| {
             table.mangled_names.insert(id, name);
-        })
+        });
     }
 }
 

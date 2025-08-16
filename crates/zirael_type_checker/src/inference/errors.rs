@@ -34,10 +34,10 @@ impl<'reports> TypeInference<'reports> {
                     format!("{}<{}>", resolve(name), gens)
                 }
             }
-            Type::TypeVariable { id, name } => {
+            Type::TypeVariable { name, .. } => {
                 format!("'{}", resolve(name))
             }
-            Type::BoundedTypeVariable { id, name, bounds } => {
+            Type::BoundedTypeVariable { name, bounds, .. } => {
                 let bounds_str = if bounds.is_empty() {
                     "".to_string()
                 } else {
@@ -51,7 +51,6 @@ impl<'reports> TypeInference<'reports> {
                 format!("'{}{}", resolve(name), bounds_str)
             }
             Type::Error => "error".bright_red().bold().to_string(),
-            _ => format!("<unknown type>").bright_red().bold().to_string(),
         }
     }
 

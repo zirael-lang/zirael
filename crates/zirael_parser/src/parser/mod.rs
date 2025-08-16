@@ -90,14 +90,6 @@ impl<'a> Parser<'a> {
         self.position >= self.tokens.len()
     }
 
-    pub fn position(&self) -> usize {
-        self.position
-    }
-
-    pub fn remaining(&self) -> usize {
-        self.tokens.len().saturating_sub(self.position)
-    }
-
     pub fn advance(&mut self) -> Option<Token> {
         if !self.is_at_end() {
             let token = self.tokens[self.position].clone();
@@ -196,14 +188,6 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn has_errors(&self) -> bool {
-        !self.reports.is_empty()
-    }
-
-    pub fn clear_errors(&mut self) {
-        self.reports.clear();
-    }
-
     pub fn check(&self, kind: &TokenKind) -> bool {
         match self.peek() {
             Some(token) => &token.kind == kind,
@@ -286,40 +270,6 @@ impl<'a> Parser<'a> {
             }
             self.advance();
         }
-    }
-
-    pub fn skip_while<F>(&mut self, mut condition: F) -> usize
-    where
-        F: FnMut(&TokenKind) -> bool,
-    {
-        let start_pos = self.position;
-
-        while let Some(token) = self.peek() {
-            if condition(&token.kind) {
-                self.advance();
-            } else {
-                break;
-            }
-        }
-
-        self.position - start_pos
-    }
-
-    pub fn skip_until<F>(&mut self, mut condition: F) -> usize
-    where
-        F: FnMut(&TokenKind) -> bool,
-    {
-        let start_pos = self.position;
-
-        while let Some(token) = self.peek() {
-            if condition(&token.kind) {
-                break;
-            } else {
-                self.advance();
-            }
-        }
-
-        self.position - start_pos
     }
 
     pub fn expect_keyword(&mut self, expected: Keyword) -> bool {
