@@ -12,7 +12,7 @@ pub use operator::*;
 pub use stmt::*;
 pub use types::*;
 
-pub(crate) use crate::ast::item::Item;
+pub use crate::ast::item::Item;
 use std::fmt::Debug;
 
 #[derive(Clone, Debug)]

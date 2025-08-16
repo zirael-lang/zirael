@@ -1,5 +1,7 @@
 use crate::{
-    AstId, TokenKind, Type,
+    AstId, StructDeclaration, StructField,
+    SymbolKind::Struct,
+    TokenKind, Type,
     ast::{
         Abi, Function, FunctionModifiers, FunctionSignature, ImportKind, Item, ItemKind, Keyword,
         Parameter, ParameterKind,
@@ -21,6 +23,8 @@ impl<'a> Parser<'a> {
         let id = self.fresh_id();
         let (kind, name) = if self.match_keyword(Keyword::Fn) {
             self.parse_fn(id)
+        } else if self.match_keyword(Keyword::Struct) {
+            self.parse_struct(id)
         } else if self.match_keyword(Keyword::Import) {
             self.parse_import()
         } else {
@@ -37,6 +41,90 @@ impl<'a> Parser<'a> {
             span: span.to(self.prev_span()),
             symbol_id: None,
         })
+    }
+
+    pub fn parse_struct(&mut self, id: AstId) -> (ItemKind, Identifier) {
+        let span = self.prev_span();
+        let name = self.expect_identifier().unwrap_or_else(|| {
+            self.error_at_current("struct name is required");
+            default_ident()
+        });
+        self.validate_struct_name(&name);
+        let generics = self.parse_generics();
+
+        if self.match_token(TokenKind::Semicolon) {
+            // struct with no data: struct Person;
+            return (
+                ItemKind::Struct(StructDeclaration {
+                    id,
+                    name,
+                    generics,
+                    fields: vec![],
+                    methods: vec![],
+                    span: span.to(self.prev_span()),
+                }),
+                name,
+            );
+        }
+
+        self.expect(TokenKind::BraceOpen);
+        let mut fields = vec![];
+        let mut methods = vec![];
+
+        while !self.check(&TokenKind::BraceClose) && !self.is_at_end() {
+            let attrs = self.parse_attrs();
+
+            if self.check_keyword(Keyword::Fn) {
+                if let Some(item) = self.parse_item() {
+                    if let ItemKind::Function(_) = item.kind {
+                        methods.push(item.clone());
+                    } else {
+                        self.error_at("only functions are allowed as struct methods", item.span);
+                    }
+                }
+            } else if let Some(field_name) = self.expect_identifier() {
+                self.expect(TokenKind::Colon);
+                let field_type = self.parse_type().unwrap_or_else(|| {
+                    self.error_at_current("expected type after ':'");
+                    Type::Error
+                });
+
+                fields.push(StructField {
+                    name: field_name,
+                    ty: field_type,
+                    is_public: true,
+                    attributes: attrs,
+                });
+
+                if !self.check(&TokenKind::BraceClose) {
+                    if !self.match_token(TokenKind::Comma)
+                        && !self.match_token(TokenKind::Semicolon)
+                    {
+                        self.error_at_current("expected ',' or ';' after field");
+                    }
+                }
+            } else {
+                self.error_at("struct body expected a method or field", self.prev_span());
+                self.synchronize(&[TokenKind::Semicolon, TokenKind::Comma, TokenKind::BraceClose]);
+                if self.check(&TokenKind::BraceClose) {
+                    break;
+                }
+            }
+        }
+
+        self.expect(TokenKind::BraceClose);
+
+        (
+            ItemKind::Struct(StructDeclaration {
+                id,
+                name,
+                generics,
+                fields,
+                methods,
+                span: span.to(self.prev_span()),
+            }),
+            name,
+        )
     }
 
     pub fn parse_import(&mut self) -> (ItemKind, Identifier) {
@@ -125,6 +213,23 @@ impl<'a> Parser<'a> {
                 ReportBuilder::builder("function names must be camel case", ReportKind::Warning)
                     .label("here", self.prev_span())
                     .note(&format!("Suggested name {}", camel.dimmed().bold())),
+            )
+        }
+    }
+
+    pub fn validate_struct_name(&mut self, name: &Identifier) {
+        let name = resolve(name);
+        if name.is_empty() {
+            return;
+        }
+
+        let pascal = name.to_case(Case::Pascal);
+
+        if name != pascal {
+            self.add_report(
+                ReportBuilder::builder("struct names must be pascal case", ReportKind::Warning)
+                    .label("here", self.prev_span())
+                    .note(&format!("Suggested name {}", pascal.dimmed().bold())),
             )
         }
     }

@@ -20,10 +20,20 @@ pub fn run_codegen(
     header.writeln("#include <stdlib.h>");
     header.writeln("#include <uchar.h>");
     header.writeln("#include <stdint.h>");
+    header.writeln("#include <stdbool.h>");
 
     for module in &modules {
         for item in &module.items {
-            item.generate_header(header);
+            let has_monomorphized_versions =
+                module.mono_items.iter().any(|m| m.sym_id == item.sym_id);
+
+            if !has_monomorphized_versions {
+                item.generate_header(header);
+            }
+        }
+
+        for mono_item in &module.mono_items {
+            mono_item.generate_header(header);
         }
     }
     header.writeln("");
@@ -36,16 +46,35 @@ pub fn run_codegen(
     implementation.writeln("");
 
     let module_items = modules.iter().flat_map(|m| &m.items).collect::<Vec<_>>();
+    let mono_items = modules.iter().flat_map(|m| &m.mono_items).collect::<Vec<_>>();
 
     if order.is_empty() {
         order = module_items.iter().map(|i| i.sym_id).collect_vec();
     }
 
-    for id in order {
-        let Some(item) = module_items.iter().find(|i| i.sym_id == id) else {
+    for id in &order {
+        let Some(item) = module_items.iter().find(|i| i.sym_id == *id) else {
             continue;
         };
-        item.generate(implementation);
+
+        let monomorphized_versions: Vec<_> =
+            mono_items.iter().filter(|m| m.sym_id == *id).collect();
+
+        let is_generic_function = !monomorphized_versions.is_empty();
+
+        if !is_generic_function {
+            item.generate(implementation);
+        }
+
+        for mono_item in monomorphized_versions {
+            mono_item.generate(implementation);
+        }
+    }
+
+    for mono_item in mono_items {
+        if !order.contains(&mono_item.sym_id) {
+            mono_item.generate(implementation);
+        }
     }
 
     fs_err::create_dir_all(&info.write_to)?;
@@ -278,7 +307,7 @@ impl Gen for Type {
                 ty.generate(p);
                 p.write("*");
             }
-            _ => p.write("/* TODO */"),
+            _ => p.write(&format!("/* TODO {:?} */", self)),
         }
     }
 }

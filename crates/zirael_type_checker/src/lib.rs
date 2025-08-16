@@ -1,3 +1,3 @@
 mod inference;
 
-pub use inference::*;
+pub use inference::{monomorphization::*, *};

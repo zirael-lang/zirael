@@ -4,6 +4,9 @@ use crate::{
     parser::Parser,
     span::SpanUtils,
 };
+use petgraph::algo::steiner_tree;
+use std::collections::HashMap;
+use zirael_utils::{ident_table::Identifier, prelude::Span};
 
 impl<'a> Parser<'a> {
     pub fn parse_expr(&mut self) -> Expr {
@@ -150,7 +153,10 @@ impl<'a> Parser<'a> {
         }
 
         let end_span = self.prev_span();
-        self.new_expr(ExprKind::Call { callee: Box::new(callee), args }, start_span.to(end_span))
+        self.new_expr(
+            ExprKind::Call { callee: Box::new(callee), args, call_info: None },
+            start_span.to(end_span),
+        )
     }
 
     fn parse_field_access(&mut self, base: Expr) -> Expr {
@@ -225,9 +231,14 @@ impl<'a> Parser<'a> {
                 TokenKind::Identifier(name) => {
                     let name = name.clone();
                     self.advance();
-                    let span = self.prev_span();
+                    let identifier_span = self.prev_span();
                     let identifier = zirael_utils::prelude::get_or_intern(&name);
-                    self.new_expr(ExprKind::Identifier(identifier, None), span)
+
+                    if self.check(&TokenKind::BraceOpen) {
+                        return self.parse_struct_initializer(identifier, identifier_span);
+                    }
+
+                    self.new_expr(ExprKind::Identifier(identifier, None), identifier_span)
                 }
 
                 TokenKind::ParenOpen => {
@@ -277,5 +288,61 @@ impl<'a> Parser<'a> {
 
         let end_span = self.prev_span();
         self.new_expr(ExprKind::Block(stmts), start_span.to(end_span))
+    }
+
+    fn parse_struct_initializer(&mut self, struct_name: Identifier, start_span: Span) -> Expr {
+        self.expect(TokenKind::BraceOpen);
+
+        let mut fields = HashMap::new();
+
+        if !self.check(&TokenKind::BraceClose) {
+            loop {
+                let field_name = match self.expect_identifier() {
+                    Some(ident) => ident,
+                    None => {
+                        self.error_at_current("expected field name in struct initializer");
+                        break;
+                    }
+                };
+
+                if !self.match_token(TokenKind::Colon) {
+                    self.error_at_current("expected ':' after field name");
+                    self.synchronize(&[TokenKind::Comma, TokenKind::BraceClose]);
+                    if self.check(&TokenKind::BraceClose) {
+                        break;
+                    }
+                    continue;
+                }
+
+                let value = self.parse_expr();
+                fields.insert(field_name, value);
+
+                if !self.match_token(TokenKind::Comma) {
+                    break;
+                }
+
+                if self.check(&TokenKind::BraceClose) {
+                    break;
+                }
+            }
+        }
+
+        if !self.match_token(TokenKind::BraceClose) {
+            self.error_at_current("expected '}' to close struct initializer");
+        }
+
+        let end_span = self.prev_span();
+        let expr_id = self.fresh_id();
+        self.new_expr(
+            ExprKind::StructInit {
+                name: Box::new(Expr::new(
+                    ExprKind::Identifier(struct_name, None),
+                    start_span.clone(),
+                    expr_id,
+                )),
+                fields,
+            },
+            start_span.to(end_span),
+        )
     }
 }

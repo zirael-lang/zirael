@@ -21,20 +21,37 @@ impl<'reports> TypeInference<'reports> {
             Type::Array(ty, size) => format!("[{}, {}]", self.format_type(&ty), size.unwrap_or(0)),
             Type::Inferred => "_".to_string(),
             Type::Function { params, return_type } => {
-                let mut params_str = String::new();
-                for param in params {
-                    params_str.push_str(&self.format_type(&param));
-                }
+                let params_str =
+                    params.iter().map(|p| self.format_type(p)).collect::<Vec<_>>().join(", ");
                 format!("fn({}) -> {}", params_str, self.format_type(&return_type))
             }
             Type::Named { name, generics } => {
-                let mut gens = vec![];
-                for generic in generics {
-                    gens.push(self.format_type(&generic));
+                if generics.is_empty() {
+                    resolve(name).to_string()
+                } else {
+                    let gens =
+                        generics.iter().map(|g| self.format_type(g)).collect::<Vec<_>>().join(", ");
+                    format!("{}<{}>", resolve(name), gens)
                 }
-                format!("{}<{}>", resolve(name), gens.join(", "))
+            }
+            Type::TypeVariable { id, name } => {
+                format!("'{}", resolve(name))
+            }
+            Type::BoundedTypeVariable { id, name, bounds } => {
+                let bounds_str = if bounds.is_empty() {
+                    "".to_string()
+                } else {
+                    let constraints = bounds
+                        .iter()
+                        .map(|b| format!("{}", resolve(&b.name)))
+                        .collect::<Vec<_>>()
+                        .join(" + ");
+                    format!(": {}", constraints)
+                };
+                format!("'{}{}", resolve(name), bounds_str)
             }
             Type::Error => "error".bright_red().bold().to_string(),
+            _ => format!("<unknown type>").bright_red().bold().to_string(),
         }
     }
 

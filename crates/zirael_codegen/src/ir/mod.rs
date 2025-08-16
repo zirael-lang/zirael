@@ -1,6 +1,7 @@
 mod drop;
 mod lowering;
 mod mangling;
+mod monomorphization;
 
 use zirael_hir::hir::{HirBody, HirFunctionSignature, HirParam};
 use zirael_parser::{BinaryOp, Literal, Symbol, SymbolId, Type, UnaryOp};
@@ -11,6 +12,7 @@ use zirael_hir::hir::expr::HirExpr;
 #[derive(Clone, Debug)]
 pub struct IrModule {
     pub items: Vec<IrItem>,
+    pub mono_items: Vec<IrItem>,
 }
 
 #[derive(Clone, Debug)]

@@ -6,7 +6,7 @@ pub mod scopes;
 mod table;
 
 use crate::{
-    ClassField, EnumVariant, Expr, FunctionModifiers, FunctionSignature, GenericParameter, Type,
+    EnumVariant, Expr, FunctionModifiers, FunctionSignature, GenericParameter, StructField, Type,
 };
 pub use scopes::*;
 pub use table::*;
@@ -39,8 +39,8 @@ pub enum SymbolKind {
         is_variadic: bool,
         default_value: Option<Expr>,
     },
-    Class {
-        fields: Vec<ClassField>,
+    Struct {
+        fields: Vec<StructField>,
         generics: Vec<GenericParameter>,
     },
     Enum {
@@ -60,7 +60,7 @@ impl SymbolKind {
             SymbolKind::Constant { .. } => "constant",
             SymbolKind::Function { .. } => "function",
             SymbolKind::Parameter { .. } => "parameter",
-            SymbolKind::Class { .. } => "class",
+            SymbolKind::Struct { .. } => "struct",
             SymbolKind::Enum { .. } => "enum",
             SymbolKind::Temporary { .. } => "temporary",
         }

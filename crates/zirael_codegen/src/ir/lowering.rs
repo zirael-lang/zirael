@@ -12,9 +12,10 @@ use zirael_hir::hir::{
     lowering::AstLowering,
 };
 use zirael_parser::{
-    AstId, DropStackEntry, ItemKind, LexedModule, ScopeId, ScopeType, SymbolId, SymbolKind,
-    SymbolTable, Type, UnaryOp, item::Item,
+    AstId, DropStackEntry, ItemKind, LexedModule, MonomorphizationId, ScopeId, ScopeType, SymbolId,
+    SymbolKind, SymbolTable, Type, UnaryOp, item::Item,
 };
+use zirael_type_checker::MonomorphizationTable;
 use zirael_utils::prelude::{
     Colorize, Identifier, Mode, ReportBuilder, ReportKind, Reports, SourceFileId, Sources, Span,
     debug, resolve, strip_same_root, warn,
@@ -23,17 +24,19 @@ use zirael_utils::prelude::{
 pub fn lower_hir_to_ir<'reports>(
     hir_modules: &mut Vec<HirModule>,
     symbol_table: &SymbolTable,
+    mono_table: MonomorphizationTable,
     reports: &Reports<'reports>,
     sources: &Sources,
     mode: Mode,
     root: PathBuf,
 ) -> Vec<IrModule> {
-    let mut lowering = HirLowering::new(symbol_table, reports, sources, mode, root);
+    let mut lowering = HirLowering::new(symbol_table, mono_table, reports, sources, mode, root);
     lowering.lower_modules(hir_modules)
 }
 
 pub struct HirLowering<'reports> {
     pub symbol_table: SymbolTable,
+    pub mono_table: MonomorphizationTable,
     processed_file: Option<SourceFileId>,
     pub sources: Sources,
     pub mode: Mode,
@@ -44,6 +47,7 @@ pub struct HirLowering<'reports> {
 impl<'reports> HirLowering<'reports> {
     pub fn new(
         symbol_table: &SymbolTable,
+        mono_table: MonomorphizationTable,
         reports: &Reports<'reports>,
         sources: &Sources,
         mode: Mode,
@@ -51,6 +55,7 @@ impl<'reports> HirLowering<'reports> {
     ) -> Self {
         Self {
             symbol_table: symbol_table.clone(),
+            mono_table,
             processed_file: None,
             sources: sources.clone(),
             reports: reports.clone(),
@@ -60,7 +65,10 @@ impl<'reports> HirLowering<'reports> {
     }
 
     pub fn lower_modules(&mut self, lexed_modules: &mut Vec<HirModule>) -> Vec<IrModule> {
-        lexed_modules.iter_mut().map(|module| self.lower_module(module)).collect()
+        let mut ir_modules =
+            lexed_modules.iter_mut().map(|module| self.lower_module(module)).collect::<Vec<_>>();
+
+        ir_modules
     }
 
     fn push_scope(&mut self, scope_type: ScopeType) {
@@ -73,18 +81,23 @@ impl<'reports> HirLowering<'reports> {
     }
 
     fn lower_module(&mut self, lexed_module: &mut HirModule) -> IrModule {
-        let mut hir_module = IrModule { items: vec![] };
+        let mut ir_module = IrModule { items: vec![], mono_items: vec![] };
 
         self.push_scope(ScopeType::Module(lexed_module.id));
         self.processed_file = Some(lexed_module.id);
+
         for item in &mut lexed_module.items.values_mut() {
-            if let Some(hir_item) = self.lower_item(item) {
-                hir_module.items.push(hir_item);
+            if let Some(ir_item) = self.lower_item(item) {
+                ir_module.items.push(ir_item);
             }
         }
         self.pop_scope();
 
-        hir_module
+        if !self.mono_table.entries.is_empty() {
+            self.process_monomorphization_entries(&mut ir_module);
+        }
+
+        ir_module
     }
 
     fn lower_item(&mut self, item: &mut HirItem) -> Option<IrItem> {
@@ -92,12 +105,17 @@ impl<'reports> HirLowering<'reports> {
 
         match &mut item.kind {
             HirItemKind::Function(func) => {
-                let hir_function = self.lower_function(func);
-                Some(IrItem {
-                    name: self.mangle_symbol(item.symbol_id),
-                    kind: IrItemKind::Function(hir_function),
-                    sym_id: item.symbol_id,
-                })
+                if let SymbolKind::Function { signature, .. } = &sym.kind {
+                    let hir_function = self.lower_function(func);
+
+                    Some(IrItem {
+                        name: self.mangle_symbol(item.symbol_id),
+                        kind: IrItemKind::Function(hir_function),
+                        sym_id: item.symbol_id,
+                    })
+                } else {
+                    None
+                }
             }
             _ => None,
         }
@@ -244,12 +262,19 @@ impl<'reports> HirLowering<'reports> {
         let kind = match expr.kind {
             HirExprKind::Block(stms) => IrExprKind::Block(self.lower_block(stms, expr.id)),
             HirExprKind::Literal(literal) => IrExprKind::Literal(literal),
-            HirExprKind::Call { callee, args } => {
-                let identifier = if let HirExprKind::Symbol(id) = callee.kind {
+            HirExprKind::Call { callee, args, call_info } => {
+                let identifier = if let Some(call_info) = call_info {
+                    if let Some(mono_id) = call_info.monomorphized_id {
+                        self.get_monomorphized_function_name(mono_id)
+                    } else {
+                        self.mangle_symbol(call_info.original_symbol)
+                    }
+                } else if let HirExprKind::Symbol(id) = callee.kind {
                     self.mangle_symbol(id)
                 } else {
-                    unreachable!()
+                    unreachable!("Invalid call expression structure")
                 };
+
                 let args = args.iter().map(|arg| self.lower_expr(arg.clone())).collect::<Vec<_>>();
 
                 IrExprKind::Call(identifier, args)

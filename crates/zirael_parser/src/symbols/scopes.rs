@@ -37,7 +37,7 @@ pub enum ScopeType {
     Module(SourceFileId),
     Function(AstId),
     Block(AstId),
-    Class(AstId),
+    Struct(AstId),
     Enum(AstId),
     Loop(AstId),
     Conditional(AstId),

@@ -223,6 +223,7 @@ impl<'reports> AstWalker<'reports> for MemoryAnalysis<'reports> {
             if let Some(sym_id) = sym_id
                 && let Some(symbol) = self.symbol_table.get_symbol(sym_id)
                 && symbol.kind.is_value()
+                && self.symbol_table.is_borrowed(sym_id).is_some()
             {
                 self.report_return_of_local_reference(value, &symbol);
             }

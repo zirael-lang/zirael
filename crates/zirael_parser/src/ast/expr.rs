@@ -21,10 +21,20 @@ pub enum ExprKind {
     AssignOp(Box<Expr>, BinaryOp, Box<Expr>),
     Unary(Box<UnaryOp>, Box<Expr>),
     Paren(Box<Expr>),
-    Call { callee: Box<Expr>, args: Vec<Expr> },
+    Call { callee: Box<Expr>, args: Vec<Expr>, call_info: Option<CallInfo> },
     FieldAccess(Vec<Expr>),
     IndexAccess(Box<Expr>, Box<Expr>),
     CouldntParse(CouldntParse),
+    StructInit { name: Box<Expr>, fields: HashMap<Identifier, Expr> },
+}
+
+pub type MonomorphizationId = Id<()>;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CallInfo {
+    pub original_symbol: SymbolId,
+    pub monomorphized_id: Option<MonomorphizationId>,
+    pub concrete_types: HashMap<Identifier, Type>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -94,6 +104,7 @@ impl ExprKind {
             ExprKind::Call { .. } => "call",
             ExprKind::FieldAccess(_) => "field access",
             ExprKind::IndexAccess(_, _) => "index access",
+            ExprKind::StructInit { .. } => "struct constructor",
             ExprKind::CouldntParse(_) => "couldnt parse",
         }
     }

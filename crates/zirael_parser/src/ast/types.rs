@@ -2,7 +2,7 @@ use zirael_utils::prelude::*;
 
 pub type TypeVarId = u32;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Type {
     String,
     Char,
@@ -16,6 +16,9 @@ pub enum Type {
     Array(Box<Type>, Option<usize>),
     Function { params: Vec<Type>, return_type: Box<Type> },
     Named { name: Identifier, generics: Vec<Type> },
+
+    TypeVariable { id: usize, name: Identifier },
+    BoundedTypeVariable { id: usize, name: Identifier, bounds: Vec<TraitBound> },
 
     Inferred,
     Error,
@@ -35,20 +38,20 @@ impl Type {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct GenericParameter {
     pub name: Identifier,
     pub constraints: Vec<TraitBound>,
     pub default_type: Option<Type>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TraitBound {
     pub name: Identifier,
     pub generic_args: Vec<GenericArg>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum GenericArg {
     Type(Type),
     Named { name: Identifier, ty: Type },

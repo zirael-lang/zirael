@@ -23,7 +23,7 @@ pub struct HirItem {
 #[derive(Debug, Clone)]
 pub enum HirItemKind {
     Function(HirFunction),
-    Class(HirClass),
+    Struct(HirStruct),
     Enum(HirEnum),
 }
 
@@ -59,7 +59,7 @@ pub struct HirBody {
 }
 
 #[derive(Debug, Clone)]
-pub struct HirClass {
+pub struct HirStruct {
     pub symbol_id: SymbolId,
     pub fields: Vec<HirField>,
 }

@@ -1420,6 +1420,7 @@ dependencies = [
  "itertools",
  "zirael_hir",
  "zirael_parser",
+ "zirael_type_checker",
  "zirael_utils",
 ]
 

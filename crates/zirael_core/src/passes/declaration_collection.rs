@@ -78,7 +78,7 @@ impl<'reports> DeclarationCollection<'reports> {
 
                         self.process_path_import(&path.with_extension("zr"), span, current_file_id);
                     }
-                    
+
                     self.used_externals.push(name.to_string());
                 } else {
                     self.error(
@@ -253,6 +253,23 @@ impl<'reports> AstWalker<'reports> for DeclarationCollection<'reports> {
 
                 self.symbol_table.exit_scope().unwrap();
 
+                sym
+            }
+            ItemKind::Struct(struct_def) => {
+                let sym = self.register_symbol(
+                    struct_def.name,
+                    SymbolKind::Struct {
+                        generics: struct_def.generics.clone(),
+                        fields: struct_def.fields.clone(),
+                    },
+                    struct_def.span.clone(),
+                );
+                self.symbol_table.create_scope(ScopeType::Struct(struct_def.id));
+
+                for func in struct_def.methods.iter_mut() {
+                    self.walk_item(func);
+                }
+                self.symbol_table.exit_scope().unwrap();
                 sym
             }
             ItemKind::Import(..) => None,

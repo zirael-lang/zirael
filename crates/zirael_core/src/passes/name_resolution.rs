@@ -10,7 +10,7 @@ pub enum ExpectedSymbol {
     Function,
     Variable,
     Constant,
-    Class,
+    Struct,
     Enum,
     Parameter,
     Type,
@@ -24,10 +24,10 @@ impl ExpectedSymbol {
             (ExpectedSymbol::Function, SymbolKind::Function { .. }) => true,
             (ExpectedSymbol::Variable, SymbolKind::Variable { .. }) => true,
             (ExpectedSymbol::Constant, SymbolKind::Constant { .. }) => true,
-            (ExpectedSymbol::Class, SymbolKind::Class { .. }) => true,
+            (ExpectedSymbol::Struct, SymbolKind::Struct { .. }) => true,
             (ExpectedSymbol::Enum, SymbolKind::Enum { .. }) => true,
             (ExpectedSymbol::Parameter, SymbolKind::Parameter { .. }) => true,
-            (ExpectedSymbol::Type, SymbolKind::Class { .. } | SymbolKind::Enum { .. }) => true,
+            (ExpectedSymbol::Type, SymbolKind::Struct { .. } | SymbolKind::Enum { .. }) => true,
             (
                 ExpectedSymbol::Value,
                 SymbolKind::Variable { .. }
@@ -44,7 +44,7 @@ impl ExpectedSymbol {
             ExpectedSymbol::Function => "function",
             ExpectedSymbol::Variable => "variable",
             ExpectedSymbol::Constant => "constant",
-            ExpectedSymbol::Class => "class",
+            ExpectedSymbol::Struct => "struct",
             ExpectedSymbol::Enum => "enum",
             ExpectedSymbol::Parameter => "parameter",
             ExpectedSymbol::Type => "type",
@@ -159,6 +159,20 @@ impl<'reports> AstWalker<'reports> for NameResolution<'reports> {
         if let Some(id) = self.resolve_identifier(id, span, ExpectedSymbol::Value) {
             self.symbol_table.mark_used(id).expect("invalid symbol id");
             *sym_id = Some(id);
+        }
+    }
+
+    fn visit_struct_init(&mut self, name: &mut Expr, _fields: &mut HashMap<Identifier, Expr>) {
+        let span = name.span.clone();
+        let Some((ident, ident_sym_id)) = name.as_identifier() else {
+            self.error("expected identifier in struct init", vec![], vec![]);
+            return;
+        };
+
+        if let Some(id) = self.resolve_identifier(ident, span, ExpectedSymbol::Struct) {
+            *ident_sym_id = Some(id);
+
+            self.symbol_table.new_relation(self.current_item.unwrap(), id);
         }
     }
 }

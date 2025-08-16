@@ -39,13 +39,15 @@ impl<'ctx> CompilationUnit<'ctx> {
         reports.print(sources);
 
         MemoryAnalysis::new(symbols, reports, sources).walk_modules(&mut result.modules);
-        TypeInference::new(symbols, reports, sources).walk_modules(&mut result.modules);
+        let inference = &mut TypeInference::new(symbols, reports, sources);
+        inference.walk_modules(&mut result.modules);
         reports.print(sources);
 
         let mut hir = lower_ast_to_hir(&mut result.modules, symbols, reports, sources);
         let ir = lower_hir_to_ir(
             &mut hir,
             symbols,
+            inference.mono_table.clone(),
             reports,
             sources,
             self.info.mode,

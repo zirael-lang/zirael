@@ -1,10 +1,10 @@
 use crate::{
     AstId, LexedModule, ModuleId, Return, ScopeType, SymbolTable,
     ast::{
-        Abi, Ast, Attribute, BinaryOp, ClassDeclaration, ClassField, EnumDeclaration, EnumVariant,
-        EnumVariantData, Expr, ExprKind, Function, FunctionModifiers, FunctionSignature,
-        GenericArg, GenericParameter, ImportKind, Item, ItemKind, Literal, Parameter,
-        ParameterKind, Stmt, StmtKind, TraitBound, Type, UnaryOp, VarDecl,
+        Abi, Ast, Attribute, BinaryOp, EnumDeclaration, EnumVariant, EnumVariantData, Expr,
+        ExprKind, Function, FunctionModifiers, FunctionSignature, GenericArg, GenericParameter,
+        ImportKind, Item, ItemKind, Literal, Parameter, ParameterKind, Stmt, StmtKind,
+        StructDeclaration, StructField, TraitBound, Type, UnaryOp, VarDecl,
     },
     symbols::SymbolId,
 };
@@ -53,7 +53,7 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
     fn walk_item_kind(&mut self, kind: &mut ItemKind) {
         match kind {
             ItemKind::Function(func) => self.walk_function(func),
-            ItemKind::Class(class) => self.walk_class_declaration(class),
+            ItemKind::Struct(_struct) => self.walk_struct_declaration(_struct),
             ItemKind::Enum(enum_decl) => self.walk_enum_declaration(enum_decl),
             ItemKind::Import(import, _) => self.walk_import_kind(import),
         }
@@ -130,26 +130,29 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
         }
     }
 
-    fn walk_class_declaration(&mut self, class: &mut ClassDeclaration) {
-        todo!("Implement class declaration");
-        self.visit_class_declaration(class);
+    fn walk_struct_declaration(&mut self, _struct: &mut StructDeclaration) {
+        self.visit_struct_declaration(_struct);
 
-        // self.push_scope(ScopeType::Class(class.name.clone()));
+        self.push_scope(ScopeType::Struct(_struct.id));
 
-        for generic in &mut class.generics {
+        for generic in &mut _struct.generics {
             self.walk_generic_parameter(generic);
         }
 
-        for field in &mut class.fields {
-            self.walk_class_field(field);
+        for field in &mut _struct.fields {
+            self.walk_struct_field(field);
+        }
+
+        for item in &mut _struct.methods {
+            self.walk_item(item);
         }
 
         self.pop_scope();
     }
 
-    fn walk_class_field(&mut self, field: &mut ClassField) {
-        self.visit_class_field(field);
-        self.walk_type(&mut field.field_type);
+    fn walk_struct_field(&mut self, field: &mut StructField) {
+        self.visit_struct_field(field);
+        self.walk_type(&mut field.ty);
 
         for attr in &mut field.attributes {
             self.walk_attribute(attr);
@@ -194,9 +197,9 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
                     self.walk_type(ty);
                 }
             }
-            EnumVariantData::Class(fields) => {
+            EnumVariantData::Struct(fields) => {
                 for field in fields {
-                    self.walk_class_field(field);
+                    self.walk_struct_field(field);
                 }
             }
         }
@@ -244,7 +247,7 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
             ExprKind::Paren(expr) => {
                 self.walk_expr(expr);
             }
-            ExprKind::Call { callee, args } => {
+            ExprKind::Call { callee, args, .. } => {
                 self.visit_function_call(callee, args);
                 for arg in args {
                     self.walk_expr(arg);
@@ -258,6 +261,12 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
             ExprKind::IndexAccess(expr, index) => {
                 self.walk_expr(expr);
                 self.walk_expr(index);
+            }
+            ExprKind::StructInit { fields, name } => {
+                self.visit_struct_init(name, fields);
+                for field in fields.values_mut() {
+                    self.walk_expr(field);
+                }
             }
             ExprKind::CouldntParse(_) => {}
         }
@@ -402,8 +411,8 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
     fn visit_parameter(&mut self, _param: &mut Parameter) {}
     fn visit_parameter_kind(&mut self, _kind: &mut ParameterKind) {}
     fn visit_attribute(&mut self, _attr: &mut Attribute) {}
-    fn visit_class_declaration(&mut self, _class: &mut ClassDeclaration) {}
-    fn visit_class_field(&mut self, _field: &mut ClassField) {}
+    fn visit_struct_declaration(&mut self, _struct: &mut StructDeclaration) {}
+    fn visit_struct_field(&mut self, _field: &mut StructField) {}
     fn visit_enum_declaration(&mut self, _enum_decl: &mut EnumDeclaration) {}
     fn visit_enum_variant(&mut self, _variant: &mut EnumVariant) {}
     fn visit_enum_variant_data(&mut self, _data: &mut EnumVariantData) {}
@@ -429,6 +438,7 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
     fn visit_box(&mut self, _expr: &mut Expr) {}
     fn visit_assign(&mut self, _lhs: &mut Expr, _rhs: &mut Expr) {}
     fn visit_return(&mut self, _ret: &mut Return) {}
+    fn visit_struct_init(&mut self, _name: &mut Expr, _fields: &mut HashMap<Identifier, Expr>) {}
 }
 
 #[macro_export]

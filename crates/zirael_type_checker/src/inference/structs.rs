@@ -1,0 +1,105 @@
+use crate::TypeInference;
+use std::collections::HashMap;
+use zirael_parser::{AstWalker, Expr, ExprKind, SymbolId, SymbolKind, Type};
+use zirael_utils::ident_table::{Identifier, resolve};
+
+impl<'reports> TypeInference<'reports> {
+    fn unify_struct_generics(
+        &mut self,
+        struct_sym_id: SymbolId,
+        field_values: &mut HashMap<Identifier, Expr>,
+    ) -> Type {
+        let symbol = self.symbol_table.get_symbol_unchecked(&struct_sym_id);
+
+        if let SymbolKind::Struct { fields, generics } = &symbol.kind {
+            if generics.is_empty() {
+                return Type::Named { name: symbol.name, generics: vec![] };
+            }
+
+            let mut generic_mapping = HashMap::new();
+
+            for field in fields {
+                if let Some(mut expr) = field_values.get_mut(&field.name) {
+                    let field_type = &field.ty;
+                    let expr_type = self.infer_expr(&mut expr);
+
+                    // try to infer generic parameters by unifying the expected field type with the actual initializer type.
+                    self.infer_generic_types(field_type, &expr_type, &mut generic_mapping);
+                }
+            }
+
+            // For each generic parameter, use the inferred type if available, otherwise create a fresh type variable.
+            let concrete_generics = generics
+                .iter()
+                .map(|g| {
+                    if let Some(ty) = generic_mapping.get(&g.name) {
+                        ty.clone()
+                    } else {
+                        Type::TypeVariable { id: self.ctx.next_type_var_id(), name: g.name }
+                    }
+                })
+                .collect();
+
+            return Type::Named { name: symbol.name, generics: concrete_generics };
+        }
+
+        Type::Named { name: symbol.name, generics: vec![] }
+    }
+
+    pub fn infer_struct_init(
+        &mut self,
+        name_expr: &Expr,
+        fields: &mut HashMap<Identifier, Expr>,
+    ) -> Type {
+        let struct_sym_id = if let ExprKind::Identifier(_, Some(sym_id)) = &name_expr.kind {
+            *sym_id
+        } else {
+            return Type::Error;
+        };
+
+        let struct_type = self.unify_struct_generics(struct_sym_id, fields);
+
+        let symbol = self.symbol_table.get_symbol_unchecked(&struct_sym_id);
+        if let SymbolKind::Struct { fields: struct_fields, .. } = &symbol.kind {
+            for field in struct_fields {
+                if !fields.contains_key(&field.name) {
+                    self.error(
+                        &format!("missing field `{}`", resolve(&field.name)),
+                        vec![(
+                            format!("missing field `{}`", resolve(&field.name)),
+                            name_expr.span.clone(),
+                        )],
+                        vec![],
+                    );
+                }
+            }
+
+            for (field_name, field_expr) in fields {
+                if let Some(field) = struct_fields.iter().find(|f| &f.name == field_name) {
+                    let expr_type = self.infer_expr(field_expr);
+
+                    let field_type = if let Type::Named { generics, .. } = &struct_type {
+                        self.substitute_generic_params(&field.ty, &symbol.kind, generics)
+                    } else {
+                        field.ty.clone()
+                    };
+
+                    if !self.eq(&field_type, &expr_type) {
+                        self.type_mismatch(&field_type, &expr_type, field_expr.span.clone());
+                    }
+                } else {
+                    self.error(
+                        &format!("unknown field `{}`", resolve(field_name)),
+                        vec![(
+                            format!("unknown field `{}`", resolve(field_name)),
+                            field_expr.span.clone(),
+                        )],
+                        vec![],
+                    );
+                }
+            }
+        }
+
+        struct_type
+    }
+}

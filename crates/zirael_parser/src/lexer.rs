@@ -16,7 +16,7 @@ pub enum TokenKind {
     Bool(bool),
 
     #[token("fn", |_| Keyword::Fn)]
-    #[token("class", |_| Keyword::Class)]
+    #[token("struct", |_| Keyword::Struct)]
     #[token("enum", |_| Keyword::Enum)]
     #[token("import", |_| Keyword::Import)]
     #[token("var", |_| Keyword::Var)]

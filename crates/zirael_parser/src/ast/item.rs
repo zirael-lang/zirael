@@ -23,7 +23,7 @@ pub type AstId = Id<()>;
 #[derive(Debug, Clone, PartialEq)]
 pub enum ItemKind {
     Function(Function),
-    Class(ClassDeclaration),
+    Struct(StructDeclaration),
     Enum(EnumDeclaration),
     Import(ImportKind, Span),
 }
@@ -86,16 +86,19 @@ pub struct Attribute {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ClassDeclaration {
+pub struct StructDeclaration {
+    pub id: AstId,
     pub name: Identifier,
     pub generics: Vec<GenericParameter>,
-    pub fields: Vec<ClassField>,
+    pub fields: Vec<StructField>,
+    pub methods: Vec<Item>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ClassField {
+pub struct StructField {
     pub name: Identifier,
-    pub field_type: Type,
+    pub ty: Type,
     pub is_public: bool,
     pub attributes: Vec<Attribute>,
 }
@@ -118,5 +121,5 @@ pub struct EnumVariant {
 pub enum EnumVariantData {
     Unit,
     Tuple(Vec<Type>),
-    Class(Vec<ClassField>),
+    Struct(Vec<StructField>),
 }

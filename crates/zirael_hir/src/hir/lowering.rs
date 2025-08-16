@@ -182,11 +182,26 @@ impl<'reports> AstLowering<'reports> {
                 }
             }
 
-            ExprKind::Call { callee, args } => {
+            ExprKind::Call { callee, args, call_info } => {
                 let callee_expr = Box::new(self.lower_expr(callee));
                 let arg_exprs: Vec<HirExpr> =
                     args.iter_mut().map(|arg| self.lower_expr(arg)).collect();
-                HirExprKind::Call { callee: callee_expr, args: arg_exprs }
+                HirExprKind::Call {
+                    callee: callee_expr,
+                    args: arg_exprs,
+                    call_info: call_info.clone(),
+                }
+            }
+
+            ExprKind::StructInit { name, fields } => {
+                let name_expr = Box::new(self.lower_expr(name));
+
+                let mut fields_map = HashMap::new();
+                for (ident, mut val) in fields {
+                    fields_map.insert(*ident, self.lower_expr(&mut val));
+                }
+
+                HirExprKind::StructInit { name: name_expr, fields: fields_map }
             }
 
             ExprKind::FieldAccess(exprs) => {

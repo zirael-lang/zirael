@@ -7,7 +7,7 @@ use zirael_parser::Expr;
 impl<'reports> AstLowering<'reports> {
     /// Checks if an expression statement has no side effects and its result is unused.
     /// Such expressions are typically pointless as statements.
-    /// 
+    ///
     /// ```zr
     /// 5 + 3; <- pointless expression
     /// print(5); <- actually does something
@@ -21,7 +21,8 @@ impl<'reports> AstLowering<'reports> {
             | HirExprKind::Literal(_)
             | HirExprKind::Symbol(_)
             | HirExprKind::FieldAccess { .. }
-            | HirExprKind::IndexAccess { .. } => true,
+            | HirExprKind::IndexAccess { .. }
+            | HirExprKind::StructInit { .. } => true,
 
             HirExprKind::Assign { .. }
             | HirExprKind::Call { .. }

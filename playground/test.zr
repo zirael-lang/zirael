@@ -1,30 +1,16 @@
-import "div.zr"
-import "std"
-
-fn test(num: &uint) {}
+// Example test file for monomorphization
+fn identity<T>(value: T): T {
+    value
+}
 
 fn main() {
-    // Basic variable declarations
-    //var x = 42
-    //var y = 3.14
+    // These calls will cause monomorphization of the identity function with different types
+    var _int_value = identity(42);
+    var _str_value = identity("Hello, World!");
+    var _bool_value = identity(true);
 
-    // Move semantics
-    //var a = x  // x is moved to a, x cannot be used anymore
-    //var b = a  // a is moved to b
-
-    //var heap_num = box 100
-    //var heap_float = box 2.5
-
-    // Borrowing
-    //var num = 50
-    //var ref_num = &num     // Borrow num
-    //var another_ref = &num // Multiple borrows OK
-    //test(&num);
-
-    // Assignment
-    //var counter = 0
-    //counter = 10           // Simple assignment
-    //counter = counter + 5  // Use and reassign
-
-    var variable = div(10, 5);
+    // The compiler will generate three versions of the identity function:
+    // 1. identity_int(int) -> int
+    // 2. identity_str(char*) -> char*
+    // 3. identity_bool(bool) -> bool
 }

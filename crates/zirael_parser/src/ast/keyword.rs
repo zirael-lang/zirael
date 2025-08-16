@@ -7,7 +7,7 @@ pub enum Keyword {
     #[strum(props(category = "declaration"))]
     Fn,
     #[strum(props(category = "declaration"))]
-    Class,
+    Struct,
     #[strum(props(category = "declaration"))]
     Enum,
     #[strum(props(category = "declaration"))]
@@ -57,7 +57,7 @@ impl Keyword {
     pub const fn as_str(&self) -> &'static str {
         match self {
             Self::Fn => "fn",
-            Self::Class => "class",
+            Self::Struct => "struct",
             Self::Enum => "enum",
             Self::Import => "import",
             Self::Var => "var",
