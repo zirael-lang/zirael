@@ -1,22 +1,41 @@
 use crate::{
     codegen::{Codegen, Gen},
-    ir::{IrBlock, IrExpr, IrExprKind, IrItem, IrItemKind, IrModule, IrParam, IrStmt},
+    ir::{IrBlock, IrExpr, IrExprKind, IrFunction, IrItem, IrItemKind, IrModule, IrParam, IrStmt},
 };
 use itertools::Itertools;
+use std::path::PathBuf;
 use zirael_parser::{BinaryOp, Literal, Stmt, SymbolId, Type, UnaryOp};
-use zirael_utils::prelude::warn;
+use zirael_utils::prelude::{CompilationInfo, warn};
 
 pub fn run_codegen(
     modules: Vec<IrModule>,
-    name: String,
+    info: &CompilationInfo,
     mut order: Vec<SymbolId>,
+    used_externals: Vec<String>,
 ) -> anyhow::Result<()> {
-    let cg = &mut Codegen::new();
+    let header = &mut Codegen::new();
+    let implementation = &mut Codegen::new();
+    let header_file = PathBuf::from(info.name.clone()).with_extension("h");
 
-    cg.writeln("#include <stdlib.h>");
-    cg.writeln("#include <uchar.h>");
-    cg.writeln("#include <stdint.h>");
-    let module_items = modules.iter().map(|m| &m.items).flatten().collect::<Vec<_>>();
+    header.writeln("#include <stdlib.h>");
+    header.writeln("#include <uchar.h>");
+    header.writeln("#include <stdint.h>");
+
+    for module in &modules {
+        for item in &module.items {
+            item.generate_header(header);
+        }
+    }
+    header.writeln("");
+
+    implementation.writeln(&format!("#include \"{}\"", header_file.display()));
+    for external in used_externals {
+        let file = PathBuf::from(external.clone()).with_extension("h");
+        implementation.writeln(&format!("#include \"{}\"", file.display()));
+    }
+    implementation.writeln("");
+
+    let module_items = modules.iter().flat_map(|m| &m.items).collect::<Vec<_>>();
 
     if order.is_empty() {
         order = module_items.iter().map(|i| i.sym_id).collect_vec();
@@ -24,33 +43,51 @@ pub fn run_codegen(
 
     for id in order {
         let Some(item) = module_items.iter().find(|i| i.sym_id == id) else {
-            warn!("invalid id in codegen order");
             continue;
         };
-        item.generate(cg);
+        item.generate(implementation);
     }
 
-    cg.write_to_file(
-        dirs::cache_dir().unwrap().join("zirael-compiler").join(name).with_extension("c"),
-    )
+    fs_err::create_dir_all(&info.write_to)?;
+    fs_err::write(info.write_to.join(header_file), header.content.buffer())?;
+    fs_err::write(
+        info.write_to.join(info.name.clone()).with_extension("c"),
+        implementation.content.buffer(),
+    )?;
+
+    Ok(())
+}
+
+fn function_signature(func: &IrFunction, name: &str, p: &mut Codegen) {
+    func.return_type.generate(p);
+    p.write(" ");
+    p.write(name);
+
+    p.write("(");
+    for (i, param) in func.parameters.iter().enumerate() {
+        param.generate(p);
+        if i != func.parameters.len() - 1 {
+            p.write(", ");
+        }
+    }
+    p.write(")");
 }
 
 impl Gen for IrItem {
+    fn generate_header(&self, cg: &mut Codegen) {
+        match &self.kind {
+            IrItemKind::Function(func) => {
+                function_signature(func, self.name.as_str(), cg);
+                cg.writeln(";");
+                cg.newline();
+            }
+        }
+    }
+
     fn generate(&self, p: &mut Codegen) {
         match &self.kind {
             IrItemKind::Function(func) => {
-                func.return_type.generate(p);
-                p.write(" ");
-                p.write(self.name.as_str());
-                p.write("(");
-                for (i, param) in func.parameters.iter().enumerate() {
-                    param.generate(p);
-
-                    if i != func.parameters.len() - 1 {
-                        p.write(", ");
-                    }
-                }
-                p.write(")");
+                function_signature(func, self.name.as_str(), p);
 
                 if let Some(body) = &func.body {
                     if body.stmts.is_empty() {

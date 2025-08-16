@@ -1416,6 +1416,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "dirs",
+ "fs-err",
  "itertools",
  "zirael_hir",
  "zirael_parser",

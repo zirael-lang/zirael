@@ -94,7 +94,7 @@ impl<'reports> HirLowering<'reports> {
             HirItemKind::Function(func) => {
                 let hir_function = self.lower_function(func);
                 Some(IrItem {
-                    name: self.mangle_symbol(func.symbol_id),
+                    name: self.mangle_symbol(item.symbol_id),
                     kind: IrItemKind::Function(hir_function),
                     sym_id: item.symbol_id,
                 })

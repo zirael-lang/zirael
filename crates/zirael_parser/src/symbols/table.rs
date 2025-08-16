@@ -40,6 +40,7 @@ pub struct SymbolTableImpl {
     pub declaration_counter: usize,
     pub name_lookup: HashMap<(Identifier, ScopeId), SymbolId>,
     pub symbol_relations: SymbolRelations,
+    pub mangled_names: HashMap<SymbolId, String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -71,6 +72,7 @@ impl Default for SymbolTableImpl {
             name_lookup: HashMap::new(),
             symbol_relations: SymbolRelations::new(),
             current_traversal_scope: global_scope_id,
+            mangled_names: HashMap::new(),
         }
     }
 }
@@ -115,6 +117,7 @@ impl SymbolTable {
                 is_used: false,
                 declaration_order: table.declaration_counter,
                 imported_from: None,
+                canonical_symbol: id,
             });
 
             table.name_lookup.insert((name, current_scope), symbol_id);
@@ -343,11 +346,7 @@ impl SymbolTable {
                 }
                 _ => {
                     let base_name = resolve(&symbol.name);
-                    if table.needs_mangling(id) {
-                        format!("__zirael_{}_{}", base_name, symbol.scope.index())
-                    } else {
-                        base_name
-                    }
+                    format!("__zirael_{}", base_name)
                 }
             })
         })
@@ -451,6 +450,16 @@ impl SymbolTable {
     pub fn build_symbol_relations(&self) -> Result<Vec<SymbolId>> {
         self.read(|table| table.symbol_relations.build_graph())
     }
+
+    pub fn get_mangled_name(&self, id: SymbolId) -> Option<String> {
+        self.read(|table| table.mangled_names.get(&id).cloned())
+    }
+
+    pub fn add_mangled_name(&self, id: SymbolId, name: String) {
+        self.write(|table| {
+            table.mangled_names.insert(id, name);
+        })
+    }
 }
 
 impl SymbolTableImpl {
@@ -501,6 +510,7 @@ impl SymbolTableImpl {
             is_used: false,
             declaration_order: self.declaration_counter,
             imported_from: Some(source_module),
+            canonical_symbol: source_symbol_id,
         });
 
         self.name_lookup.insert((symbol_name, target_module), imported_symbol_id);
@@ -517,32 +527,6 @@ impl SymbolTableImpl {
             if !target_scope.imported_modules.contains(&source_module) {
                 target_scope.imported_modules.push(source_module);
             }
-        }
-    }
-
-    fn needs_mangling(&self, id: SymbolId) -> bool {
-        if let Some(symbol) = self.symbols.get(id) {
-            let name = symbol.name;
-            self.symbols.iter().any(|(other_id, other_symbol)| {
-                other_id != id
-                    && other_symbol.name == name
-                    && self.scopes_would_conflict_in_c(symbol.scope, other_symbol.scope)
-            })
-        } else {
-            false
-        }
-    }
-
-    fn scopes_would_conflict_in_c(&self, scope1: ScopeId, scope2: ScopeId) -> bool {
-        if let (Some(s1), Some(s2)) = (self.scopes_arena.get(scope1), self.scopes_arena.get(scope2))
-        {
-            match (&s1.scope_type, &s2.scope_type) {
-                (ScopeType::Global, _) | (_, ScopeType::Global) => true,
-                (ScopeType::Function(f1), ScopeType::Function(f2)) => f1 == f2,
-                _ => false,
-            }
-        } else {
-            false
         }
     }
 }

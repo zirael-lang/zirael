@@ -91,4 +91,5 @@ pub struct Symbol {
     pub is_used: bool,
     pub declaration_order: usize,
     pub imported_from: Option<ScopeId>,
+    pub canonical_symbol: SymbolId,
 }

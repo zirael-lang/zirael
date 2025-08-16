@@ -12,6 +12,7 @@ zirael_utils = { workspace = true }
 anyhow = { workspace = true }
 dirs = { workspace = true }
 itertools = { workspace = true }
+fs-err = { workspace = true }
 
 [lints]
 workspace = true

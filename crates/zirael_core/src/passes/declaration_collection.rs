@@ -13,6 +13,7 @@ use zirael_utils::{
 
 impl_ast_walker!(DeclarationCollection, {
     packages: Dependencies,
+    used_externals: Vec<String>
 });
 
 impl<'reports> DeclarationCollection<'reports> {
@@ -77,6 +78,8 @@ impl<'reports> DeclarationCollection<'reports> {
 
                         self.process_path_import(&path.with_extension("zr"), span, current_file_id);
                     }
+                    
+                    self.used_externals.push(name.to_string());
                 } else {
                     self.error(
                         &format!("couldn't find package: {}", name.dimmed().bold()),

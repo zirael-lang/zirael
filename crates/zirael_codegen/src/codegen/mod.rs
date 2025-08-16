@@ -9,6 +9,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+#[derive(Debug)]
 pub struct Codegen {
     content: BufWriter<Vec<u8>>,
     indent_level: usize,
@@ -77,5 +78,6 @@ impl Codegen {
 }
 
 pub trait Gen {
-    fn generate(&self, p: &mut Codegen);
+    fn generate_header(&self, cg: &mut Codegen) {}
+    fn generate(&self, cg: &mut Codegen);
 }

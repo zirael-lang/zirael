@@ -26,8 +26,8 @@ pub struct Cli {
         short = 'd',
         long = "packages",
         help = "Add packages that will be resolved by the compiler. \
-        Format: name:root=entrypoint \
-        Example: -d std:/path/to/std=./std/lib.zr \
+        Format: name:write_to=entrypoint \
+        Example: -d std:./std=./std/lib.zr \
         Order is important, because if one dependency depends on another, but it isn't compiled yet, the compiler will fail."
     )]
     packages: Vec<Dependency>,
@@ -51,6 +51,14 @@ pub struct Cli {
         default_value = "static"
     )]
     lib_type: LibType,
+
+    #[arg(
+        value_name = "output",
+        help = "Path where the codegen should be saved to",
+        long = "output",
+        short = 'o'
+    )]
+    output: PathBuf,
 }
 
 pub const CLAP_STYLING: Styles = Styles::styled()
@@ -67,6 +75,7 @@ pub fn try_cli() -> Result<()> {
     setup_logger(cli.verbose, false);
 
     let mut context = Context::new();
+    let write_to = cli.output;
 
     for dep in &cli.packages {
         if context.packages().contains(&dep) {
@@ -81,7 +90,12 @@ pub fn try_cli() -> Result<()> {
         let mut unit = CompilationUnit::new(
             file,
             context.clone(),
-            CompilationInfo { mode: cli.mode, name: dep.name.clone(), root: dep.root.clone() },
+            CompilationInfo {
+                mode: cli.mode,
+                name: dep.name.clone(),
+                root: dep.root.clone(),
+                write_to: write_to.clone(),
+            },
         );
         unit.compile()?;
     }
@@ -112,7 +126,12 @@ pub fn try_cli() -> Result<()> {
     let mut unit = CompilationUnit::new(
         file,
         context.clone(),
-        CompilationInfo { mode: cli.mode, name: cli.name.clone(), root },
+        CompilationInfo {
+            mode: cli.mode,
+            name: cli.name.clone(),
+            root,
+            write_to: write_to.clone(),
+        },
     );
     unit.compile()?;
 

@@ -6,13 +6,6 @@ use zirael_codegen::{codegen::run_codegen, ir::lower_hir_to_ir};
 use zirael_hir::hir::lowering::lower_ast_to_hir;
 use zirael_type_checker::TypeInference;
 
-#[derive(Debug, Clone)]
-pub struct CompilationInfo {
-    pub mode: Mode,
-    pub root: PathBuf,
-    pub name: String,
-}
-
 #[derive(Debug)]
 pub struct CompilationUnit<'ctx> {
     pub entry_point: SourceFileId,
@@ -34,13 +27,14 @@ impl<'ctx> CompilationUnit<'ctx> {
         let mut result = determine_lexed_modules(self.entry_point, sources, reports);
         self.module_graph = result.dependency_graph;
 
-        DeclarationCollection::new_no_defaults(
+        let decl = &mut DeclarationCollection::new_no_defaults(
             symbols,
             reports,
             sources,
             self.context.packages().clone(),
-        )
-        .collect(&mut result.modules);
+            vec![],
+        );
+        decl.collect(&mut result.modules);
         NameResolution::new(symbols, reports, sources).walk_modules(&mut result.modules);
         reports.print(sources);
 
@@ -49,8 +43,6 @@ impl<'ctx> CompilationUnit<'ctx> {
         reports.print(sources);
 
         let mut hir = lower_ast_to_hir(&mut result.modules, symbols, reports, sources);
-        // TODO: optimizations on HIR
-
         let ir = lower_hir_to_ir(
             &mut hir,
             symbols,
@@ -62,6 +54,8 @@ impl<'ctx> CompilationUnit<'ctx> {
         reports.print(sources);
 
         let order = symbols.build_symbol_relations()?;
-        run_codegen(ir, self.info.name.clone(), order)
+        let result = run_codegen(ir, &self.info, order, decl.used_externals.clone());
+
+        Ok(())
     }
 }

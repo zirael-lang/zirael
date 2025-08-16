@@ -11,17 +11,21 @@ impl<'reports> HirLowering<'reports> {
         if self.mode == Mode::Debug {
             self.symbol_table.get_c_identifier(sym_id).unwrap()
         } else {
-            let mut result = String::from("_ZN");
             let symbol = self.symbol_table.get_symbol_unchecked(&sym_id);
-            let symbol_name = resolve(&symbol.name);
-            let symbol_file = if let Some(imported_from) = symbol.imported_from {
-                imported_from
-            } else {
-                symbol.scope
-            };
-            let symbol_file = self.symbol_table.get_symbol_module(symbol_file).unwrap();
+            let canonical_id = symbol.canonical_symbol;
+
+            if let Some(mangled) = self.symbol_table.get_mangled_name(canonical_id) {
+                return mangled;
+            }
+
+            let canonical_symbol = self.symbol_table.get_symbol_unchecked(&canonical_id);
+            let symbol_name = resolve(&canonical_symbol.name);
+
+            let symbol_file = self.symbol_table.get_symbol_module(canonical_symbol.scope).unwrap();
             let file_path = self.sources.get_unchecked(symbol_file).path();
             let base_path = strip_same_root(file_path, self.root.clone()).with_extension("");
+
+            let mut result = String::from("_ZN");
             result.push_str(&format!("{}{}", symbol_name.len(), symbol_name));
 
             for component in base_path.components() {
@@ -33,11 +37,11 @@ impl<'reports> HirLowering<'reports> {
             let mut hasher = DefaultHasher::new();
             symbol_name.hash(&mut hasher);
             let hash = format!("{:x}", hasher.finish());
-
             result.push('h');
             result.push_str(&hash);
             result.push('E');
 
+            self.symbol_table.add_mangled_name(canonical_id, result.clone());
             result
         }
     }
