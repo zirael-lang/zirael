@@ -13,14 +13,38 @@ pub struct HirExpr {
 pub enum HirExprKind {
     Literal(Literal),
     Symbol(SymbolId),
-    Binary { left: Box<HirExpr>, op: BinaryOp, right: Box<HirExpr> },
-    Unary { op: UnaryOp, operand: Box<HirExpr> },
+    Binary {
+        left: Box<HirExpr>,
+        op: BinaryOp,
+        right: Box<HirExpr>,
+    },
+    Unary {
+        op: UnaryOp,
+        operand: Box<HirExpr>,
+    },
     Block(Vec<HirStmt>),
-    Assign { lhs: Box<HirExpr>, rhs: Box<HirExpr> },
-    Call { callee: Box<HirExpr>, args: Vec<HirExpr>, call_info: Option<CallInfo> },
-    StructInit { name: Box<HirExpr>, fields: HashMap<Identifier, HirExpr> },
-    FieldAccess { receiver: Box<HirExpr>, field_symbol: SymbolId },
-    IndexAccess { object: Box<HirExpr>, index: Box<HirExpr> },
+    Assign {
+        lhs: Box<HirExpr>,
+        rhs: Box<HirExpr>,
+    },
+    Call {
+        callee: Box<HirExpr>,
+        args: Vec<HirExpr>,
+        call_info: Option<CallInfo>,
+    },
+    StructInit {
+        name: Box<HirExpr>,
+        fields: HashMap<Identifier, HirExpr>,
+        call_info: Option<CallInfo>,
+    },
+    FieldAccess {
+        receiver: Box<HirExpr>,
+        field_symbol: SymbolId,
+    },
+    IndexAccess {
+        object: Box<HirExpr>,
+        index: Box<HirExpr>,
+    },
     Error,
 }
 

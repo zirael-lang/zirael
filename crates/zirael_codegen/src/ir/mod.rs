@@ -3,6 +3,7 @@ mod lowering;
 mod mangling;
 mod monomorphization;
 
+use std::collections::HashMap;
 use zirael_parser::{BinaryOp, Literal, SymbolId, Type, UnaryOp};
 
 pub use lowering::*;
@@ -23,10 +24,12 @@ pub struct IrItem {
 #[derive(Clone, Debug)]
 pub enum IrItemKind {
     Function(IrFunction),
+    Struct(IrStruct),
 }
 
 #[derive(Clone, Debug)]
 pub struct IrFunction {
+    pub name: String,
     pub parameters: Vec<IrParam>,
     pub return_type: Type,
     pub body: Option<IrBlock>,
@@ -34,6 +37,19 @@ pub struct IrFunction {
     pub is_const: bool,
     pub is_extern: bool,
     pub abi: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct IrStruct {
+    pub name: String,
+    pub fields: Vec<IrField>,
+    pub methods: Vec<IrFunction>,
+}
+
+#[derive(Clone, Debug)]
+pub struct IrField {
+    pub name: String,
+    pub ty: Type,
 }
 
 #[derive(Debug, Clone)]
@@ -78,6 +94,7 @@ pub enum IrExprKind {
     Block(IrBlock),
     Literal(Literal),
     Call(String, Vec<IrExpr>),
+    StructInit(String, HashMap<String, IrExpr>),
     Assign(Box<IrExpr>, Box<IrExpr>),
     Unary(UnaryOp, Box<IrExpr>),
     Binary(Box<IrExpr>, BinaryOp, Box<IrExpr>),

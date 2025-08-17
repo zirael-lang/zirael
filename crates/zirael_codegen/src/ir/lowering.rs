@@ -1,12 +1,16 @@
 use crate::ir::{
-    IrBlock, IrExpr, IrExprKind, IrFunction, IrItem, IrItemKind, IrModule, IrParam, IrStmt,
+    IrBlock, IrExpr, IrExprKind, IrField, IrFunction, IrItem, IrItemKind, IrModule, IrParam,
+    IrStmt, IrStruct,
 };
-use std::path::PathBuf;
+use itertools::Itertools;
+use std::{collections::HashMap, path::PathBuf};
 use zirael_hir::hir::{
-    HirBody, HirFunction, HirItem, HirItemKind, HirModule,
+    HirBody, HirFunction, HirItem, HirItemKind, HirModule, HirStruct,
     expr::{HirExpr, HirExprKind, HirStmt},
 };
-use zirael_parser::{AstId, DropStackEntry, ScopeType, SymbolKind, SymbolTable, Type, UnaryOp};
+use zirael_parser::{
+    AstId, DropStackEntry, Scope, ScopeType, SymbolKind, SymbolTable, Type, UnaryOp,
+};
 use zirael_type_checker::MonomorphizationTable;
 use zirael_utils::prelude::{
     Colorize as _, Mode, ReportBuilder, ReportKind, Reports, SourceFileId, Sources, debug, resolve,
@@ -68,6 +72,13 @@ impl<'reports> HirLowering<'reports> {
         self.symbol_table.get_scope_unchecked(pop).drop_stack
     }
 
+    pub fn lower_type(&self, ty: Type) -> Type {
+        match ty {
+            Type::MonomorphizedSymbol(sym) => self.handle_monomorphized_symbol(&sym, true),
+            _ => ty,
+        }
+    }
+
     fn lower_module(&mut self, lexed_module: &mut HirModule) -> IrModule {
         let mut ir_module = IrModule { items: vec![], mono_items: vec![] };
 
@@ -90,32 +101,62 @@ impl<'reports> HirLowering<'reports> {
 
     fn lower_item(&mut self, item: &mut HirItem) -> Option<IrItem> {
         let sym = self.symbol_table.get_symbol_unchecked(&item.symbol_id);
+        let name = self.mangle_symbol(item.symbol_id);
 
         match &mut item.kind {
             HirItemKind::Function(func) => {
-                if let SymbolKind::Function { .. } = &sym.kind {
-                    let hir_function = self.lower_function(func);
+                let ir_function = self.lower_function(name.clone(), func);
 
-                    Some(IrItem {
-                        name: self.mangle_symbol(item.symbol_id),
-                        kind: IrItemKind::Function(hir_function),
-                        sym_id: item.symbol_id,
-                    })
-                } else {
-                    None
-                }
+                Some(IrItem {
+                    name,
+                    kind: IrItemKind::Function(ir_function),
+                    sym_id: item.symbol_id,
+                })
             }
-            _ => None,
+            HirItemKind::Struct(hir_struct) => {
+                let ir_struct = self.lower_struct(name.clone(), hir_struct);
+                Some(IrItem { name, kind: IrItemKind::Struct(ir_struct), sym_id: item.symbol_id })
+            }
+            _ => todo!(),
         }
     }
 
-    fn lower_function(&mut self, func: &mut HirFunction) -> IrFunction {
+    fn lower_struct(&mut self, name: String, hir_struct: &mut HirStruct) -> IrStruct {
+        self.push_scope(ScopeType::Struct(hir_struct.id));
+
+        let mut items = vec![];
+        for item in hir_struct.methods.iter_mut() {
+            if let HirItemKind::Function(func) = &mut item.kind {
+                let name = self.mangle_symbol(item.symbol_id);
+                items.push(self.lower_function(name, func));
+            }
+        }
+
+        self.pop_scope();
+        IrStruct {
+            fields: hir_struct
+                .fields
+                .iter()
+                .map(|field| IrField {
+                    name: resolve(&field.name),
+                    ty: self.lower_type(field.ty.clone()),
+                })
+                .collect_vec(),
+            methods: items,
+            name,
+        }
+    }
+
+    fn lower_function(&mut self, name: String, func: &mut HirFunction) -> IrFunction {
         self.push_scope(ScopeType::Function(func.id));
         let parameters = func
             .signature
             .parameters
             .iter()
-            .map(|p| IrParam { name: self.mangle_symbol(p.symbol_id), ty: p.ty.clone() })
+            .map(|p| IrParam {
+                name: self.mangle_symbol(p.symbol_id),
+                ty: self.lower_type(p.ty.clone()),
+            })
             .collect::<Vec<_>>();
 
         let mut body = self.lower_body(func.body.clone());
@@ -125,8 +166,9 @@ impl<'reports> HirLowering<'reports> {
         }
 
         IrFunction {
+            name,
             parameters,
-            return_type: func.signature.return_type.clone(),
+            return_type: self.lower_type(func.signature.return_type.clone()),
             body,
             is_extern: func.is_extern,
             is_const: func.is_const,
@@ -145,18 +187,19 @@ impl<'reports> HirLowering<'reports> {
         }
     }
 
-    fn heap_variable(&self, name: String, ty: Type) -> IrStmt {
+    fn heap_variable(&mut self, name: String, ty: Type) -> IrStmt {
+        let lowered_ty = self.lower_type(ty.clone());
         IrStmt::Var(
             name,
             IrExpr::new(
-                Type::Pointer(Box::new(ty.clone())),
+                self.lower_type(Type::Pointer(Box::new(ty.clone()))),
                 IrExprKind::CCall(
                     "malloc".to_owned(),
                     vec![IrExpr::new(
-                        Type::Int,
+                        self.lower_type(Type::Int),
                         IrExprKind::CCall(
                             "sizeof".to_owned(),
-                            vec![IrExpr::new(ty.clone(), IrExprKind::Type(ty))],
+                            vec![IrExpr::new(lowered_ty.clone(), IrExprKind::Type(lowered_ty))],
                         ),
                     )],
                 ),
@@ -166,13 +209,16 @@ impl<'reports> HirLowering<'reports> {
 
     fn after_heap_assigment(&mut self, name: String, expr: IrExpr) -> IrStmt {
         IrStmt::Expr(IrExpr::new(
-            expr.ty.clone(),
+            self.lower_type(expr.ty.clone()),
             IrExprKind::Assign(
                 Box::new(IrExpr::new(
-                    Type::Inferred,
+                    self.lower_type(Type::Inferred),
                     IrExprKind::Unary(
                         UnaryOp::Deref,
-                        Box::new(IrExpr::new(expr.ty.clone(), IrExprKind::Symbol(name.clone()))),
+                        Box::new(IrExpr::new(
+                            self.lower_type(expr.ty.clone()),
+                            IrExprKind::Symbol(name.clone()),
+                        )),
                     ),
                 )),
                 Box::new(expr),
@@ -250,7 +296,7 @@ impl<'reports> HirLowering<'reports> {
             HirExprKind::Call { callee, args, call_info } => {
                 let identifier = if let Some(call_info) = call_info {
                     if let Some(mono_id) = call_info.monomorphized_id {
-                        self.get_monomorphized_function_name(mono_id)
+                        self.get_monomorphized_name(mono_id)
                     } else {
                         self.mangle_symbol(call_info.original_symbol)
                     }
@@ -263,6 +309,27 @@ impl<'reports> HirLowering<'reports> {
                 let args = args.iter().map(|arg| self.lower_expr(arg.clone())).collect::<Vec<_>>();
 
                 IrExprKind::Call(identifier, args)
+            }
+            HirExprKind::StructInit { name, fields, call_info } => {
+                // TODO: remove duplicated code
+                let constructor_identifier = if let Some(call_info) = call_info {
+                    if let Some(mono_id) = call_info.monomorphized_id {
+                        self.get_monomorphized_name(mono_id)
+                    } else {
+                        self.mangle_symbol(call_info.original_symbol)
+                    }
+                } else if let HirExprKind::Symbol(id) = name.kind {
+                    self.mangle_symbol(id)
+                } else {
+                    unreachable!("Invalid struct init expression structure")
+                };
+
+                let mut new_fields = HashMap::new();
+                for (ident, expr) in fields {
+                    new_fields.insert(resolve(&ident), self.lower_expr(expr.clone()));
+                }
+
+                IrExprKind::StructInit(constructor_identifier, new_fields)
             }
             HirExprKind::Assign { lhs, rhs } => {
                 let lhs = self.lower_expr(*lhs);
@@ -282,6 +349,6 @@ impl<'reports> HirLowering<'reports> {
             _ => IrExprKind::Symbol(String::new()),
         };
 
-        IrExpr { ty: expr.ty, kind }
+        IrExpr { ty: self.lower_type(expr.ty), kind }
     }
 }

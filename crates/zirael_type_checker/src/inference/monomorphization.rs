@@ -14,6 +14,12 @@ pub struct MonomorphizationTable {
     pub entries: HashMap<MonomorphizationId, MonomorphizationEntry>,
 }
 
+impl MonomorphizationTable {
+    pub fn get_entry(&self, id: MonomorphizationId) -> &MonomorphizationEntry {
+        self.entries.get(&id).unwrap()
+    }
+}
+
 impl<'reports> TypeInference<'reports> {
     pub fn record_monomorphization(
         &mut self,
@@ -39,13 +45,46 @@ impl<'reports> TypeInference<'reports> {
         );
     }
 
-    pub(crate) fn record_monomorphization_with_id(
+    pub fn record_monomorphization_with_id(
         &mut self,
         symbol_id: SymbolId,
         concrete_types: &HashMap<Identifier, Type>,
     ) -> MonomorphizationId {
+        let candidate_ids: Vec<_> = self
+            .mono_table
+            .entries
+            .iter()
+            .filter(|(_, entry)| entry.original_id == symbol_id)
+            .map(|(id, _)| *id)
+            .collect();
+        for id in candidate_ids {
+            let entry = self.mono_table.entries[&id].clone();
+            let mut fields_eq = true;
+            for (name, value) in &entry.concrete_types {
+                let Some(other) = concrete_types.get(name) else {
+                    fields_eq = false;
+                    break;
+                };
+                if !self.eq(value, other) {
+                    fields_eq = false;
+                    break;
+                }
+            }
+            for (name, value) in concrete_types {
+                let Some(other) = entry.concrete_types.get(name) else {
+                    fields_eq = false;
+                    break;
+                };
+                if !self.eq(value, other) {
+                    fields_eq = false;
+                    break;
+                }
+            }
+            if fields_eq {
+                return id;
+            }
+        }
         let mono_id = self.next_monomorphization_id();
-
         self.record_monomorphization(symbol_id, concrete_types, mono_id);
         mono_id
     }

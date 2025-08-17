@@ -7,14 +7,14 @@ _default:
     @just --list -u
 
 fix:
-    cargo clippy --workspace --fix --allow-staged --no-deps
+    cargo clippy --workspace --fix --allow-staged --no-deps --allow-dirty
     just fmt
     just check
     just lint
     git status
 
 check:
-    cargo check --workspace --all-features --all-targets
+    cargo check --workspace --all-features --all-targets --allow-dirty
 
 lint:
     cargo clippy --workspace --all-targets --all-features --fix --allow-dirty -- --deny warnings
@@ -25,4 +25,4 @@ fmt:
     dprint fmt
 
 comp-run args='':
-    cargo run -p zirael playground/test.zr {{ args }} --name playground -o playground/build -m release
+    cargo run -p zirael playground/test.zr {{ args }} --name playground -o playground/build

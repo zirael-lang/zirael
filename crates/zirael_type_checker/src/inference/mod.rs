@@ -7,7 +7,7 @@ mod substitution;
 
 use crate::{MonomorphizationTable, inference::ctx::TypeInferenceContext};
 use id_arena::Arena;
-use zirael_parser::*;
+use zirael_parser::{ast::monomorphized_symbol::MonomorphizedSymbol, *};
 use zirael_utils::prelude::*;
 
 impl_ast_walker!(TypeInference, {
@@ -17,10 +17,37 @@ impl_ast_walker!(TypeInference, {
 });
 
 impl<'reports> TypeInference<'reports> {
+    pub fn try_monomorphize_named_type(&mut self, ty: Type) -> Type {
+        if let Type::Named { name, generics } = &ty {
+            if let Some(symbol) = self.symbol_table.lookup_symbol(name) {
+                if let SymbolKind::Struct { generics: generic_params, .. } = &symbol.kind {
+                    let all_concrete = generics
+                        .iter()
+                        .all(|g| !matches!(g, Type::TypeVariable { .. } | Type::Inferred));
+                    if all_concrete && !generic_params.is_empty() {
+                        let mut generic_map = HashMap::new();
+                        for (g, ty) in generic_params.iter().zip(generics.iter()) {
+                            generic_map.insert(g.name, ty.clone());
+                        }
+                        let monomorphized_id =
+                            self.record_monomorphization_with_id(symbol.id, &generic_map);
+                        return Type::MonomorphizedSymbol(MonomorphizedSymbol {
+                            id: monomorphized_id,
+                            display_ty: Box::new(ty),
+                        });
+                    }
+                }
+            }
+        }
+        ty
+    }
+
     pub fn eq(&mut self, left: &Type, right: &Type) -> bool {
         let empty_map = HashMap::new();
-        let left_sub = self.substitute_type_with_map(left, &empty_map);
-        let right_sub = self.substitute_type_with_map(right, &empty_map);
+        let left_sub =
+            self.try_monomorphize_named_type(self.substitute_type_with_map(left, &empty_map));
+        let right_sub =
+            self.try_monomorphize_named_type(self.substitute_type_with_map(right, &empty_map));
         self.structural_eq(&left_sub, &right_sub)
     }
 
@@ -67,6 +94,20 @@ impl<'reports> TypeInference<'reports> {
 
             (Type::Inferred, Type::Inferred) | (Type::Error, _) | (_, Type::Error) => true,
 
+            (Type::MonomorphizedSymbol(sym), Type::MonomorphizedSymbol(sym2)) => {
+                let mono1 = self.mono_table.get_entry(sym.id).clone();
+                let mono2 = self.mono_table.get_entry(sym2.id).clone();
+
+                let mut fields_eq = true;
+                for (name, value) in &mono1.concrete_types {
+                    let Some(mono2) = mono2.concrete_types.get(&name) else { return false };
+
+                    fields_eq = self.eq(&value, &mono2)
+                }
+
+                mono1.original_id == mono2.original_id && fields_eq
+            }
+
             _ => false,
         }
     }
@@ -112,7 +153,8 @@ impl<'reports> TypeInference<'reports> {
 
 impl<'reports> AstWalker<'reports> for TypeInference<'reports> {
     fn walk_expr(&mut self, expr: &mut Expr) {
-        self.infer_expr(expr);
+        let ty = self.infer_expr(expr);
+        expr.ty = self.try_monomorphize_named_type(ty);
     }
 
     fn visit_var_decl(&mut self, _var_decl: &mut VarDecl) {
@@ -135,15 +177,16 @@ impl<'reports> AstWalker<'reports> for TypeInference<'reports> {
             HashMap::new()
         };
 
-        for param in &func.signature.parameters {
+        for param in &mut func.signature.parameters {
             if let Some(param_id) = param.symbol_id {
                 let param_type = if !generic_type_vars.is_empty() {
                     self.substitute_type_variables(&param.ty, &generic_type_vars)
                 } else {
                     param.ty.clone()
                 };
-
-                self.ctx.add_variable(param_id, param_type);
+                let mono_type = self.try_monomorphize_named_type(param_type);
+                param.ty = mono_type.clone();
+                self.ctx.add_variable(param_id, mono_type);
             }
         }
 

@@ -338,6 +338,7 @@ impl<'a> Parser<'a> {
                     start_span.clone(),
                     expr_id,
                 )),
+                call_info: None,
                 fields,
             },
             start_span.to(end_span),

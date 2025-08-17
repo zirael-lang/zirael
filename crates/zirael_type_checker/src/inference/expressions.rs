@@ -9,6 +9,7 @@ use zirael_utils::prelude::{Colorize, Identifier, Span, resolve, warn};
 impl<'reports> TypeInference<'reports> {
     fn expect_type(&mut self, expected: &Type, actual: &Type, span: &Span, context: &str) -> bool {
         if !self.eq(expected, actual) {
+            println!("{:#?} {:#?}", expected, actual);
             self.error(
                 &format!(
                     "type mismatch in {}: expected {}, found {}",
@@ -41,7 +42,10 @@ impl<'reports> TypeInference<'reports> {
         let mut valid = true;
         for (i, (arg, param_type)) in args.iter_mut().zip(params.iter()).enumerate() {
             let arg_type = self.infer_expr(arg);
-            if !self.expect_type(param_type, &arg_type, &arg.span, &format!("argument {}", i + 1)) {
+            let mono_type = self.try_monomorphize_named_type(arg_type);
+            arg.ty = mono_type.clone();
+            if !self.expect_type(param_type, &mono_type, &arg.span, &format!("argument {}", i + 1))
+            {
                 valid = false;
             }
         }
@@ -58,7 +62,9 @@ impl<'reports> TypeInference<'reports> {
             ExprKind::Binary { left, op, right } => self.infer_binary(left, op, right),
             ExprKind::Call { callee, args, call_info } => self.infer_call(callee, args, call_info),
             ExprKind::Paren(expr) => self.infer_expr(expr),
-            ExprKind::StructInit { name, fields } => self.infer_struct_init(name, fields),
+            ExprKind::StructInit { name, fields, call_info } => {
+                self.infer_struct_init(name, fields, call_info)
+            }
             _ => {
                 warn!("unimplemented expr: {:#?}", expr);
                 Type::Error
@@ -251,9 +257,11 @@ impl<'reports> TypeInference<'reports> {
                     args.iter_mut().zip(signature.parameters.iter()).enumerate()
                 {
                     let arg_type = self.infer_expr(arg);
+                    let mono_type = self.try_monomorphize_named_type(arg_type);
+                    arg.ty = mono_type.clone();
                     // we try to bind generic parameters to actual argument types.
                     if !signature.generics.is_empty() {
-                        self.infer_generic_types(&param.ty, &arg_type, &mut generic_mapping);
+                        self.infer_generic_types(&param.ty, &mono_type, &mut generic_mapping);
                     }
                     let param_type = if !generic_mapping.is_empty() {
                         self.substitute_type_with_map(&param.ty, &generic_mapping)
@@ -262,7 +270,7 @@ impl<'reports> TypeInference<'reports> {
                     };
                     if !self.expect_type(
                         &param_type,
-                        &arg_type,
+                        &mono_type,
                         &arg.span,
                         &format!("argument {}", i + 1),
                     ) {

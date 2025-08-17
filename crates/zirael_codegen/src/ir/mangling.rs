@@ -3,7 +3,7 @@ use std::hash::{DefaultHasher, Hash as _, Hasher as _};
 use zirael_parser::{SymbolId, Type};
 use zirael_utils::{
     ident_table::resolve,
-    prelude::{Mode, strip_same_root},
+    prelude::{Mode, strip_same_root, warn},
 };
 
 impl<'reports> HirLowering<'reports> {
@@ -46,7 +46,7 @@ impl<'reports> HirLowering<'reports> {
         }
     }
 
-    pub fn mangle_monomorphized_function(
+    pub fn mangle_monomorphized_symbol(
         &self,
         original_sym_id: SymbolId,
         type_arguments: &[Type],
@@ -137,7 +137,14 @@ impl<'reports> HirLowering<'reports> {
                     .join("_");
                 format!("fn_{}__ret_{}", param_names, self.mangle_type_for_name(return_type))
             }
-            _ => "unknown".to_owned(),
+            Type::MonomorphizedSymbol(mono) => {
+                let mono = self.handle_monomorphized_symbol(mono, false);
+                self.mangle_type_for_name(&mono)
+            }
+            _ => {
+                warn!("unknown type for mangling: {:?}", ty);
+                "unknown".to_owned()
+            }
         }
     }
 

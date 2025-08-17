@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 pub trait SpanUtils {
     fn to_start(&self) -> Range<usize>;
     fn to_end(&self) -> Range<usize>;

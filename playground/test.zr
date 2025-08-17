@@ -1,16 +1,22 @@
-// Example test file for monomorphization
-fn identity<T>(value: T): T {
-    value
+struct Pair<T, U> {
+    first: T,
+    second: U,
+}
+
+fn identity<T>(x: T): T {
+    x
+}
+
+fn test(arg: Pair<int, int>) {
+
 }
 
 fn main() {
-    // These calls will cause monomorphization of the identity function with different types
-    var _int_value = identity(42);
-    var _str_value = identity("Hello, World!");
-    var _bool_value = identity(true);
+    var _int_pair = Pair { first: 10, second: 20 };
+    var _str_int_pair = Pair { first: "wiek", second: 25 };
 
-    // The compiler will generate three versions of the identity function:
-    // 1. identity_int(int) -> int
-    // 2. identity_str(char*) -> char*
-    // 3. identity_bool(bool) -> bool
+    var _num = identity(Pair { first: true, second: "tak" });
+    var _text = identity("hello");
+
+    test(Pair { first: 10, second: 20 });
 }

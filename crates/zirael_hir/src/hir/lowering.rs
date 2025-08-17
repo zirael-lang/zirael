@@ -1,6 +1,6 @@
 use crate::hir::{
     ExprContext, HirBody, HirFunction, HirFunctionSignature, HirItem, HirItemKind, HirModule,
-    HirParam,
+    HirParam, HirStruct,
     expr::{HirExpr, HirExprKind, HirStmt},
 };
 use std::{collections::HashMap, ops::Range};
@@ -73,8 +73,34 @@ impl<'reports> AstLowering<'reports> {
                     span: item.span.clone(),
                 })
             }
-            _ => None,
+            ItemKind::Struct(struct_def) => {
+                self.push_scope(ScopeType::Struct(struct_def.id));
+                let hir_struct = self.lower_struct(struct_def, symbol_id);
+                self.pop_scope();
+                Some(HirItem {
+                    symbol_id,
+                    kind: HirItemKind::Struct(hir_struct),
+                    span: item.span.clone(),
+                })
+            }
+            ItemKind::Import(..) => None,
+            _ => unimplemented!("Unimplemented item kind: {:?}", item),
         }
+    }
+
+    fn lower_struct(
+        &mut self,
+        struct_def: &mut StructDeclaration,
+        symbol_id: SymbolId,
+    ) -> HirStruct {
+        let mut methods = vec![];
+        for method in &mut struct_def.methods {
+            if let Some(item) = self.lower_item(method) {
+                methods.push(item);
+            }
+        }
+
+        HirStruct { id: struct_def.id, symbol_id, fields: struct_def.fields.clone(), methods }
     }
 
     fn lower_function(&mut self, func: &mut Function, symbol_id: SymbolId) -> HirFunction {
@@ -190,7 +216,7 @@ impl<'reports> AstLowering<'reports> {
                 }
             }
 
-            ExprKind::StructInit { name, fields } => {
+            ExprKind::StructInit { name, fields, call_info } => {
                 let name_expr = Box::new(self.lower_expr(name));
 
                 let mut fields_map = HashMap::new();
@@ -198,7 +224,11 @@ impl<'reports> AstLowering<'reports> {
                     fields_map.insert(*ident, self.lower_expr(val));
                 }
 
-                HirExprKind::StructInit { name: name_expr, fields: fields_map }
+                HirExprKind::StructInit {
+                    name: name_expr,
+                    fields: fields_map,
+                    call_info: call_info.clone(),
+                }
             }
 
             ExprKind::FieldAccess(_) => {

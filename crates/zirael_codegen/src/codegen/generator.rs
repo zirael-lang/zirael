@@ -1,11 +1,14 @@
 use crate::{
     codegen::{Codegen, Gen},
-    ir::{IrBlock, IrExpr, IrExprKind, IrFunction, IrItem, IrItemKind, IrModule, IrParam, IrStmt},
+    ir::{
+        IrBlock, IrExpr, IrExprKind, IrField, IrFunction, IrItem, IrItemKind, IrModule, IrParam,
+        IrStmt, IrStruct,
+    },
 };
 use itertools::Itertools as _;
 use std::path::PathBuf;
 use zirael_parser::{BinaryOp, Literal, SymbolId, Type, UnaryOp};
-use zirael_utils::prelude::CompilationInfo;
+use zirael_utils::prelude::{CompilationInfo, resolve};
 
 pub fn run_codegen(
     modules: Vec<IrModule>,
@@ -105,29 +108,73 @@ fn function_signature(func: &IrFunction, name: &str, p: &mut Codegen) {
 impl Gen for IrItem {
     fn generate_header(&self, cg: &mut Codegen) {
         match &self.kind {
-            IrItemKind::Function(func) => {
-                function_signature(func, self.name.as_str(), cg);
-                cg.writeln(";");
-                cg.newline();
-            }
+            IrItemKind::Function(func) => func.generate_header(cg),
+            IrItemKind::Struct(ir) => ir.generate_header(cg),
         }
     }
 
     fn generate(&self, p: &mut Codegen) {
         match &self.kind {
-            IrItemKind::Function(func) => {
-                function_signature(func, self.name.as_str(), p);
+            IrItemKind::Function(func) => func.generate(p),
+            IrItemKind::Struct(ir) => ir.generate(p),
+        }
+        p.newline();
+    }
+}
 
-                if let Some(body) = &func.body {
-                    if body.stmts.is_empty() {
-                        p.writeln(";");
-                        return;
-                    }
+impl Gen for IrStruct {
+    fn generate_header(&self, cg: &mut Codegen) {
+        cg.writeln(&format!("struct {};", self.name));
+    }
 
-                    p.write(" ");
-                    body.generate(p);
-                }
+    fn generate(&self, cg: &mut Codegen) {
+        cg.write(&format!("struct {} {{", self.name));
+        cg.newline();
+        cg.indent();
+
+        for field in &self.fields {
+            field.generate(cg);
+        }
+
+        cg.dedent();
+        cg.write("};");
+        cg.newline();
+
+        for method in &self.methods {
+            cg.newline();
+            method.generate(cg);
+        }
+    }
+}
+
+impl Gen for IrField {
+    fn generate(&self, cg: &mut Codegen) {
+        cg.write_indented("");
+        self.ty.generate(cg);
+        cg.write(" ");
+        cg.write(&self.name);
+        cg.writeln(";");
+    }
+}
+
+impl Gen for IrFunction {
+    fn generate_header(&self, cg: &mut Codegen) {
+        function_signature(self, self.name.as_str(), cg);
+        cg.writeln(";");
+        cg.newline();
+    }
+
+    fn generate(&self, p: &mut Codegen) {
+        function_signature(self, self.name.as_str(), p);
+
+        if let Some(body) = &self.body {
+            if body.stmts.is_empty() {
+                p.writeln(";");
+                return;
             }
+
+            p.write(" ");
+            body.generate(p);
         }
         p.newline();
     }
@@ -210,6 +257,20 @@ impl Gen for IrExpr {
                     }
                 }
                 p.write(")");
+            }
+            IrExprKind::StructInit(name, fields) => {
+                p.write("(struct ");
+                p.write(name);
+                p.write(") ");
+                p.write(" { ");
+                for (name, expr) in fields {
+                    p.write(" .");
+                    p.write(name);
+                    p.write(" = ");
+                    expr.generate(p);
+                    p.write(", ")
+                }
+                p.write(" }");
             }
             IrExprKind::Type(ty) => ty.generate(p),
             IrExprKind::CCall(name, args) => {
@@ -307,6 +368,7 @@ impl Gen for Type {
                 ty.generate(p);
                 p.write("*");
             }
+            Self::Named { name, .. } => p.write(&resolve(name)),
             _ => p.write(&format!("/* TODO {self:?} */")),
         }
     }

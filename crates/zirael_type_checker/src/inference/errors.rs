@@ -50,6 +50,7 @@ impl<'reports> TypeInference<'reports> {
                 };
                 format!("'{}{}", resolve(name), bounds_str)
             }
+            Type::MonomorphizedSymbol(sym) => self.format_type(&sym.display_ty),
             Type::Error => "error".bright_red().bold().to_string(),
         }
     }

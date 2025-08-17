@@ -1,6 +1,9 @@
 use crate::TypeInference;
 use std::collections::HashMap;
-use zirael_parser::{AstWalker, Expr, ExprKind, SymbolId, SymbolKind, Type};
+use zirael_parser::{
+    AstWalker, CallInfo, Expr, ExprKind, SymbolId, SymbolKind, Type,
+    ast::monomorphized_symbol::MonomorphizedSymbol,
+};
 use zirael_utils::ident_table::{Identifier, resolve};
 
 impl<'reports> TypeInference<'reports> {
@@ -22,14 +25,12 @@ impl<'reports> TypeInference<'reports> {
                 if let Some(mut expr) = field_values.get_mut(&field.name) {
                     let field_type = &field.ty;
                     let expr_type = self.infer_expr(&mut expr);
-
-                    // try to infer generic parameters by unifying the expected field type with the actual initializer type.
                     self.infer_generic_types(field_type, &expr_type, &mut generic_mapping);
                 }
             }
 
             // For each generic parameter, use the inferred type if available, otherwise create a fresh type variable.
-            let concrete_generics = generics
+            let concrete_generics: Vec<Type> = generics
                 .iter()
                 .map(|g| {
                     if let Some(ty) = generic_mapping.get(&g.name) {
@@ -40,6 +41,26 @@ impl<'reports> TypeInference<'reports> {
                 })
                 .collect();
 
+            // If all generics are mapped (i.e., no type variables remain), return MonomorphizedSymbol
+            let all_generics_mapped =
+                concrete_generics.iter().all(|ty| !matches!(ty, Type::TypeVariable { .. }));
+            if all_generics_mapped {
+                let mut generic_map = HashMap::new();
+                for (g, ty) in generics.iter().zip(concrete_generics.iter()) {
+                    generic_map.insert(g.name, ty.clone());
+                }
+                let monomorphized_id =
+                    self.record_monomorphization_with_id(struct_sym_id, &generic_map);
+                return Type::MonomorphizedSymbol(MonomorphizedSymbol {
+                    id: monomorphized_id,
+                    display_ty: Box::new(Type::Named {
+                        name: symbol.name,
+                        generics: concrete_generics,
+                    }),
+                });
+            }
+
+            // Otherwise, return Named (with type variables)
             return Type::Named { name: symbol.name, generics: concrete_generics };
         }
 
@@ -50,6 +71,7 @@ impl<'reports> TypeInference<'reports> {
         &mut self,
         name_expr: &Expr,
         fields: &mut HashMap<Identifier, Expr>,
+        call_info: &mut Option<CallInfo>,
     ) -> Type {
         let struct_sym_id = if let ExprKind::Identifier(_, Some(sym_id)) = &name_expr.kind {
             *sym_id
@@ -77,11 +99,23 @@ impl<'reports> TypeInference<'reports> {
             for (field_name, field_expr) in fields {
                 if let Some(field) = struct_fields.iter().find(|f| &f.name == field_name) {
                     let expr_type = self.infer_expr(field_expr);
-
-                    let field_type = if let Type::Named { generics, .. } = &struct_type {
-                        self.substitute_generic_params(&field.ty, &symbol.kind, generics)
-                    } else {
-                        field.ty.clone()
+                    let field_type = match &struct_type {
+                        Type::MonomorphizedSymbol(mono) => {
+                            // Use the generics from the display_ty
+                            if let Type::Named { generics: type_generics, .. } = &*mono.display_ty {
+                                self.substitute_generic_params(
+                                    &field.ty,
+                                    &symbol.kind,
+                                    type_generics,
+                                )
+                            } else {
+                                field.ty.clone()
+                            }
+                        }
+                        Type::Named { generics: type_generics, .. } => {
+                            self.substitute_generic_params(&field.ty, &symbol.kind, type_generics)
+                        }
+                        _ => field.ty.clone(),
                     };
 
                     if !self.eq(&field_type, &expr_type) {
@@ -98,8 +132,23 @@ impl<'reports> TypeInference<'reports> {
                     );
                 }
             }
-        }
 
-        struct_type
+            // Always return the monomorphized type if possible
+            if let Type::MonomorphizedSymbol(_) = &struct_type {
+                *call_info = Some(CallInfo {
+                    original_symbol: struct_sym_id,
+                    monomorphized_id: match &struct_type {
+                        Type::MonomorphizedSymbol(mono) => Some(mono.id),
+                        _ => None,
+                    },
+                    concrete_types: HashMap::new(), // Optionally fill with generics if needed
+                });
+                return struct_type;
+            }
+
+            struct_type
+        } else {
+            Type::Error
+        }
     }
 }

@@ -1,5 +1,7 @@
 use zirael_utils::prelude::*;
 
+use crate::{MonomorphizationId, ast::monomorphized_symbol::MonomorphizedSymbol};
+
 pub type TypeVarId = u32;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -16,6 +18,8 @@ pub enum Type {
     Array(Box<Type>, Option<usize>),
     Function { params: Vec<Type>, return_type: Box<Type> },
     Named { name: Identifier, generics: Vec<Type> },
+
+    MonomorphizedSymbol(MonomorphizedSymbol),
 
     TypeVariable { id: usize, name: Identifier },
     BoundedTypeVariable { id: usize, name: Identifier, bounds: Vec<TraitBound> },

@@ -25,7 +25,7 @@ pub enum ExprKind {
     FieldAccess(Vec<Expr>),
     IndexAccess(Box<Expr>, Box<Expr>),
     CouldntParse(CouldntParse),
-    StructInit { name: Box<Expr>, fields: HashMap<Identifier, Expr> },
+    StructInit { name: Box<Expr>, fields: HashMap<Identifier, Expr>, call_info: Option<CallInfo> },
 }
 
 pub type MonomorphizationId = Id<()>;

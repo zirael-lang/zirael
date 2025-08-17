@@ -262,7 +262,7 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
                 self.walk_expr(expr);
                 self.walk_expr(index);
             }
-            ExprKind::StructInit { fields, name } => {
+            ExprKind::StructInit { fields, name, .. } => {
                 self.visit_struct_init(name, fields);
                 for field in fields.values_mut() {
                     self.walk_expr(field);

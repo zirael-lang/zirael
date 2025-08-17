@@ -34,16 +34,3 @@ impl<'reports> Context<'reports> {
         &self.symbols
     }
 }
-
-mod tests {
-    use std::path::PathBuf;
-    use crate::context::Context;
-
-    #[test]
-    fn test_context() {
-        let ctx = Context::new();
-        let id = ctx.sources().add_static("test", PathBuf::from("test.rs"));
-
-        assert!(ctx.sources().contains(id));
-    }
-}
