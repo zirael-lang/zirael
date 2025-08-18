@@ -9,23 +9,24 @@ use std::{
     hash::{DefaultHasher, Hash as _},
 };
 use zirael_parser::{
-    GenericParameter, MonomorphizationId, SymbolKind, Type,
-    monomorphized_symbol::MonomorphizedSymbol,
+    GenericParameter, MonomorphizationId, SymbolKind, SymbolRelationNode,
+    SymbolRelationNode::Symbol, Type, monomorphized_symbol::MonomorphizedSymbol,
 };
 use zirael_type_checker::MonomorphizationEntry;
 use zirael_utils::prelude::{Identifier, get_or_intern, resolve, warn};
 
 impl<'reports> HirLowering<'reports> {
     pub fn process_monomorphization_entries(&mut self, module: &mut IrModule) {
-        for entry in self.mono_table.entries.values() {
-            if let Some(monomorphized_item) = self.create_monomorphized_item(entry, module) {
+        // TODO: find a way to do that without cloning the entries
+        for (id, entry) in self.mono_table.entries.clone() {
+            if let Some(monomorphized_item) = self.create_monomorphized_item(&id, &entry, module) {
                 module.mono_items.push(monomorphized_item);
             }
         }
     }
 
     fn get_type_arguments(
-        &self,
+        &mut self,
         generics: &Vec<GenericParameter>,
         concrete_types: &HashMap<Identifier, Type>,
     ) -> Option<Vec<Type>> {
@@ -45,7 +46,8 @@ impl<'reports> HirLowering<'reports> {
     }
 
     fn create_monomorphized_item(
-        &self,
+        &mut self,
+        id: &MonomorphizationId,
         entry: &MonomorphizationEntry,
         module: &IrModule,
     ) -> Option<IrItem> {
@@ -55,6 +57,7 @@ impl<'reports> HirLowering<'reports> {
         let original_item = module.items.iter().find(|item| item.sym_id == original_id)?;
         let original_symbol = self.symbol_table.get_symbol_unchecked(&original_id);
 
+        self.current_mono_id = Some(id.clone());
         match (&original_symbol.kind, &original_item.kind) {
             (SymbolKind::Function { signature, .. }, IrItemKind::Function(func)) => {
                 let Some(type_arguments) =
@@ -70,6 +73,7 @@ impl<'reports> HirLowering<'reports> {
                     name: mangled_name,
                     kind: IrItemKind::Function(monomorphized_function),
                     sym_id: original_id,
+                    mono_id: Some(id.clone()),
                 })
             }
             (SymbolKind::Struct { generics, .. }, IrItemKind::Struct(struct_def)) => {
@@ -84,6 +88,7 @@ impl<'reports> HirLowering<'reports> {
                     name: mangled_name,
                     kind: IrItemKind::Struct(monomorphized_struct),
                     sym_id: original_id,
+                    mono_id: Some(id.clone()),
                 })
             }
             _ => None,
@@ -91,7 +96,7 @@ impl<'reports> HirLowering<'reports> {
     }
 
     fn monomorphize_struct(
-        &self,
+        &mut self,
         name: String,
         struct_def: &IrStruct,
         type_map: &HashMap<Identifier, Type>,
@@ -109,7 +114,7 @@ impl<'reports> HirLowering<'reports> {
     }
 
     fn monomorphize_function(
-        &self,
+        &mut self,
         name: String,
         original: &IrFunction,
         type_map: &HashMap<Identifier, Type>,
@@ -140,7 +145,7 @@ impl<'reports> HirLowering<'reports> {
     }
 
     fn monomorphize_block(
-        &self,
+        &mut self,
         original: &IrBlock,
         type_map: &HashMap<Identifier, Type>,
     ) -> IrBlock {
@@ -150,7 +155,11 @@ impl<'reports> HirLowering<'reports> {
         IrBlock { stmts }
     }
 
-    fn monomorphize_stmt(&self, original: &IrStmt, type_map: &HashMap<Identifier, Type>) -> IrStmt {
+    fn monomorphize_stmt(
+        &mut self,
+        original: &IrStmt,
+        type_map: &HashMap<Identifier, Type>,
+    ) -> IrStmt {
         match original {
             IrStmt::Var(name, init) => {
                 IrStmt::Var(name.clone(), self.monomorphize_expr(init, type_map))
@@ -166,7 +175,11 @@ impl<'reports> HirLowering<'reports> {
         }
     }
 
-    fn monomorphize_expr(&self, original: &IrExpr, type_map: &HashMap<Identifier, Type>) -> IrExpr {
+    fn monomorphize_expr(
+        &mut self,
+        original: &IrExpr,
+        type_map: &HashMap<Identifier, Type>,
+    ) -> IrExpr {
         let ty = self.substitute_type(&original.ty, type_map);
 
         let kind = match &original.kind {
@@ -221,8 +234,8 @@ impl<'reports> HirLowering<'reports> {
         IrExpr { ty, kind }
     }
 
-    fn substitute_type(&self, ty: &Type, type_map: &HashMap<Identifier, Type>) -> Type {
-        self.lower_type(match ty {
+    fn substitute_type(&mut self, ty: &Type, type_map: &HashMap<Identifier, Type>) -> Type {
+        let new_ty = match ty {
             Type::TypeVariable { id: _, name } => {
                 if let Some(concrete_type) = type_map.get(name) {
                     concrete_type.clone()
@@ -268,13 +281,20 @@ impl<'reports> HirLowering<'reports> {
             Type::MonomorphizedSymbol(sym) => self.handle_monomorphized_symbol(sym, true),
 
             _ => ty.clone(),
-        })
+        };
+
+        self.lower_type(new_ty)
     }
 
-    pub fn handle_monomorphized_symbol(&self, sym: &MonomorphizedSymbol, add_struct: bool) -> Type {
+    pub fn handle_monomorphized_symbol(
+        &mut self,
+        sym: &MonomorphizedSymbol,
+        add_struct: bool,
+    ) -> Type {
         let name = self.get_monomorphized_name(sym.id);
         let sym_id = self.mono_table.entries[&sym.id].original_id;
         let original_symbol = self.symbol_table.get_symbol_unchecked(&sym_id);
+        self.new_relation(SymbolRelationNode::Monomorphization(sym.id.clone()));
 
         if let SymbolKind::Struct { .. } = &original_symbol.kind {
             Type::Named {
@@ -286,7 +306,7 @@ impl<'reports> HirLowering<'reports> {
         }
     }
 
-    pub(crate) fn hash_type(&self, ty: &Type, hasher: &mut DefaultHasher) {
+    pub(crate) fn hash_type(&mut self, ty: &Type, hasher: &mut DefaultHasher) {
         match ty {
             Type::String => "string".hash(hasher),
             Type::Char => "char".hash(hasher),
@@ -338,7 +358,7 @@ impl<'reports> HirLowering<'reports> {
         }
     }
 
-    pub fn get_monomorphized_name(&self, mono_id: MonomorphizationId) -> String {
+    pub fn get_monomorphized_name(&mut self, mono_id: MonomorphizationId) -> String {
         if let Some(entry) = self.mono_table.entries.get(&mono_id) {
             let original_symbol = self.symbol_table.get_symbol_unchecked(&entry.original_id);
             let generics = if let SymbolKind::Function { signature, .. } = &original_symbol.kind {

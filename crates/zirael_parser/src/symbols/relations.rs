@@ -1,4 +1,4 @@
-use crate::SymbolId;
+use crate::{MonomorphizationId, SymbolId};
 use std::hash::RandomState;
 
 use anyhow::{Result, anyhow};
@@ -9,16 +9,22 @@ pub struct SymbolRelations {
     pub entries: Vec<SymbolRelationEntry>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Copy)]
+pub enum SymbolRelationNode {
+    Symbol(SymbolId),
+    Monomorphization(MonomorphizationId),
+}
+
 #[derive(Debug, Clone)]
 pub struct SymbolRelationEntry {
     /// symbol that uses the referred
-    pub referer: SymbolId,
+    pub referer: SymbolRelationNode,
     /// symbol that is being referred
-    pub referred: SymbolId,
+    pub referred: SymbolRelationNode,
 }
 
 impl SymbolRelationEntry {
-    pub fn new(referer: SymbolId, referred: SymbolId) -> Self {
+    pub fn new(referer: SymbolRelationNode, referred: SymbolRelationNode) -> Self {
         Self { referer, referred }
     }
 }
@@ -34,12 +40,12 @@ impl SymbolRelations {
         Self { entries: Vec::new() }
     }
 
-    pub fn entry(&mut self, referer: SymbolId, referred: SymbolId) {
+    pub fn entry(&mut self, referer: SymbolRelationNode, referred: SymbolRelationNode) {
         self.entries.push(SymbolRelationEntry::new(referer, referred));
     }
 
-    pub fn build_graph(&self) -> Result<Vec<SymbolId>> {
-        let mut graph = DiGraphMap::<SymbolId, (), RandomState>::new();
+    pub fn build_graph(&self) -> Result<Vec<SymbolRelationNode>> {
+        let mut graph = DiGraphMap::<SymbolRelationNode, (), RandomState>::new();
 
         for entry in &self.entries {
             graph.add_node(entry.referer);

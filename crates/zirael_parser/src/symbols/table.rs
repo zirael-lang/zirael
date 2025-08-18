@@ -2,7 +2,7 @@ use crate::{
     Type,
     symbols::{
         Scope, ScopeId, ScopeType, Symbol, SymbolId, SymbolKind, TemporaryLifetime,
-        relations::SymbolRelations,
+        relations::{SymbolRelationNode, SymbolRelations},
     },
 };
 use id_arena::Arena;
@@ -440,13 +440,13 @@ impl SymbolTable {
         })
     }
 
-    pub fn new_relation(&self, referrer: SymbolId, referred: SymbolId) {
+    pub fn new_relation(&self, referrer: SymbolRelationNode, referred: SymbolRelationNode) {
         self.write(|table| {
             table.symbol_relations.entry(referrer, referred);
         });
     }
 
-    pub fn build_symbol_relations(&self) -> Result<Vec<SymbolId>> {
+    pub fn build_symbol_relations(&self) -> Result<Vec<SymbolRelationNode>> {
         self.read(|table| table.symbol_relations.build_graph())
     }
 

@@ -1,7 +1,7 @@
 use crate::prelude::{WalkerContext, warn};
 use zirael_parser::{
-    AstWalker, Expr, ScopeType, Symbol, SymbolId, SymbolKind, SymbolTable, impl_ast_walker,
-    item::Item,
+    AstWalker, Expr, ScopeType, Symbol, SymbolId, SymbolKind, SymbolRelationNode, SymbolTable,
+    Type, impl_ast_walker, item::Item,
 };
 use zirael_utils::prelude::*;
 
@@ -151,7 +151,10 @@ impl<'reports> AstWalker<'reports> for NameResolution<'reports> {
         if let Some(id) = self.resolve_identifier(ident, span, ExpectedSymbol::Function) {
             *ident_sym_id = Some(id);
 
-            self.symbol_table.new_relation(self.current_item.unwrap(), id);
+            self.symbol_table.new_relation(
+                SymbolRelationNode::Symbol(self.current_item.unwrap()),
+                SymbolRelationNode::Symbol(id),
+            );
         }
     }
 
@@ -172,7 +175,24 @@ impl<'reports> AstWalker<'reports> for NameResolution<'reports> {
         if let Some(id) = self.resolve_identifier(ident, span, ExpectedSymbol::Struct) {
             *ident_sym_id = Some(id);
 
-            self.symbol_table.new_relation(self.current_item.unwrap(), id);
+            self.symbol_table.new_relation(
+                SymbolRelationNode::Symbol(self.current_item.unwrap()),
+                SymbolRelationNode::Symbol(id),
+            );
+        }
+    }
+
+    fn visit_type(&mut self, _ty: &mut Type) {
+        if let Type::Named { name, .. } = _ty {
+            if let Some(sym) = self.symbol_table.lookup_symbol(name) {
+                if let SymbolKind::Struct { .. } | SymbolKind::Enum { .. } = sym.kind {
+                    self.symbol_table.new_relation(
+                        SymbolRelationNode::Symbol(self.current_item.unwrap()),
+                        SymbolRelationNode::Symbol(sym.id),
+                    );
+                    self.symbol_table.mark_used(sym.id).expect("invalid symbol id");
+                }
+            }
         }
     }
 }

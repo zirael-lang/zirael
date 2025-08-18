@@ -47,7 +47,7 @@ impl<'reports> HirLowering<'reports> {
     }
 
     pub fn mangle_monomorphized_symbol(
-        &self,
+        &mut self,
         original_sym_id: SymbolId,
         type_arguments: &[Type],
     ) -> String {
@@ -102,7 +102,7 @@ impl<'reports> HirLowering<'reports> {
         }
     }
 
-    fn mangle_type_for_name(&self, ty: &Type) -> String {
+    fn mangle_type_for_name(&mut self, ty: &Type) -> String {
         match ty {
             Type::String => "string".to_owned(),
             Type::Char => "char".to_owned(),

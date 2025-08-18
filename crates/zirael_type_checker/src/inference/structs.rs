@@ -29,7 +29,6 @@ impl<'reports> TypeInference<'reports> {
                 }
             }
 
-            // For each generic parameter, use the inferred type if available, otherwise create a fresh type variable.
             let concrete_generics: Vec<Type> = generics
                 .iter()
                 .map(|g| {
@@ -41,7 +40,6 @@ impl<'reports> TypeInference<'reports> {
                 })
                 .collect();
 
-            // If all generics are mapped (i.e., no type variables remain), return MonomorphizedSymbol
             let all_generics_mapped =
                 concrete_generics.iter().all(|ty| !matches!(ty, Type::TypeVariable { .. }));
             if all_generics_mapped {
@@ -60,7 +58,6 @@ impl<'reports> TypeInference<'reports> {
                 });
             }
 
-            // Otherwise, return Named (with type variables)
             return Type::Named { name: symbol.name, generics: concrete_generics };
         }
 
@@ -101,7 +98,6 @@ impl<'reports> TypeInference<'reports> {
                     let expr_type = self.infer_expr(field_expr);
                     let field_type = match &struct_type {
                         Type::MonomorphizedSymbol(mono) => {
-                            // Use the generics from the display_ty
                             if let Type::Named { generics: type_generics, .. } = &*mono.display_ty {
                                 self.substitute_generic_params(
                                     &field.ty,
@@ -133,7 +129,6 @@ impl<'reports> TypeInference<'reports> {
                 }
             }
 
-            // Always return the monomorphized type if possible
             if let Type::MonomorphizedSymbol(_) = &struct_type {
                 *call_info = Some(CallInfo {
                     original_symbol: struct_sym_id,
@@ -141,7 +136,7 @@ impl<'reports> TypeInference<'reports> {
                         Type::MonomorphizedSymbol(mono) => Some(mono.id),
                         _ => None,
                     },
-                    concrete_types: HashMap::new(), // Optionally fill with generics if needed
+                    concrete_types: HashMap::new(),
                 });
                 return struct_type;
             }

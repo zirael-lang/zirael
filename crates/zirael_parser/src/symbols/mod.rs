@@ -8,6 +8,7 @@ mod table;
 use crate::{
     EnumVariant, Expr, FunctionModifiers, FunctionSignature, GenericParameter, StructField, Type,
 };
+pub use relations::*;
 pub use scopes::*;
 pub use table::*;
 

@@ -7,13 +7,13 @@ use crate::{
 };
 use itertools::Itertools as _;
 use std::path::PathBuf;
-use zirael_parser::{BinaryOp, Literal, SymbolId, Type, UnaryOp};
+use zirael_parser::{BinaryOp, Literal, SymbolId, SymbolRelationNode, Type, UnaryOp};
 use zirael_utils::prelude::{CompilationInfo, resolve};
 
 pub fn run_codegen(
     modules: Vec<IrModule>,
     info: &CompilationInfo,
-    mut order: Vec<SymbolId>,
+    mut order: Vec<SymbolRelationNode>,
     used_externals: Vec<String>,
 ) -> anyhow::Result<()> {
     let header = &mut Codegen::new();
@@ -25,21 +25,30 @@ pub fn run_codegen(
     header.writeln("#include <stdint.h>");
     header.writeln("#include <stdbool.h>");
 
-    for module in &modules {
-        for item in &module.items {
-            let has_monomorphized_versions =
-                module.mono_items.iter().any(|m| m.sym_id == item.sym_id);
+    let module_items = modules.iter().flat_map(|m| &m.items).collect::<Vec<_>>();
+    let mono_items = modules.iter().flat_map(|m| &m.mono_items).collect::<Vec<_>>();
 
-            if !has_monomorphized_versions {
-                item.generate_header(header);
+    if order.is_empty() {
+        order = module_items.iter().map(|i| SymbolRelationNode::Symbol(i.sym_id)).collect_vec();
+    }
+
+    for node in &order {
+        match node {
+            SymbolRelationNode::Symbol(id) => {
+                if let Some(item) = module_items.iter().find(|i| i.sym_id == *id) {
+                    let has_monomorphized_versions = mono_items.iter().any(|m| m.sym_id == *id);
+                    if !has_monomorphized_versions {
+                        item.generate_header(header);
+                    }
+                }
+            }
+            SymbolRelationNode::Monomorphization(mono_id) => {
+                if let Some(mono_item) = mono_items.iter().find(|m| m.mono_id == Some(*mono_id)) {
+                    mono_item.generate_header(header);
+                }
             }
         }
-
-        for mono_item in &module.mono_items {
-            mono_item.generate_header(header);
-        }
     }
-    header.writeln("");
 
     implementation.writeln(&format!("#include \"{}\"", header_file.display()));
     for external in used_externals {
@@ -48,35 +57,33 @@ pub fn run_codegen(
     }
     implementation.writeln("");
 
-    let module_items = modules.iter().flat_map(|m| &m.items).collect::<Vec<_>>();
-    let mono_items = modules.iter().flat_map(|m| &m.mono_items).collect::<Vec<_>>();
+    for node in &order {
+        match node {
+            SymbolRelationNode::Symbol(id) => {
+                let Some(item) = module_items.iter().find(|i| i.sym_id == *id) else {
+                    continue;
+                };
 
-    if order.is_empty() {
-        order = module_items.iter().map(|i| i.sym_id).collect_vec();
-    }
+                let has_monomorphized_versions = mono_items.iter().any(|m| m.sym_id == *id);
 
-    for id in &order {
-        let Some(item) = module_items.iter().find(|i| i.sym_id == *id) else {
-            continue;
-        };
-
-        let monomorphized_versions: Vec<_> =
-            mono_items.iter().filter(|m| m.sym_id == *id).collect();
-
-        let is_generic_function = !monomorphized_versions.is_empty();
-
-        if !is_generic_function {
-            item.generate(implementation);
-        }
-
-        for mono_item in monomorphized_versions {
-            mono_item.generate(implementation);
+                if !has_monomorphized_versions {
+                    item.generate(implementation);
+                }
+            }
+            SymbolRelationNode::Monomorphization(mono_id) => {
+                if let Some(mono_item) = mono_items.iter().find(|m| m.mono_id == Some(*mono_id)) {
+                    mono_item.generate(implementation);
+                }
+            }
         }
     }
 
     for mono_item in mono_items {
-        if !order.contains(&mono_item.sym_id) {
-            mono_item.generate(implementation);
+        if let Some(mono_id) = mono_item.mono_id {
+            let mono_node = SymbolRelationNode::Monomorphization(mono_id);
+            if !order.contains(&mono_node) {
+                mono_item.generate(implementation);
+            }
         }
     }
 

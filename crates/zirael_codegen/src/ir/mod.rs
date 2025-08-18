@@ -4,7 +4,7 @@ mod mangling;
 mod monomorphization;
 
 use std::collections::HashMap;
-use zirael_parser::{BinaryOp, Literal, SymbolId, Type, UnaryOp};
+use zirael_parser::{BinaryOp, Literal, MonomorphizationId, SymbolId, Type, UnaryOp};
 
 pub use lowering::*;
 
@@ -19,12 +19,19 @@ pub struct IrItem {
     pub name: String,
     pub kind: IrItemKind,
     pub sym_id: SymbolId,
+    pub mono_id: Option<MonomorphizationId>,
 }
 
 #[derive(Clone, Debug)]
 pub enum IrItemKind {
     Function(IrFunction),
     Struct(IrStruct),
+}
+
+impl IrItemKind {
+    pub fn is_type_def(&self) -> bool {
+        matches!(self, IrItemKind::Struct(_))
+    }
 }
 
 #[derive(Clone, Debug)]

@@ -9,7 +9,8 @@ use zirael_hir::hir::{
     expr::{HirExpr, HirExprKind, HirStmt},
 };
 use zirael_parser::{
-    AstId, DropStackEntry, Scope, ScopeType, SymbolKind, SymbolTable, Type, UnaryOp,
+    AstId, DropStackEntry, MonomorphizationId, Scope, ScopeType, SymbolId, SymbolKind,
+    SymbolRelationNode, SymbolTable, Type, UnaryOp,
 };
 use zirael_type_checker::MonomorphizationTable;
 use zirael_utils::prelude::{
@@ -37,6 +38,8 @@ pub struct HirLowering<'reports> {
     pub mode: Mode,
     pub root: PathBuf,
     pub reports: Reports<'reports>,
+    pub current_mono_id: Option<MonomorphizationId>,
+    pub current_symbol_id: Option<SymbolId>,
 }
 
 impl<'reports> HirLowering<'reports> {
@@ -56,6 +59,8 @@ impl<'reports> HirLowering<'reports> {
             reports: reports.clone(),
             mode,
             root,
+            current_mono_id: None,
+            current_symbol_id: None,
         }
     }
 
@@ -72,7 +77,7 @@ impl<'reports> HirLowering<'reports> {
         self.symbol_table.get_scope_unchecked(pop).drop_stack
     }
 
-    pub fn lower_type(&self, ty: Type) -> Type {
+    pub fn lower_type(&mut self, ty: Type) -> Type {
         match ty {
             Type::MonomorphizedSymbol(sym) => self.handle_monomorphized_symbol(&sym, true),
             _ => ty,
@@ -103,6 +108,7 @@ impl<'reports> HirLowering<'reports> {
         let sym = self.symbol_table.get_symbol_unchecked(&item.symbol_id);
         let name = self.mangle_symbol(item.symbol_id);
 
+        self.current_symbol_id = Some(item.symbol_id);
         match &mut item.kind {
             HirItemKind::Function(func) => {
                 let ir_function = self.lower_function(name.clone(), func);
@@ -111,11 +117,17 @@ impl<'reports> HirLowering<'reports> {
                     name,
                     kind: IrItemKind::Function(ir_function),
                     sym_id: item.symbol_id,
+                    mono_id: None,
                 })
             }
             HirItemKind::Struct(hir_struct) => {
                 let ir_struct = self.lower_struct(name.clone(), hir_struct);
-                Some(IrItem { name, kind: IrItemKind::Struct(ir_struct), sym_id: item.symbol_id })
+                Some(IrItem {
+                    name,
+                    kind: IrItemKind::Struct(ir_struct),
+                    sym_id: item.symbol_id,
+                    mono_id: None,
+                })
             }
             _ => todo!(),
         }
@@ -127,6 +139,7 @@ impl<'reports> HirLowering<'reports> {
         let mut items = vec![];
         for item in hir_struct.methods.iter_mut() {
             if let HirItemKind::Function(func) = &mut item.kind {
+                self.current_symbol_id = Some(item.symbol_id);
                 let name = self.mangle_symbol(item.symbol_id);
                 items.push(self.lower_function(name, func));
             }
@@ -289,6 +302,18 @@ impl<'reports> HirLowering<'reports> {
         IrBlock::new(ir_block)
     }
 
+    pub(crate) fn new_relation(&mut self, node: SymbolRelationNode) {
+        let referrer = if let Some(mono) = self.current_mono_id {
+            SymbolRelationNode::Monomorphization(mono)
+        } else if let Some(sym_id) = self.current_symbol_id {
+            SymbolRelationNode::Symbol(sym_id)
+        } else {
+            unreachable!()
+        };
+
+        self.symbol_table.new_relation(referrer, node);
+    }
+
     fn lower_expr(&mut self, expr: HirExpr) -> IrExpr {
         let kind = match expr.kind {
             HirExprKind::Block(stms) => IrExprKind::Block(self.lower_block(stms, expr.id)),
@@ -296,6 +321,7 @@ impl<'reports> HirLowering<'reports> {
             HirExprKind::Call { callee, args, call_info } => {
                 let identifier = if let Some(call_info) = call_info {
                     if let Some(mono_id) = call_info.monomorphized_id {
+                        self.new_relation(SymbolRelationNode::Monomorphization(mono_id));
                         self.get_monomorphized_name(mono_id)
                     } else {
                         self.mangle_symbol(call_info.original_symbol)
