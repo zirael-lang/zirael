@@ -10,7 +10,7 @@ use zirael_hir::hir::{
 };
 use zirael_parser::{
     AstId, DropStackEntry, MonomorphizationId, Scope, ScopeType, StructField, SymbolId, SymbolKind,
-    SymbolRelationNode, SymbolTable, Type, UnaryOp,
+    SymbolRelationNode, SymbolTable, Type, UnaryOp, monomorphized_symbol::MonomorphizedSymbol,
 };
 use zirael_type_checker::MonomorphizationTable;
 use zirael_utils::prelude::{
@@ -95,6 +95,34 @@ impl<'reports> HirLowering<'reports> {
                 } else {
                     Type::Named { name, generics }
                 }
+            }
+            Type::Named { name, generics } if !generics.is_empty() => {
+                for (mono_id, entry) in &self.mono_table.entries {
+                    if let Some(symbol) = self.symbol_table.lookup_symbol(&name) {
+                        if entry.original_id == symbol.id {
+                            if let SymbolKind::Struct { generics: generic_params, .. } =
+                                &symbol.kind
+                            {
+                                if generic_params.len() == generics.len() {
+                                    let types_match = generic_params
+                                        .iter()
+                                        .zip(generics.iter())
+                                        .all(|(param, ty)| {
+                                            entry.concrete_types.get(&param.name) == Some(ty)
+                                        });
+                                    if types_match {
+                                        let mono_sym = MonomorphizedSymbol {
+                                            id: *mono_id,
+                                            display_ty: Box::new(Type::Named { name, generics }),
+                                        };
+                                        return self.handle_monomorphized_symbol(&mono_sym, true);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                Type::Named { name, generics }
             }
             _ => ty,
         }

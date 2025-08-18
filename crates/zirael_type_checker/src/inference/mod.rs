@@ -43,12 +43,9 @@ impl<'reports> TypeInference<'reports> {
     }
 
     pub fn eq(&mut self, left: &Type, right: &Type) -> bool {
-        let empty_map = HashMap::new();
-        let l = self.substitute_type_with_map(left, &empty_map);
-        let left_sub = self.try_monomorphize_named_type(l);
-        let r = self.substitute_type_with_map(right, &empty_map);
-        let right_sub = self.try_monomorphize_named_type(r);
-        self.structural_eq(&left_sub, &right_sub)
+        let left_mono = self.try_monomorphize_named_type(left.clone());
+        let right_mono = self.try_monomorphize_named_type(right.clone());
+        self.structural_eq(&left_mono, &right_mono)
     }
 
     fn structural_eq(&mut self, left: &Type, right: &Type) -> bool {
@@ -95,58 +92,30 @@ impl<'reports> TypeInference<'reports> {
             (Type::Inferred, Type::Inferred) | (Type::Error, _) | (_, Type::Error) => true,
 
             (Type::MonomorphizedSymbol(sym), Type::MonomorphizedSymbol(sym2)) => {
-                let mono1 = self.mono_table.get_entry(sym.id).clone();
-                let mono2 = self.mono_table.get_entry(sym2.id).clone();
+                if let (Some(mono1), Some(mono2)) =
+                    (self.mono_table.get_entry(sym.id), self.mono_table.get_entry(sym2.id))
+                {
+                    if mono1.original_id != mono2.original_id {
+                        return false;
+                    }
 
-                let mut fields_eq = true;
-                for (name, value) in &mono1.concrete_types {
-                    let Some(mono2) = mono2.concrete_types.get(&name) else { return false };
+                    let concrete_types1 = mono1.concrete_types.clone();
+                    let concrete_types2 = mono2.concrete_types.clone();
 
-                    fields_eq = self.eq(&value, &mono2)
+                    for (name, value) in &concrete_types1 {
+                        let Some(mono2_value) = concrete_types2.get(name) else { return false };
+                        if !self.eq(value, mono2_value) {
+                            return false;
+                        }
+                    }
+
+                    true
+                } else {
+                    false
                 }
-
-                mono1.original_id == mono2.original_id && fields_eq
             }
 
             _ => false,
-        }
-    }
-}
-
-impl<'reports> TypeInference<'reports> {
-    fn substitute_type_variables(&self, ty: &Type, type_vars: &HashMap<Identifier, Type>) -> Type {
-        match ty {
-            Type::Named { name, generics } if generics.is_empty() => {
-                if let Some(var_type) = type_vars.get(name) {
-                    return var_type.clone();
-                }
-
-                ty.clone()
-            }
-            Type::Named { name, generics } => Type::Named {
-                name: *name,
-                generics: generics
-                    .iter()
-                    .map(|g| self.substitute_type_variables(g, type_vars))
-                    .collect(),
-            },
-            Type::Pointer(inner) => {
-                Type::Pointer(Box::new(self.substitute_type_variables(inner, type_vars)))
-            }
-            Type::Reference(inner) => {
-                Type::Reference(Box::new(self.substitute_type_variables(inner, type_vars)))
-            }
-            Type::Array(inner, size) => {
-                Type::Array(Box::new(self.substitute_type_variables(inner, type_vars)), *size)
-            }
-            Type::Function { params, return_type } => Type::Function {
-                params: params
-                    .iter()
-                    .map(|p| self.substitute_type_variables(p, type_vars))
-                    .collect(),
-                return_type: Box::new(self.substitute_type_variables(return_type, type_vars)),
-            },
-            _ => ty.clone(),
         }
     }
 }
@@ -180,7 +149,7 @@ impl<'reports> AstWalker<'reports> for TypeInference<'reports> {
         for param in &mut func.signature.parameters {
             if let Some(param_id) = param.symbol_id {
                 let param_type = if !generic_type_vars.is_empty() {
-                    self.substitute_type_variables(&param.ty, &generic_type_vars)
+                    self.substitute_type_with_map(&param.ty, &generic_type_vars)
                 } else {
                     param.ty.clone()
                 };
@@ -194,7 +163,7 @@ impl<'reports> AstWalker<'reports> for TypeInference<'reports> {
             let body_ty = self.infer_expr(body);
 
             let return_type = if !generic_type_vars.is_empty() {
-                self.substitute_type_variables(&func.signature.return_type, &generic_type_vars)
+                self.substitute_type_with_map(&func.signature.return_type, &generic_type_vars)
             } else {
                 func.signature.return_type.clone()
             };
@@ -210,33 +179,15 @@ impl<'reports> AstWalker<'reports> for TypeInference<'reports> {
     fn walk_struct_declaration(&mut self, _struct: &mut StructDeclaration) {
         self.push_scope(ScopeType::Struct(_struct.id));
 
-        let generic_type_vars = if !_struct.generics.is_empty() {
-            _struct
-                .generics
-                .iter()
-                .map(|g| {
-                    let type_var = self.ctx.fresh_type_var(Some(g.name));
-
-                    if !g.constraints.is_empty() {
-                        warn!("constraints on generic parameters are not supported yet")
-                    }
-
-                    (g.name, type_var)
-                })
-                .collect::<HashMap<_, _>>()
-        } else {
-            HashMap::new()
-        };
-
         for generic in &mut _struct.generics {
             self.walk_generic_parameter(generic);
+
+            if !generic.constraints.is_empty() {
+                warn!("constraints on generic parameters are not supported yet")
+            }
         }
 
         for field in &mut _struct.fields {
-            if !generic_type_vars.is_empty() {
-                let _field_type = self.substitute_type_variables(&field.ty, &generic_type_vars);
-            }
-
             self.walk_struct_field(field);
         }
 
@@ -245,5 +196,16 @@ impl<'reports> AstWalker<'reports> for TypeInference<'reports> {
         }
 
         self.pop_scope();
+    }
+
+    fn walk_struct_field(&mut self, field: &mut StructField) {
+        field.ty = self.try_monomorphize_named_type(field.ty.clone());
+
+        self.visit_struct_field(field);
+        self.walk_type(&mut field.ty);
+
+        for attr in &mut field.attributes {
+            self.walk_attribute(attr);
+        }
     }
 }

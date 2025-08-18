@@ -1,9 +1,9 @@
-use crate::{TypeInference, inference::ctx::TypeInferenceContext};
+use crate::TypeInference;
 use std::collections::HashMap;
 use zirael_parser::{
-    FunctionSignature, MonomorphizationId, Parameter, StructField, SymbolId, Type,
+    MonomorphizationId, StructField, SymbolId, Type,
 };
-use zirael_utils::prelude::{Identifier, resolve, warn};
+use zirael_utils::prelude::Identifier;
 
 #[derive(Debug, Clone)]
 pub struct MonomorphizationEntry {
@@ -18,8 +18,8 @@ pub struct MonomorphizationTable {
 }
 
 impl MonomorphizationTable {
-    pub fn get_entry(&self, id: MonomorphizationId) -> &MonomorphizationEntry {
-        self.entries.get(&id).unwrap()
+    pub fn get_entry(&self, id: MonomorphizationId) -> Option<&MonomorphizationEntry> {
+        self.entries.get(&id)
     }
 }
 

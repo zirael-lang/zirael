@@ -7,7 +7,10 @@ use crate::{
 };
 use itertools::Itertools as _;
 use std::path::PathBuf;
-use zirael_parser::{BinaryOp, Literal, SymbolId, SymbolRelationNode, Type, UnaryOp};
+use zirael_parser::{
+    BinaryOp, Literal, SymbolId, SymbolRelationNode, Type, UnaryOp,
+    ast::monomorphized_symbol::MonomorphizedSymbol,
+};
 use zirael_utils::prelude::{CompilationInfo, resolve};
 
 pub fn run_codegen(

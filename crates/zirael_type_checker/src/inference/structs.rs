@@ -1,86 +1,12 @@
 use crate::TypeInference;
 use std::{collections::HashMap, vec};
 use zirael_parser::{
-    AstWalker, CallInfo, Expr, ExprKind, SymbolId, SymbolKind, Type,
+    AstWalker, CallInfo, Expr, ExprKind, SymbolKind, Type,
     ast::monomorphized_symbol::MonomorphizedSymbol,
 };
 use zirael_utils::ident_table::{Identifier, resolve};
 
 impl<'reports> TypeInference<'reports> {
-    fn unify_struct_generics(
-        &mut self,
-        struct_sym_id: SymbolId,
-        field_values: &mut HashMap<Identifier, Expr>,
-    ) -> Type {
-        let symbol = self.symbol_table.get_symbol_unchecked(&struct_sym_id);
-
-        if let SymbolKind::Struct { fields, generics } = &symbol.kind {
-            if generics.is_empty() {
-                return Type::Named { name: symbol.name, generics: vec![] };
-            }
-
-            let mut generic_mapping = HashMap::new();
-
-            for field in fields {
-                if let Some(mut expr) = field_values.get_mut(&field.name) {
-                    let field_type = &field.ty;
-                    let expr_type = self.infer_expr(&mut expr);
-                    self.infer_generic_types(field_type, &expr_type, &mut generic_mapping);
-                }
-            }
-
-            let concrete_generics: Vec<Type> = generics
-                .iter()
-                .map(|g| {
-                    if let Some(ty) = generic_mapping.get(&g.name) {
-                        ty.clone()
-                    } else {
-                        Type::TypeVariable { id: self.ctx.next_type_var_id(), name: g.name }
-                    }
-                })
-                .collect();
-
-            let all_generics_mapped =
-                concrete_generics.iter().all(|ty| !matches!(ty, Type::TypeVariable { .. }));
-            if all_generics_mapped {
-                let mut generic_map = HashMap::new();
-                for (g, ty) in generics.iter().zip(concrete_generics.iter()) {
-                    generic_map.insert(g.name, ty.clone());
-                }
-
-                let monomorphized_fields = fields
-                    .iter()
-                    .map(|field| {
-                        let mut new_field = field.clone();
-                        new_field.ty = self.substitute_generic_params(
-                            &field.ty,
-                            &symbol.kind,
-                            &concrete_generics,
-                        );
-                        new_field
-                    })
-                    .collect::<Vec<_>>();
-
-                let monomorphized_id = self.record_monomorphization_with_id(
-                    struct_sym_id,
-                    &generic_map,
-                    Some(monomorphized_fields),
-                );
-                return Type::MonomorphizedSymbol(MonomorphizedSymbol {
-                    id: monomorphized_id,
-                    display_ty: Box::new(Type::Named {
-                        name: symbol.name,
-                        generics: concrete_generics,
-                    }),
-                });
-            }
-
-            return Type::Named { name: symbol.name, generics: concrete_generics };
-        }
-
-        Type::Named { name: symbol.name, generics: vec![] }
-    }
-
     pub fn infer_struct_init(
         &mut self,
         name_expr: &Expr,
@@ -92,8 +18,6 @@ impl<'reports> TypeInference<'reports> {
         } else {
             return Type::Error;
         };
-
-        let struct_type = self.unify_struct_generics(struct_sym_id, fields);
 
         let symbol = self.symbol_table.get_symbol_unchecked(&struct_sym_id);
         if let SymbolKind::Struct { fields: struct_fields, generics } = &symbol.kind {
@@ -110,45 +34,28 @@ impl<'reports> TypeInference<'reports> {
                 }
             }
 
-            let mut m_fields = struct_fields.clone();
-            for (field_name, field_expr) in fields {
-                if let Some(field) = m_fields.iter().find(|f| &f.name == field_name) {
+            if !generics.is_empty() {
+                for generic in generics {
+                    if !self.ctx.is_generic_parameter(generic.name) {
+                        let _type_var = self.ctx.fresh_type_var(Some(generic.name));
+                    }
+                }
+            }
+
+            let mut generic_mapping = HashMap::new();
+            let mut field_types = Vec::new();
+
+            for (field_name, field_expr) in fields.iter_mut() {
+                if let Some(field) = struct_fields.iter().find(|f| &f.name == field_name) {
                     let expr_type = self.infer_expr(field_expr);
-                    let field_type = match &struct_type {
-                        Type::MonomorphizedSymbol(mono) => {
-                            if let Type::Named { generics: type_generics, .. } = &*mono.display_ty {
-                                self.substitute_generic_params(
-                                    &field.ty,
-                                    &symbol.kind,
-                                    type_generics,
-                                )
-                            } else {
-                                field.ty.clone()
-                            }
-                        }
-                        Type::Named { generics: type_generics, .. } => {
-                            self.substitute_generic_params(&field.ty, &symbol.kind, type_generics)
-                        }
-                        _ => field.ty.clone(),
-                    };
+                    field_types.push((*field_name, expr_type.clone()));
 
-                    m_fields.iter_mut().find(|f| &f.name == field_name).unwrap().ty =
-                        field_type.clone();
-
-                    if generics.is_empty() {
-                        let _ =
-                            self.symbol_table.update_symbol_kind(symbol.id, |kind| match kind {
-                                SymbolKind::Struct { fields, .. } => {
-                                    *fields = m_fields.clone();
-
-                                    kind.clone()
-                                }
-                                _ => unreachable!(),
-                            });
+                    if !generics.is_empty() {
+                        self.infer_generic_types(&field.ty, &expr_type, &mut generic_mapping);
                     }
 
-                    if !self.eq(&field_type, &expr_type) {
-                        self.type_mismatch(&field_type, &expr_type, field_expr.span.clone());
+                    if generics.is_empty() && !self.eq(&field.ty, &expr_type) {
+                        self.type_mismatch(&field.ty, &expr_type, field_expr.span.clone());
                     }
                 } else {
                     self.error(
@@ -162,24 +69,83 @@ impl<'reports> TypeInference<'reports> {
                 }
             }
 
-            if let Type::MonomorphizedSymbol(_) = &struct_type {
-                let (id, types) = match &struct_type {
-                    Type::MonomorphizedSymbol(mono) => {
-                        let entry = self.mono_table.get_entry(mono.id);
+            if generics.is_empty() {
+                Type::Named { name: symbol.name, generics: vec![] }
+            } else {
+                let concrete_generics: Vec<Type> = generics
+                    .iter()
+                    .map(|g| {
+                        generic_mapping.get(&g.name).cloned().unwrap_or_else(|| {
+                            Type::TypeVariable { id: self.ctx.next_type_var_id(), name: g.name }
+                        })
+                    })
+                    .collect();
 
-                        (Some(mono.id), Some(entry.concrete_types.clone()))
+                let all_generics_mapped =
+                    concrete_generics.iter().all(|ty| !matches!(ty, Type::TypeVariable { .. }));
+
+                if all_generics_mapped {
+                    for (field_name, expr_type) in &field_types {
+                        if let Some(field) = struct_fields.iter().find(|f| &f.name == field_name) {
+                            let concrete_field_type = self.substitute_generic_params(
+                                &field.ty,
+                                &symbol.kind,
+                                &concrete_generics,
+                            );
+
+                            if !self.eq(&concrete_field_type, expr_type) {
+                                if let Some(field_expr) = fields.get(field_name) {
+                                    self.type_mismatch(
+                                        &concrete_field_type,
+                                        expr_type,
+                                        field_expr.span.clone(),
+                                    );
+                                }
+                            }
+                        }
                     }
-                    _ => (None, None),
-                };
-                *call_info = Some(CallInfo {
-                    original_symbol: struct_sym_id,
-                    monomorphized_id: id,
-                    concrete_types: types.unwrap_or_default(),
-                });
-                return struct_type;
-            }
 
-            struct_type
+                    let mut generic_map = HashMap::new();
+                    for (g, ty) in generics.iter().zip(concrete_generics.iter()) {
+                        generic_map.insert(g.name, ty.clone());
+                    }
+
+                    let monomorphized_fields = struct_fields
+                        .iter()
+                        .map(|field| {
+                            let mut new_field = field.clone();
+                            new_field.ty = self.substitute_generic_params(
+                                &field.ty,
+                                &symbol.kind,
+                                &concrete_generics,
+                            );
+                            new_field
+                        })
+                        .collect::<Vec<_>>();
+
+                    let monomorphized_id = self.record_monomorphization_with_id(
+                        struct_sym_id,
+                        &generic_map,
+                        Some(monomorphized_fields),
+                    );
+
+                    *call_info = Some(CallInfo {
+                        original_symbol: struct_sym_id,
+                        monomorphized_id: Some(monomorphized_id),
+                        concrete_types: generic_map,
+                    });
+
+                    Type::MonomorphizedSymbol(MonomorphizedSymbol {
+                        id: monomorphized_id,
+                        display_ty: Box::new(Type::Named {
+                            name: symbol.name,
+                            generics: concrete_generics,
+                        }),
+                    })
+                } else {
+                    Type::Named { name: symbol.name, generics: concrete_generics }
+                }
+            }
         } else {
             Type::Error
         }

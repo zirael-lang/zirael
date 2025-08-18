@@ -2,7 +2,7 @@ use crate::inference::TypeInference;
 use std::collections::HashMap;
 use zirael_parser::{
     AstId, AstWalker, BinaryOp, CallInfo, Expr, ExprKind, Literal, ScopeType, Stmt, StmtKind,
-    StructField, SymbolId, SymbolKind, Type, UnaryOp, VarDecl, WalkerContext,
+    SymbolId, SymbolKind, Type, UnaryOp, VarDecl, WalkerContext,
 };
 use zirael_utils::prelude::{Colorize, Identifier, Span, resolve, warn};
 
@@ -54,7 +54,18 @@ impl<'reports> TypeInference<'reports> {
     pub fn infer_expr(&mut self, expr: &mut Expr) -> Type {
         let ty = match &mut expr.kind {
             ExprKind::Literal(lit) => self.infer_literal(lit),
-            ExprKind::Identifier(_, symbol_id) => self.infer_identifier(symbol_id.unwrap()),
+            ExprKind::Identifier(_, symbol_id) => {
+                if let Some(sym_id) = symbol_id {
+                    self.infer_identifier(*sym_id, &expr.span)
+                } else {
+                    self.error(
+                        "unresolved identifier",
+                        vec![("here".to_string(), expr.span.clone())],
+                        vec![],
+                    );
+                    Type::Error
+                }
+            }
             ExprKind::Assign(lhs, rhs) => self.infer_assignment(lhs, rhs),
             ExprKind::Block(stmts) => self.infer_block(stmts, expr.id),
             ExprKind::Unary(op, expr) => self.infer_unary(op, expr),
@@ -113,17 +124,21 @@ impl<'reports> TypeInference<'reports> {
                 }
             }
             Type::MonomorphizedSymbol(sym) => {
-                let entry = self.mono_table.get_entry(sym.id);
-                let sym = self.symbol_table.get_symbol_unchecked(&entry.original_id);
+                if let Some(entry) = self.mono_table.get_entry(sym.id) {
+                    let sym = self.symbol_table.get_symbol_unchecked(&entry.original_id);
 
-                match sym.kind.clone() {
-                    SymbolKind::Struct { fields, .. } => {
-                        entry.monomorphized_fields.clone().unwrap_or(fields)
+                    match sym.kind.clone() {
+                        SymbolKind::Struct { fields, .. } => {
+                            entry.monomorphized_fields.clone().unwrap_or(fields)
+                        }
+                        _ => {
+                            self.non_struct_type(field_span);
+                            return Type::Error;
+                        }
                     }
-                    _ => {
-                        self.non_struct_type(field_span);
-                        return Type::Error;
-                    }
+                } else {
+                    self.non_struct_type(field_span);
+                    return Type::Error;
                 }
             }
             _ => {
@@ -150,13 +165,12 @@ impl<'reports> TypeInference<'reports> {
         let first_span = fields[0].span.clone();
 
         if let Some((_, Some(sym_id))) = base {
-            let var = match self.ctx.get_variable(sym_id.clone()) {
-                Some(var) => var,
+            let var = match self.ctx.get_variable(*sym_id) {
+                Some(var) => var.clone(),
                 None => return Type::Error,
-            }
-            .clone();
+            };
 
-            if fields.len() > 1 { self.check_field(&var, fields, 1) } else { var.clone() }
+            if fields.len() > 1 { self.check_field(&var, fields, 1) } else { var }
         } else {
             self.non_struct_type(first_span);
             Type::Error
@@ -439,23 +453,49 @@ impl<'reports> TypeInference<'reports> {
         let value_ty = &self.infer_expr(&mut decl.value);
         let variable_ty =
             if let Type::Inferred = decl.ty { value_ty.clone() } else { decl.ty.clone() };
-        let symbol = self.symbol_table.get_symbol_unchecked(&decl.symbol_id.unwrap());
-        self.ctx.add_variable(symbol.id, variable_ty.clone());
-        if !self.expect_type(&variable_ty, value_ty, &decl.span, "variable declaration") {
-            return Type::Error;
+
+        if let Some(symbol_id) = decl.symbol_id {
+            let symbol = self.symbol_table.get_symbol_unchecked(&symbol_id);
+            self.ctx.add_variable(symbol.id, variable_ty.clone());
+            if !self.expect_type(&variable_ty, value_ty, &decl.span, "variable declaration") {
+                return Type::Error;
+            }
+            decl.ty = value_ty.clone();
+            variable_ty.clone()
+        } else {
+            self.error(
+                "unresolved variable declaration",
+                vec![("here".to_string(), decl.span.clone())],
+                vec![],
+            );
+            Type::Error
         }
-        decl.ty = value_ty.clone();
-        variable_ty.clone()
     }
 
-    fn infer_identifier(&mut self, sym_id: SymbolId) -> Type {
+    fn infer_identifier(&mut self, sym_id: SymbolId, span: &Span) -> Type {
         let sym = self.symbol_table().get_symbol_unchecked(&sym_id);
 
         match &sym.kind {
             SymbolKind::Parameter { .. } | SymbolKind::Variable { .. } => {
-                self.ctx.get_variable(sym_id).unwrap().clone()
+                if let Some(var_type) = self.ctx.get_variable(sym_id) {
+                    var_type.clone()
+                } else {
+                    self.error(
+                        &format!("variable '{}' used before initialization", resolve(&sym.name)),
+                        vec![("here".to_string(), span.clone())],
+                        vec![],
+                    );
+                    Type::Error
+                }
             }
-            _ => unreachable!(),
+            _ => {
+                self.error(
+                    &format!("identifier '{}' cannot be used in this context", resolve(&sym.name)),
+                    vec![("here".to_string(), span.clone())],
+                    vec![],
+                );
+                Type::Error
+            }
         }
     }
 
@@ -477,10 +517,22 @@ impl<'reports> TypeInference<'reports> {
         mapping: &mut HashMap<Identifier, Type>,
     ) {
         match (expected, actual) {
-            (Type::Named { name, generics: _ }, concrete_type) => {
-                if self.ctx.is_generic_parameter(*name) {
+            (Type::Named { name, generics }, concrete_type) => {
+                if generics.is_empty() && self.ctx.is_generic_parameter(*name) {
                     mapping.insert(*name, concrete_type.clone());
+                } else if !generics.is_empty() {
+                    if let Type::Named { name: a_name, generics: a_generics } = concrete_type {
+                        if name == a_name && generics.len() == a_generics.len() {
+                            for (e_gen, a_gen) in generics.iter().zip(a_generics.iter()) {
+                                self.infer_generic_types(e_gen, a_gen, mapping);
+                            }
+                        }
+                    }
                 }
+            }
+
+            (Type::TypeVariable { name, .. }, concrete_type) => {
+                mapping.insert(*name, concrete_type.clone());
             }
 
             (Type::Pointer(e_inner), Type::Pointer(a_inner)) => {
@@ -495,14 +547,6 @@ impl<'reports> TypeInference<'reports> {
                 self.infer_generic_types(e_inner, a_inner, mapping);
             }
 
-            (
-                Type::Named { name: e_name, generics: e_generics },
-                Type::Named { name: a_name, generics: a_generics },
-            ) if e_name == a_name && e_generics.len() == a_generics.len() => {
-                for (e_gen, a_gen) in e_generics.iter().zip(a_generics.iter()) {
-                    self.infer_generic_types(e_gen, a_gen, mapping);
-                }
-            }
             _ => {}
         }
     }
