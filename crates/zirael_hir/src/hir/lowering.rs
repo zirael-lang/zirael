@@ -231,8 +231,17 @@ impl<'reports> AstLowering<'reports> {
                 }
             }
 
-            ExprKind::FieldAccess(_) => {
-                todo!("Implement field access lowering")
+            ExprKind::FieldAccess(fields) => {
+                let (_, symbol_id) = self.symbol_table.symbol_from_expr(&fields[0]).unwrap();
+                fields.remove(0);
+
+                let mut indents = vec![];
+                for field in fields {
+                    let (ident, _) = field.as_identifier().unwrap();
+                    indents.push(ident.clone());
+                }
+
+                HirExprKind::FieldAccess { field_symbol: symbol_id, fields: indents }
             }
 
             ExprKind::IndexAccess(object, index) => {
@@ -318,6 +327,19 @@ impl<'reports> AstLowering<'reports> {
             self.reports.add(file_id, report);
         } else {
             warn!("Report outside of a file: {message}");
+        }
+    }
+
+    pub fn warn(&mut self, message: &str, labels: Vec<(String, Range<usize>)>, notes: Vec<String>) {
+        if let Some(file_id) = self.processed_file {
+            let mut report = ReportBuilder::builder(message, ReportKind::Warning);
+            for note in notes {
+                report = report.note(&note);
+            }
+            for (msg, span) in labels {
+                report = report.label(&msg, span);
+            }
+            self.reports.add(file_id, report);
         }
     }
 }

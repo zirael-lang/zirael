@@ -31,7 +31,7 @@ impl<'reports> AstLowering<'reports> {
     }
 
     pub fn result_not_used_error(&mut self, expr: &HirExpr) {
-        self.error(
+        self.warn(
             "expression result is not used",
             vec![("here".to_owned(), expr.span.clone())],
             vec![],

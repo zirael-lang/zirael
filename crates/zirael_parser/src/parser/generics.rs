@@ -84,7 +84,6 @@ impl<'a> Parser<'a> {
             }
         }
 
-        // optional default
         if self.match_token(TokenKind::Equals) {
             match self.parse_type() {
                 Some(ty) => default_type = Some(ty),

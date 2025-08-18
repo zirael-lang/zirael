@@ -3,20 +3,19 @@ struct Pair<T, U> {
     second: U,
 }
 
-fn identity<T>(x: T): T {
-    x
+struct Person {
+    name: char,
+    hobby: Pair<string, string>
 }
 
-fn test(arg: Pair<int, int>) {
-
-}
+fn test(pair: Pair<string, string>) {}
 
 fn main() {
-    var _int_pair = Pair { first: 10, second: 20 };
-    var _str_int_pair = Pair { first: "wiek", second: 25 };
+    var pair = Pair { first: "Jeff", second: 25 };
 
-    var _num = identity(Pair { first: true, second: "tak" });
-    var _text = identity("hello");
+    var _test = pair.first;
 
-    test(Pair { first: 10, second: 20 });
+    var hobby = Pair { first: "name", second: "hobby" };
+    var person = Person { name: 'A', hobby: hobby };
+    test(person.hobby);
 }

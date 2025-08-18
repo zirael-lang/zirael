@@ -253,11 +253,7 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
                     self.walk_expr(arg);
                 }
             }
-            ExprKind::FieldAccess(exprs) => {
-                for expr in exprs {
-                    self.walk_expr(expr);
-                }
-            }
+            ExprKind::FieldAccess(exprs) => self.visit_field_access(exprs),
             ExprKind::IndexAccess(expr, index) => {
                 self.walk_expr(expr);
                 self.walk_expr(index);
@@ -439,6 +435,7 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
     fn visit_assign(&mut self, _lhs: &mut Expr, _rhs: &mut Expr) {}
     fn visit_return(&mut self, _ret: &mut Return) {}
     fn visit_struct_init(&mut self, _name: &mut Expr, _fields: &mut HashMap<Identifier, Expr>) {}
+    fn visit_field_access(&mut self, _exprs: &mut Vec<Expr>) {}
 }
 
 #[macro_export]

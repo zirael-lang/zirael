@@ -214,6 +214,12 @@ impl<'a> Parser<'a> {
                     let span = self.prev_span();
                     self.new_expr(ExprKind::Literal(Literal::Float(value)), span)
                 }
+                TokenKind::Char(value) => {
+                    let value = *value;
+                    self.advance();
+                    let span = self.prev_span();
+                    self.new_expr(ExprKind::Literal(Literal::Char(value)), span)
+                }
                 TokenKind::String(value) => {
                     let value = value.clone();
                     self.advance();

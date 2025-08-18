@@ -3,18 +3,19 @@ use crate::ir::{
     IrStmt, IrStruct,
 };
 use itertools::Itertools;
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, path::PathBuf, vec};
 use zirael_hir::hir::{
     HirBody, HirFunction, HirItem, HirItemKind, HirModule, HirStruct,
     expr::{HirExpr, HirExprKind, HirStmt},
 };
 use zirael_parser::{
-    AstId, DropStackEntry, MonomorphizationId, Scope, ScopeType, SymbolId, SymbolKind,
+    AstId, DropStackEntry, MonomorphizationId, Scope, ScopeType, StructField, SymbolId, SymbolKind,
     SymbolRelationNode, SymbolTable, Type, UnaryOp,
 };
 use zirael_type_checker::MonomorphizationTable;
 use zirael_utils::prelude::{
-    Colorize as _, Mode, ReportBuilder, ReportKind, Reports, SourceFileId, Sources, debug, resolve,
+    Colorize as _, Mode, ReportBuilder, ReportKind, Reports, SourceFileId, Sources, debug,
+    get_or_intern, resolve,
 };
 
 pub fn lower_hir_to_ir<'reports>(
@@ -80,6 +81,21 @@ impl<'reports> HirLowering<'reports> {
     pub fn lower_type(&mut self, ty: Type) -> Type {
         match ty {
             Type::MonomorphizedSymbol(sym) => self.handle_monomorphized_symbol(&sym, true),
+            Type::Named { name, generics } if generics.is_empty() => {
+                let symbol = self.symbol_table.lookup_symbol(&name);
+
+                if let Some(symbol) = symbol {
+                    let mangled = self.mangle_symbol(symbol.id);
+                    let string = if let SymbolKind::Struct { .. } = symbol.kind {
+                        format!("struct {}", mangled)
+                    } else {
+                        mangled
+                    };
+                    Type::Named { name: get_or_intern(&string), generics }
+                } else {
+                    Type::Named { name, generics }
+                }
+            }
             _ => ty,
         }
     }
@@ -121,7 +137,13 @@ impl<'reports> HirLowering<'reports> {
                 })
             }
             HirItemKind::Struct(hir_struct) => {
-                let ir_struct = self.lower_struct(name.clone(), hir_struct);
+                let fields = if let SymbolKind::Struct { fields, .. } = sym.kind {
+                    fields.clone()
+                } else {
+                    unreachable!()
+                };
+
+                let ir_struct = self.lower_struct(name.clone(), hir_struct, fields);
                 Some(IrItem {
                     name,
                     kind: IrItemKind::Struct(ir_struct),
@@ -133,7 +155,12 @@ impl<'reports> HirLowering<'reports> {
         }
     }
 
-    fn lower_struct(&mut self, name: String, hir_struct: &mut HirStruct) -> IrStruct {
+    fn lower_struct(
+        &mut self,
+        name: String,
+        hir_struct: &mut HirStruct,
+        fields: Vec<StructField>,
+    ) -> IrStruct {
         self.push_scope(ScopeType::Struct(hir_struct.id));
 
         let mut items = vec![];
@@ -147,8 +174,7 @@ impl<'reports> HirLowering<'reports> {
 
         self.pop_scope();
         IrStruct {
-            fields: hir_struct
-                .fields
+            fields: fields
                 .iter()
                 .map(|field| IrField {
                     name: resolve(&field.name),
@@ -372,6 +398,15 @@ impl<'reports> HirLowering<'reports> {
                 op,
                 Box::new(self.lower_expr(*right)),
             ),
+            HirExprKind::FieldAccess { field_symbol, fields } => {
+                let mut f = vec![self.mangle_symbol(field_symbol)];
+
+                for field in fields {
+                    f.push(resolve(&field));
+                }
+
+                IrExprKind::FieldAccess(f)
+            }
             _ => IrExprKind::Symbol(String::new()),
         };
 

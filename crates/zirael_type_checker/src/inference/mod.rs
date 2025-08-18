@@ -30,7 +30,7 @@ impl<'reports> TypeInference<'reports> {
                             generic_map.insert(g.name, ty.clone());
                         }
                         let monomorphized_id =
-                            self.record_monomorphization_with_id(symbol.id, &generic_map);
+                            self.record_monomorphization_with_id(symbol.id, &generic_map, None);
                         return Type::MonomorphizedSymbol(MonomorphizedSymbol {
                             id: monomorphized_id,
                             display_ty: Box::new(ty),
@@ -44,10 +44,10 @@ impl<'reports> TypeInference<'reports> {
 
     pub fn eq(&mut self, left: &Type, right: &Type) -> bool {
         let empty_map = HashMap::new();
-        let left_sub =
-            self.try_monomorphize_named_type(self.substitute_type_with_map(left, &empty_map));
-        let right_sub =
-            self.try_monomorphize_named_type(self.substitute_type_with_map(right, &empty_map));
+        let l = self.substitute_type_with_map(left, &empty_map);
+        let left_sub = self.try_monomorphize_named_type(l);
+        let r = self.substitute_type_with_map(right, &empty_map);
+        let right_sub = self.try_monomorphize_named_type(r);
         self.structural_eq(&left_sub, &right_sub)
     }
 

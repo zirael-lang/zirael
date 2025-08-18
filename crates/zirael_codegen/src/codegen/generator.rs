@@ -349,6 +349,15 @@ impl Gen for IrExpr {
                 rhs.generate(p);
                 p.write(";");
             }
+            IrExprKind::FieldAccess(fields) => {
+                for (i, field) in fields.iter().enumerate() {
+                    if i != 0 {
+                        p.write(".");
+                    }
+                    p.write(field);
+                }
+            }
+            _ => {}
         }
     }
 }
@@ -368,7 +377,7 @@ impl Gen for Type {
             Self::Uint => p.write("uint64_t"),
             Self::Float => p.write("double"),
             Self::Void => p.write("void"),
-            Self::Char => p.write("char32_t"),
+            Self::Char => p.write("char"),
             Self::String => p.write("char32_t*"),
             Self::Bool => p.write("bool"),
             Self::Pointer(ty) | Self::Reference(ty) => {

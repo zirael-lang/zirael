@@ -229,6 +229,11 @@ impl<'reports> HirLowering<'reports> {
             }
 
             IrExprKind::Type(ty) => IrExprKind::Type(self.substitute_type(ty, type_map)),
+
+            IrExprKind::FieldAccess(fields) => {
+                let mono_fields = fields.iter().map(|f| f.clone()).collect();
+                IrExprKind::FieldAccess(mono_fields)
+            }
         };
 
         IrExpr { ty, kind }

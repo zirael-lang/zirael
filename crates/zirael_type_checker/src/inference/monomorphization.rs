@@ -1,12 +1,15 @@
 use crate::{TypeInference, inference::ctx::TypeInferenceContext};
 use std::collections::HashMap;
-use zirael_parser::{FunctionSignature, MonomorphizationId, Parameter, SymbolId, Type};
+use zirael_parser::{
+    FunctionSignature, MonomorphizationId, Parameter, StructField, SymbolId, Type,
+};
 use zirael_utils::prelude::{Identifier, resolve, warn};
 
 #[derive(Debug, Clone)]
 pub struct MonomorphizationEntry {
     pub original_id: SymbolId,
     pub concrete_types: HashMap<Identifier, Type>,
+    pub monomorphized_fields: Option<Vec<StructField>>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -26,6 +29,7 @@ impl<'reports> TypeInference<'reports> {
         original_id: SymbolId,
         concrete_types: &HashMap<Identifier, Type>,
         id: MonomorphizationId,
+        monomorphized_fields: Option<Vec<StructField>>,
     ) {
         if concrete_types.is_empty() {
             return;
@@ -41,7 +45,11 @@ impl<'reports> TypeInference<'reports> {
 
         self.mono_table.entries.insert(
             id,
-            MonomorphizationEntry { concrete_types: concrete_types.clone(), original_id },
+            MonomorphizationEntry {
+                concrete_types: concrete_types.clone(),
+                original_id,
+                monomorphized_fields,
+            },
         );
     }
 
@@ -49,6 +57,7 @@ impl<'reports> TypeInference<'reports> {
         &mut self,
         symbol_id: SymbolId,
         concrete_types: &HashMap<Identifier, Type>,
+        monomorphized_fields: Option<Vec<StructField>>,
     ) -> MonomorphizationId {
         let candidate_ids: Vec<_> = self
             .mono_table
@@ -85,7 +94,7 @@ impl<'reports> TypeInference<'reports> {
             }
         }
         let mono_id = self.next_monomorphization_id();
-        self.record_monomorphization(symbol_id, concrete_types, mono_id);
+        self.record_monomorphization(symbol_id, concrete_types, mono_id, monomorphized_fields);
         mono_id
     }
 

@@ -2,14 +2,13 @@ use crate::inference::TypeInference;
 use std::collections::HashMap;
 use zirael_parser::{
     AstId, AstWalker, BinaryOp, CallInfo, Expr, ExprKind, Literal, ScopeType, Stmt, StmtKind,
-    SymbolId, SymbolKind, Type, UnaryOp, VarDecl, WalkerContext,
+    StructField, SymbolId, SymbolKind, Type, UnaryOp, VarDecl, WalkerContext,
 };
 use zirael_utils::prelude::{Colorize, Identifier, Span, resolve, warn};
 
 impl<'reports> TypeInference<'reports> {
     fn expect_type(&mut self, expected: &Type, actual: &Type, span: &Span, context: &str) -> bool {
         if !self.eq(expected, actual) {
-            println!("{:#?} {:#?}", expected, actual);
             self.error(
                 &format!(
                     "type mismatch in {}: expected {}, found {}",
@@ -65,6 +64,7 @@ impl<'reports> TypeInference<'reports> {
             ExprKind::StructInit { name, fields, call_info } => {
                 self.infer_struct_init(name, fields, call_info)
             }
+            ExprKind::FieldAccess(fields) => self.infer_field(fields),
             _ => {
                 warn!("unimplemented expr: {:#?}", expr);
                 Type::Error
@@ -72,6 +72,111 @@ impl<'reports> TypeInference<'reports> {
         };
         expr.ty = ty.clone();
         ty
+    }
+
+    fn check_field(&mut self, current_type: &Type, expr_fields: &[Expr], index: usize) -> Type {
+        if index >= expr_fields.len() {
+            return current_type.clone();
+        }
+
+        let (field_name, _) = match expr_fields[index].as_identifier() {
+            Some(id) => id,
+            None => {
+                self.non_struct_type(expr_fields[index].span.clone());
+                return Type::Error;
+            }
+        };
+
+        let field_span = expr_fields[index].span.clone();
+        let field_type = self.get_field_type(current_type, &resolve(&field_name), field_span);
+
+        match field_type {
+            Type::Error => Type::Error,
+            _ => self.check_field(&field_type, expr_fields, index + 1),
+        }
+    }
+
+    fn get_field_type(&mut self, current_type: &Type, field_name: &str, field_span: Span) -> Type {
+        let struct_fields = match current_type {
+            Type::Named { name, .. } => {
+                let sym = match self.symbol_table.lookup_symbol(name) {
+                    Some(sym) => sym,
+                    None => return Type::Error,
+                };
+
+                match sym.kind.clone() {
+                    SymbolKind::Struct { fields, .. } => fields,
+                    _ => {
+                        self.non_struct_type(field_span);
+                        return Type::Error;
+                    }
+                }
+            }
+            Type::MonomorphizedSymbol(sym) => {
+                let entry = self.mono_table.get_entry(sym.id);
+                let sym = self.symbol_table.get_symbol_unchecked(&entry.original_id);
+
+                match sym.kind.clone() {
+                    SymbolKind::Struct { fields, .. } => {
+                        entry.monomorphized_fields.clone().unwrap_or(fields)
+                    }
+                    _ => {
+                        self.non_struct_type(field_span);
+                        return Type::Error;
+                    }
+                }
+            }
+            _ => {
+                self.non_struct_type(field_span);
+                return Type::Error;
+            }
+        };
+
+        match struct_fields.iter().find(|f| resolve(&f.name) == field_name) {
+            Some(field) => field.ty.clone(),
+            None => {
+                self.field_not_found_error(field_name, current_type, field_span);
+                Type::Error
+            }
+        }
+    }
+
+    fn infer_field(&mut self, fields: &[Expr]) -> Type {
+        if fields.is_empty() {
+            return Type::Error;
+        }
+
+        let base = fields[0].as_identifier();
+        let first_span = fields[0].span.clone();
+
+        if let Some((_, Some(sym_id))) = base {
+            let var = match self.ctx.get_variable(sym_id.clone()) {
+                Some(var) => var,
+                None => return Type::Error,
+            }
+            .clone();
+
+            if fields.len() > 1 { self.check_field(&var, fields, 1) } else { var.clone() }
+        } else {
+            self.non_struct_type(first_span);
+            Type::Error
+        }
+    }
+
+    fn non_struct_type(&mut self, span: Span) {
+        self.error(
+            "cannot access field of non-struct type",
+            vec![("in this field access".to_string(), span)],
+            vec![],
+        )
+    }
+
+    fn field_not_found_error(&mut self, field_name: &str, ty: &Type, span: Span) {
+        self.error(
+            &format!("couldn't find field {field_name} on type {}", self.format_type(ty)),
+            vec![("in this field access".to_string(), span)],
+            vec![],
+        )
     }
 
     fn infer_unary(&mut self, op: &UnaryOp, expr: &mut Expr) -> Type {
@@ -236,12 +341,11 @@ impl<'reports> TypeInference<'reports> {
         call_info: &mut Option<CallInfo>,
     ) -> Type {
         // Handles both direct function calls and generic function instantiations.
-        if let Some((_, Some(sym_id))) = callee.as_identifier() {
+        if let Some((_, Some(sym_id))) = callee.as_identifier_mut() {
             let sym = self.symbol_table().get_symbol_unchecked(sym_id);
             if let SymbolKind::Function { signature, .. } = &sym.kind {
                 // Map for tracking generic parameter substitutions during this call.
                 let mut generic_mapping = HashMap::new();
-                // Precompute parameter types, substituting generics if needed.
                 let mut param_types: Vec<Type> = Vec::with_capacity(signature.parameters.len());
                 for param in &signature.parameters {
                     let param_type = if !generic_mapping.is_empty() {
@@ -251,7 +355,6 @@ impl<'reports> TypeInference<'reports> {
                     };
                     param_types.push(param_type);
                 }
-                // Check each argument and try to infer generics from usage.
                 let mut valid = true;
                 for (i, (arg, param)) in
                     args.iter_mut().zip(signature.parameters.iter()).enumerate()
@@ -259,7 +362,6 @@ impl<'reports> TypeInference<'reports> {
                     let arg_type = self.infer_expr(arg);
                     let mono_type = self.try_monomorphize_named_type(arg_type);
                     arg.ty = mono_type.clone();
-                    // we try to bind generic parameters to actual argument types.
                     if !signature.generics.is_empty() {
                         self.infer_generic_types(&param.ty, &mono_type, &mut generic_mapping);
                     }
@@ -286,7 +388,7 @@ impl<'reports> TypeInference<'reports> {
                         signature.generics.iter().all(|g| generic_mapping.contains_key(&g.name));
 
                     if all_generics_mapped {
-                        Some(self.record_monomorphization_with_id(*sym_id, &generic_mapping))
+                        Some(self.record_monomorphization_with_id(*sym_id, &generic_mapping, None))
                     } else {
                         None
                     }
@@ -374,10 +476,7 @@ impl<'reports> TypeInference<'reports> {
         actual: &Type,
         mapping: &mut HashMap<Identifier, Type>,
     ) {
-        // This function tries to infer generic parameter bindings by comparing the expected type (from the signature)
-        // and the actual type (from the call site or field initializer). It recursively walks the type structure.
         match (expected, actual) {
-            // If the expected type is a named type and is a generic parameter, bind it to the actual type.
             (Type::Named { name, generics: _ }, concrete_type) => {
                 if self.ctx.is_generic_parameter(*name) {
                     mapping.insert(*name, concrete_type.clone());

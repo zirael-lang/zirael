@@ -106,6 +106,7 @@ pub enum IrExprKind {
     Unary(UnaryOp, Box<IrExpr>),
     Binary(Box<IrExpr>, BinaryOp, Box<IrExpr>),
     CCall(String, Vec<IrExpr>),
+    FieldAccess(Vec<String>),
     // type provided to, for example, a sizeof call
     Type(Type),
 }

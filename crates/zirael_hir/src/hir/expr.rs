@@ -38,8 +38,8 @@ pub enum HirExprKind {
         call_info: Option<CallInfo>,
     },
     FieldAccess {
-        receiver: Box<HirExpr>,
         field_symbol: SymbolId,
+        fields: Vec<Identifier>,
     },
     IndexAccess {
         object: Box<HirExpr>,

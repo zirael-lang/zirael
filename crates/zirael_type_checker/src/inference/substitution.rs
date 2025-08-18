@@ -5,7 +5,7 @@ use zirael_utils::prelude::Identifier;
 
 impl<'reports> TypeInference<'reports> {
     pub fn substitute_generic_params(
-        &self,
+        &mut self,
         ty: &Type,
         struct_kind: &SymbolKind,
         generics: &[Type],
@@ -23,11 +23,11 @@ impl<'reports> TypeInference<'reports> {
     }
 
     pub fn substitute_type_with_map(
-        &self,
+        &mut self,
         ty: &Type,
         param_map: &HashMap<Identifier, Type>,
     ) -> Type {
-        match ty {
+        let ty = match ty {
             Type::Named { name, generics } if generics.is_empty() => {
                 if let Some(concrete) = param_map.get(name) {
                     return concrete.clone();
@@ -58,6 +58,8 @@ impl<'reports> TypeInference<'reports> {
                 return_type: Box::new(self.substitute_type_with_map(return_type, param_map)),
             },
             _ => ty.clone(),
-        }
+        };
+
+        self.try_monomorphize_named_type(ty)
     }
 }

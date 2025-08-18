@@ -1,5 +1,5 @@
 use crate::TypeInference;
-use std::collections::HashMap;
+use std::{collections::HashMap, vec};
 use zirael_parser::{
     AstWalker, CallInfo, Expr, ExprKind, SymbolId, SymbolKind, Type,
     ast::monomorphized_symbol::MonomorphizedSymbol,
@@ -47,8 +47,25 @@ impl<'reports> TypeInference<'reports> {
                 for (g, ty) in generics.iter().zip(concrete_generics.iter()) {
                     generic_map.insert(g.name, ty.clone());
                 }
-                let monomorphized_id =
-                    self.record_monomorphization_with_id(struct_sym_id, &generic_map);
+
+                let monomorphized_fields = fields
+                    .iter()
+                    .map(|field| {
+                        let mut new_field = field.clone();
+                        new_field.ty = self.substitute_generic_params(
+                            &field.ty,
+                            &symbol.kind,
+                            &concrete_generics,
+                        );
+                        new_field
+                    })
+                    .collect::<Vec<_>>();
+
+                let monomorphized_id = self.record_monomorphization_with_id(
+                    struct_sym_id,
+                    &generic_map,
+                    Some(monomorphized_fields),
+                );
                 return Type::MonomorphizedSymbol(MonomorphizedSymbol {
                     id: monomorphized_id,
                     display_ty: Box::new(Type::Named {
@@ -79,7 +96,7 @@ impl<'reports> TypeInference<'reports> {
         let struct_type = self.unify_struct_generics(struct_sym_id, fields);
 
         let symbol = self.symbol_table.get_symbol_unchecked(&struct_sym_id);
-        if let SymbolKind::Struct { fields: struct_fields, .. } = &symbol.kind {
+        if let SymbolKind::Struct { fields: struct_fields, generics } = &symbol.kind {
             for field in struct_fields {
                 if !fields.contains_key(&field.name) {
                     self.error(
@@ -93,8 +110,9 @@ impl<'reports> TypeInference<'reports> {
                 }
             }
 
+            let mut m_fields = struct_fields.clone();
             for (field_name, field_expr) in fields {
-                if let Some(field) = struct_fields.iter().find(|f| &f.name == field_name) {
+                if let Some(field) = m_fields.iter().find(|f| &f.name == field_name) {
                     let expr_type = self.infer_expr(field_expr);
                     let field_type = match &struct_type {
                         Type::MonomorphizedSymbol(mono) => {
@@ -114,6 +132,21 @@ impl<'reports> TypeInference<'reports> {
                         _ => field.ty.clone(),
                     };
 
+                    m_fields.iter_mut().find(|f| &f.name == field_name).unwrap().ty =
+                        field_type.clone();
+
+                    if generics.is_empty() {
+                        let _ =
+                            self.symbol_table.update_symbol_kind(symbol.id, |kind| match kind {
+                                SymbolKind::Struct { fields, .. } => {
+                                    *fields = m_fields.clone();
+
+                                    kind.clone()
+                                }
+                                _ => unreachable!(),
+                            });
+                    }
+
                     if !self.eq(&field_type, &expr_type) {
                         self.type_mismatch(&field_type, &expr_type, field_expr.span.clone());
                     }
@@ -130,13 +163,18 @@ impl<'reports> TypeInference<'reports> {
             }
 
             if let Type::MonomorphizedSymbol(_) = &struct_type {
+                let (id, types) = match &struct_type {
+                    Type::MonomorphizedSymbol(mono) => {
+                        let entry = self.mono_table.get_entry(mono.id);
+
+                        (Some(mono.id), Some(entry.concrete_types.clone()))
+                    }
+                    _ => (None, None),
+                };
                 *call_info = Some(CallInfo {
                     original_symbol: struct_sym_id,
-                    monomorphized_id: match &struct_type {
-                        Type::MonomorphizedSymbol(mono) => Some(mono.id),
-                        _ => None,
-                    },
-                    concrete_types: HashMap::new(),
+                    monomorphized_id: id,
+                    concrete_types: types.unwrap_or_default(),
                 });
                 return struct_type;
             }

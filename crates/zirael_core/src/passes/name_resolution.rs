@@ -48,7 +48,7 @@ impl ExpectedSymbol {
             Self::Enum => "enum",
             Self::Parameter => "parameter",
             Self::Type => "type",
-            Self::Value => "value",
+            Self::Value => "parameter, constant, or variable",
             Self::Any => "symbol",
         }
     }
@@ -143,7 +143,7 @@ impl<'reports> AstWalker<'reports> for NameResolution<'reports> {
 
     fn visit_function_call(&mut self, callee: &mut Expr, _args: &mut [Expr]) {
         let span = callee.span.clone();
-        let Some((ident, ident_sym_id)) = callee.as_identifier() else {
+        let Some((ident, ident_sym_id)) = callee.as_identifier_mut() else {
             self.error("expected identifier in function call", vec![], vec![]);
             return;
         };
@@ -167,7 +167,7 @@ impl<'reports> AstWalker<'reports> for NameResolution<'reports> {
 
     fn visit_struct_init(&mut self, name: &mut Expr, _fields: &mut HashMap<Identifier, Expr>) {
         let span = name.span.clone();
-        let Some((ident, ident_sym_id)) = name.as_identifier() else {
+        let Some((ident, ident_sym_id)) = name.as_identifier_mut() else {
             self.error("expected identifier in struct init", vec![], vec![]);
             return;
         };
@@ -179,6 +179,20 @@ impl<'reports> AstWalker<'reports> for NameResolution<'reports> {
                 SymbolRelationNode::Symbol(self.current_item.unwrap()),
                 SymbolRelationNode::Symbol(id),
             );
+        }
+    }
+
+    fn visit_field_access(&mut self, fields: &mut Vec<Expr>) {
+        let base = &mut fields[0];
+        let span = base.span.clone();
+        let Some((ident, ident_sym_id)) = base.as_identifier_mut() else {
+            self.error("expected identifier in field access", vec![], vec![]);
+            return;
+        };
+
+        if let Some(id) = self.resolve_identifier(ident, span, ExpectedSymbol::Value) {
+            *ident_sym_id = Some(id);
+            self.symbol_table.mark_used(id).expect("invalid symbol id");
         }
     }
 

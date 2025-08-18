@@ -74,7 +74,14 @@ impl Expr {
         Self { kind, span, id, ty: Type::Inferred }
     }
 
-    pub fn as_identifier(&mut self) -> Option<(&mut Identifier, &mut Option<SymbolId>)> {
+    pub fn as_identifier(&self) -> Option<(&Identifier, &Option<SymbolId>)> {
+        match &self.kind {
+            ExprKind::Identifier(ident, sym_id) => Some((ident, sym_id)),
+            _ => None,
+        }
+    }
+
+    pub fn as_identifier_mut(&mut self) -> Option<(&mut Identifier, &mut Option<SymbolId>)> {
         match &mut self.kind {
             ExprKind::Identifier(ident, sym_id) => Some((ident, sym_id)),
             _ => None,

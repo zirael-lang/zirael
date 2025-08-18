@@ -34,7 +34,6 @@ impl LexedModule {
         Self { id, ast }
     }
 
-    // Backward compatibility
     pub fn file(&self) -> Option<SourceFileId> {
         self.id.as_file()
     }

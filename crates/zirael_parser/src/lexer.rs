@@ -197,21 +197,43 @@ pub enum TokenKind {
     })]
     String(String),
 
+    #[regex(r"'([^'\\\x00-\x1F]|\\(['\\bnfrt/]|u[a-fA-F0-9]{4}))'" , |lex| {
+        let s = lex.slice();
+        let inner = &s[1..s.len()-1];
+
+        if inner.starts_with('\\') {
+            match &inner[1..] {
+                "n" => '\n',
+                "t" => '\t',
+                "r" => '\r',
+                "b" => '\x08',
+                "f" => '\x0C',
+                "'" => '\'',
+                "\\" => '\\',
+                "/" => '/',
+                s if s.starts_with('u') && s.len() == 5 => {
+                    // Unicode escape sequence \uXXXX
+                    let hex = &s[1..];
+                    u32::from_str_radix(hex, 16)
+                        .ok()
+                        .and_then(char::from_u32)
+                        .unwrap_or('\0')
+                },
+                _ => '\0',
+            }
+        } else {
+            inner.chars().next().unwrap_or('\0')
+        }
+    })]
+    Char(char),
+
     #[regex(r"[a-zA-Z_][a-zA-Z0-9_]*", |lex| lex.slice().to_owned())]
     Identifier(String),
 }
 
 impl Display for TokenKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        use TokenKind::{
-            Arrow, At, BitwiseAnd, BitwiseNot, BitwiseOr, BitwiseXor, Bool, BraceClose, BraceOpen,
-            BracketClose, BracketOpen, Colon, Comma, Decrement, Divide, DivideEquals, Dollar, Dot,
-            DoubleColon, Equals, EqualsEquals, FatArrow, Float, GreaterThan, GreaterThanOrEqual,
-            Hash, Identifier, Increment, Integer, Keyword, LeftShift, LessThan, LessThanOrEqual,
-            LogicalAnd, LogicalNot, LogicalOr, Minus, MinusEquals, Modulo, ModuloEquals, Multiply,
-            MultiplyEquals, NotEquals, ParenClose, ParenOpen, Plus, PlusEquals, Power, Question,
-            RightShift, Semicolon, String, Underscore,
-        };
+        use TokenKind::*;
 
         match self {
             Bool(true) => write!(f, "true"),
@@ -267,6 +289,7 @@ impl Display for TokenKind {
             Integer(n) => write!(f, "{n}"),
             Float(n) => write!(f, "{n}"),
             String(s) => write!(f, "{s}"),
+            Char(c) => write!(f, "{c}"),
             Identifier(ident) => write!(f, "{ident}"),
         }
     }
