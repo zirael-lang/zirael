@@ -109,8 +109,6 @@ impl<'a> Parser<'a> {
             }
         }
 
-        self.expect(TokenKind::BraceClose);
-
         (
             ItemKind::Struct(StructDeclaration {
                 id,

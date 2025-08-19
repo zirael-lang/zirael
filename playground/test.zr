@@ -1,21 +1,14 @@
 struct Pair<T, U> {
     first: T,
     second: U,
-}
 
-struct Person {
-    name: char,
-    hobby: Pair<string, string>
+    fn name(): T {
+        return first;
+    }
 }
-
-fn test(pair: Pair<string, string>) {}
 
 fn main() {
     var pair = Pair { first: "Jeff", second: 25 };
 
     var _test = pair.first;
-
-    var hobby = Pair { first: "name", second: "hobby" };
-    var person = Person { name: 'A', hobby: hobby };
-    test(person.hobby);
 }
