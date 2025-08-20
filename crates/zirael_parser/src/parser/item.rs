@@ -26,8 +26,23 @@ impl<'a> Parser<'a> {
         } else if self.match_keyword(Keyword::Import) {
             self.parse_import()
         } else {
-            self.error_at_peek(format!("no valid item found for {:?}", self.peek()));
-            self.synchronize(&[TokenKind::Semicolon, TokenKind::BraceClose]);
+            if let Some(token) = self.peek() {
+                self.error_at_peek(format!(
+                    "expected item declaration (fn, struct, or import), found {:?}",
+                    token.kind
+                ));
+            } else {
+                self.error_at_peek("expected item declaration, found end of file");
+            }
+
+            self.synchronize(&[
+                TokenKind::Keyword(Keyword::Fn),
+                TokenKind::Keyword(Keyword::Struct),
+                TokenKind::Keyword(Keyword::Import),
+                TokenKind::Semicolon,
+                TokenKind::BraceClose,
+            ]);
+
             return None;
         };
 

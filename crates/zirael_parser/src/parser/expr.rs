@@ -283,8 +283,14 @@ impl<'a> Parser<'a> {
         let mut stmts = vec![];
 
         while !self.check(&TokenKind::BraceClose) && !self.is_at_end() {
+            let start_position = self.position;
             let stmt = self.parse_stmt();
             stmts.push(stmt);
+
+            if self.position == start_position {
+                self.error_at_peek("unable to parse statement, skipping token");
+                self.advance();
+            }
         }
 
         if !self.match_token(TokenKind::BraceClose) {
@@ -302,15 +308,26 @@ impl<'a> Parser<'a> {
 
         if !self.check(&TokenKind::BraceClose) {
             loop {
+                let start_position = self.position;
+
                 let field_name = if let Some(ident) = self.expect_identifier() {
                     ident
                 } else {
                     self.error_at_current("expected field name in struct initializer");
-                    break;
+                    self.synchronize(&[TokenKind::Comma, TokenKind::BraceClose]);
+
+                    if self.position == start_position && !self.is_at_end() {
+                        self.advance();
+                    }
+
+                    if self.check(&TokenKind::BraceClose) {
+                        break;
+                    }
+                    continue;
                 };
 
-                if !self.match_token(TokenKind::Colon) {
-                    self.error_at_current("expected ':' after field name");
+                if !self.match_token(TokenKind::Colon) && !self.match_token(TokenKind::Equals) {
+                    self.error_at_current("expected ':' or '=' after field name");
                     self.synchronize(&[TokenKind::Comma, TokenKind::BraceClose]);
                     if self.check(&TokenKind::BraceClose) {
                         break;

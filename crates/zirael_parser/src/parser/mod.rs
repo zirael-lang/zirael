@@ -338,8 +338,15 @@ impl<'a> Parser<'a> {
         let mut items = Vec::new();
 
         while !self.is_at_end() {
+            let start_position = self.position;
+
             if let Some(item) = self.parse_item() {
                 items.push(item);
+            } else {
+                if self.position == start_position {
+                    self.error_at_peek("unexpected token, skipping");
+                    self.advance();
+                }
             }
         }
 

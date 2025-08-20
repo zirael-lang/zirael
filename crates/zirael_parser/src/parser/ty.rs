@@ -41,17 +41,23 @@ impl<'a> Parser<'a> {
                         }
                     } else {
                         self.error_at_current("expected array size");
+                        self.synchronize(&[TokenKind::BracketClose]);
+                        self.match_token(TokenKind::BracketClose);
                     }
                 } else if self.match_token(TokenKind::BracketClose) {
                     // Dynamic array [T]
                     return Some(Type::Array(Box::new(element_type), None));
                 } else {
                     self.error_at_current("expected ';' or ']' in array type");
+                    self.synchronize(&[TokenKind::BracketClose]);
+                    self.match_token(TokenKind::BracketClose);
                 }
             } else {
                 self.error_at_current("expected element type in array");
+                self.synchronize(&[TokenKind::BracketClose]);
+                self.match_token(TokenKind::BracketClose);
             }
-            return None;
+            return Some(Type::Error);
         }
 
         if self.match_token(TokenKind::BitwiseAnd) {
@@ -59,7 +65,7 @@ impl<'a> Parser<'a> {
                 return Some(Type::Reference(Box::new(inner_type)));
             }
             self.error_at_current("expected type after '&'");
-            return None;
+            return Some(Type::Error);
         }
 
         if self.match_token(TokenKind::Multiply) {
@@ -67,7 +73,7 @@ impl<'a> Parser<'a> {
                 return Some(Type::Pointer(Box::new(inner_type)));
             }
             self.error_at_current("expected type after '*'");
-            return None;
+            return Some(Type::Error);
         }
 
         if self.match_keyword(Keyword::Fn) {
@@ -85,6 +91,12 @@ impl<'a> Parser<'a> {
             })
         }) {
             return Some(Type::Named { name: ident, generics: vec![] });
+        }
+
+        if let Some(token) = self.peek() {
+            self.error_at_peek(format!("unexpected token in type context: {:?}", token.kind));
+        } else {
+            self.error_at_peek("unexpected end of input while parsing type");
         }
 
         None

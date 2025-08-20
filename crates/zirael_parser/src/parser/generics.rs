@@ -18,10 +18,17 @@ impl<'a> Parser<'a> {
         }
 
         loop {
+            let start_position = self.position;
+
             match self.parse_generic_parameter() {
                 Some(param) => generics.push(param),
                 None => {
+                    self.error_at_current("failed to parse generic parameter");
                     self.synchronize(&[TokenKind::Comma, TokenKind::GreaterThan]);
+
+                    if self.position == start_position && !self.is_at_end() {
+                        self.advance();
+                    }
                 }
             }
 
@@ -33,12 +40,11 @@ impl<'a> Parser<'a> {
                 break;
             } else {
                 self.error_at_current("expected ',' or '>' in generic parameter list");
-
                 self.synchronize(&[TokenKind::Comma, TokenKind::GreaterThan]);
 
                 if self.match_token(TokenKind::GreaterThan) {
                     break;
-                } else {
+                } else if !self.is_at_end() {
                     self.error_at_current("unable to recover from generic parsing error");
                     break;
                 }
