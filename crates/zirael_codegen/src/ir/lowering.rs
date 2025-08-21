@@ -80,6 +80,7 @@ impl<'reports> HirLowering<'reports> {
 
     pub fn lower_type(&mut self, ty: Type) -> Type {
         match ty {
+            Type::Reference(ty) => Type::Reference(Box::new(self.lower_type(*ty))),
             Type::MonomorphizedSymbol(sym) => self.handle_monomorphized_symbol(&sym, true),
             Type::Named { name, generics } if generics.is_empty() => {
                 let symbol = self.symbol_table.lookup_symbol(&name);
@@ -426,11 +427,15 @@ impl<'reports> HirLowering<'reports> {
                 op,
                 Box::new(self.lower_expr(*right)),
             ),
-            HirExprKind::FieldAccess { field_symbol, fields } => {
-                let mut f = vec![self.mangle_symbol(field_symbol)];
+            HirExprKind::FieldAccess { field_symbol, main_access, fields } => {
+                let mut f = vec![self.mangle_symbol(field_symbol), main_access.to_string()];
 
-                for field in fields {
+                for (i, (field, access)) in fields.iter().enumerate() {
                     f.push(resolve(&field));
+
+                    if i != fields.len() - 1 {
+                        f.push(access.to_string());
+                    }
                 }
 
                 IrExprKind::FieldAccess(f)

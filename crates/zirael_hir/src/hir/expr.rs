@@ -1,3 +1,4 @@
+use std::fmt::Display;
 use zirael_parser::*;
 use zirael_utils::prelude::*;
 
@@ -39,13 +40,29 @@ pub enum HirExprKind {
     },
     FieldAccess {
         field_symbol: SymbolId,
-        fields: Vec<Identifier>,
+        main_access: AccessKind,
+        fields: Vec<(Identifier, AccessKind)>,
     },
     IndexAccess {
         object: Box<HirExpr>,
         index: Box<HirExpr>,
     },
     Error,
+}
+
+#[derive(Debug, Clone)]
+pub enum AccessKind {
+    Value,
+    Pointer,
+}
+
+impl Display for AccessKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AccessKind::Value => write!(f, "."),
+            AccessKind::Pointer => write!(f, "->"),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

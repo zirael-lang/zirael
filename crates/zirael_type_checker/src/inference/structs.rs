@@ -20,7 +20,7 @@ impl<'reports> TypeInference<'reports> {
         };
 
         let symbol = self.symbol_table.get_symbol_unchecked(&struct_sym_id);
-        if let SymbolKind::Struct { fields: struct_fields, generics } = &symbol.kind {
+        if let SymbolKind::Struct { fields: struct_fields, generics, .. } = &symbol.kind {
             for field in struct_fields {
                 if !fields.contains_key(&field.name) {
                     self.error(

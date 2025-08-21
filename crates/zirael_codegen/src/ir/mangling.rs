@@ -1,48 +1,29 @@
 use crate::ir::HirLowering;
 use std::hash::{DefaultHasher, Hash as _, Hasher as _};
-use zirael_parser::{SymbolId, Type};
+use zirael_parser::{Symbol, SymbolId, Type};
 use zirael_utils::{
     ident_table::resolve,
     prelude::{Mode, strip_same_root, warn},
 };
 
 impl<'reports> HirLowering<'reports> {
-    pub fn mangle_symbol(&self, sym_id: SymbolId) -> String {
+    pub fn mangle_symbol(&mut self, sym_id: SymbolId) -> String {
         if self.mode == Mode::Debug {
-            self.symbol_table.get_c_identifier(sym_id).unwrap()
+            self.mangle_debug_symbol(sym_id, &[])
         } else {
-            let symbol = self.symbol_table.get_symbol_unchecked(&sym_id);
-            let canonical_id = symbol.canonical_symbol;
+            self.mangle_release_symbol(sym_id, &[])
+        }
+    }
 
-            if let Some(mangled) = self.symbol_table.get_mangled_name(canonical_id) {
-                return mangled;
-            }
+    pub fn get_sym_name(&self, sym: &Symbol) -> String {
+        let base = resolve(&sym.name);
 
-            let canonical_symbol = self.symbol_table.get_symbol_unchecked(&canonical_id);
-            let symbol_name = resolve(&canonical_symbol.name);
-
-            let symbol_file = self.symbol_table.get_symbol_module(canonical_symbol.scope).unwrap();
-            let file_path = self.sources.get_unchecked(symbol_file).path();
-            let base_path = strip_same_root(file_path, self.root.clone()).with_extension("");
-
-            let mut result = String::from("_ZN");
-            result.push_str(&format!("{}{}", symbol_name.len(), symbol_name));
-
-            for component in base_path.components() {
-                if let Some(component_str) = component.as_os_str().to_str() {
-                    result.push_str(&format!("{}{}", component_str.len(), component_str));
-                }
-            }
-
-            let mut hasher = DefaultHasher::new();
-            symbol_name.hash(&mut hasher);
-            let hash = format!("{:x}", hasher.finish());
-            result.push('h');
-            result.push_str(&hash);
-            result.push('E');
-
-            self.symbol_table.add_mangled_name(canonical_id, result.clone());
-            result
+        if let Some(parent_struct) = self.symbol_table.is_a_method(sym.id) {
+            let parent_struct = self.symbol_table.get_symbol_unchecked(&parent_struct);
+            let parent_struct_name = resolve(&parent_struct.name);
+            format!("{}_{}", parent_struct_name, base)
+        } else {
+            base
         }
     }
 
@@ -52,54 +33,108 @@ impl<'reports> HirLowering<'reports> {
         type_arguments: &[Type],
     ) -> String {
         if self.mode == Mode::Debug {
-            // In debug mode, use readable names
-            let base_name = self.symbol_table.get_c_identifier(original_sym_id).unwrap();
+            self.mangle_debug_symbol(original_sym_id, type_arguments)
+        } else {
+            self.mangle_release_symbol(original_sym_id, type_arguments)
+        }
+    }
+
+    fn mangle_debug_symbol(&mut self, sym_id: SymbolId, type_arguments: &[Type]) -> String {
+        let symbol = self.symbol_table.get_symbol_unchecked(&sym_id);
+        let canonical_symbol = self.symbol_table.get_symbol_unchecked(&symbol.canonical_symbol);
+
+        let base_name = format!("__zirael_{}", self.get_sym_name(&canonical_symbol));
+
+        if type_arguments.is_empty() {
+            base_name
+        } else {
             let type_suffix = type_arguments
                 .iter()
                 .map(|ty| self.mangle_type_for_name(ty))
                 .collect::<Vec<_>>()
                 .join("_");
-
-            if type_suffix.is_empty() { base_name } else { format!("{base_name}__{type_suffix}") }
-        } else {
-            let symbol = self.symbol_table.get_symbol_unchecked(&original_sym_id);
-            let canonical_id = symbol.canonical_symbol;
-            let canonical_symbol = self.symbol_table.get_symbol_unchecked(&canonical_id);
-            let symbol_name = resolve(&canonical_symbol.name);
-
-            let symbol_file = self.symbol_table.get_symbol_module(canonical_symbol.scope).unwrap();
-            let file_path = self.sources.get_unchecked(symbol_file).path();
-            let base_path = strip_same_root(file_path, self.root.clone()).with_extension("");
-
-            let mut result = String::from("_ZN");
-            result.push_str(&format!("{}{}", symbol_name.len(), symbol_name));
-
-            for component in base_path.components() {
-                if let Some(component_str) = component.as_os_str().to_str() {
-                    result.push_str(&format!("{}{}", component_str.len(), component_str));
-                }
-            }
-
-            if !type_arguments.is_empty() {
-                result.push('I');
-                for ty in type_arguments {
-                    self.mangle_type_into_string(ty, &mut result);
-                }
-                result.push('E');
-            }
-
-            let mut hasher = DefaultHasher::new();
-            symbol_name.hash(&mut hasher);
-            for ty in type_arguments {
-                self.hash_type(ty, &mut hasher);
-            }
-            let hash = format!("{:x}", hasher.finish());
-            result.push('h');
-            result.push_str(&hash);
-            result.push('E');
-
-            result
+            format!("{}__{}", base_name, type_suffix)
         }
+    }
+
+    fn mangle_release_symbol(&mut self, sym_id: SymbolId, type_arguments: &[Type]) -> String {
+        let symbol = self.symbol_table.get_symbol_unchecked(&sym_id);
+        let canonical_id = symbol.canonical_symbol;
+
+        let cache_key = self.compute_cache_key(canonical_id, type_arguments);
+        if let Some(cached) = self.get_cached_mangled_name(canonical_id, &cache_key) {
+            return cached;
+        }
+
+        let canonical_symbol = self.symbol_table.get_symbol_unchecked(&canonical_id);
+        let result = self.build_mangled_name(&canonical_symbol, type_arguments);
+
+        self.cache_mangled_name(canonical_id, cache_key, result.clone());
+        result
+    }
+
+    fn build_mangled_name(&mut self, symbol: &Symbol, type_arguments: &[Type]) -> String {
+        let symbol_name = self.get_sym_name(symbol);
+        let symbol_file = self.symbol_table.get_symbol_module(symbol.scope).unwrap();
+        let file_path = self.sources.get_unchecked(symbol_file).path();
+        let base_path = strip_same_root(file_path, self.root.clone()).with_extension("");
+
+        let mut result = String::from("_ZN");
+
+        result.push_str(&format!("{}{}", symbol_name.len(), symbol_name));
+
+        for component in base_path.components() {
+            if let Some(component_str) = component.as_os_str().to_str() {
+                result.push_str(&format!("{}{}", component_str.len(), component_str));
+            }
+        }
+
+        if !type_arguments.is_empty() {
+            result.push('I');
+            for ty in type_arguments {
+                self.mangle_type_into_string(ty, &mut result);
+            }
+            result.push('E');
+        }
+
+        let hash = self.compute_symbol_hash(&symbol_name, type_arguments);
+        result.push('h');
+        result.push_str(&hash);
+        result.push('E');
+
+        result
+    }
+
+    fn compute_cache_key(&mut self, symbol_id: SymbolId, type_arguments: &[Type]) -> String {
+        if type_arguments.is_empty() {
+            format!("sym_{}", symbol_id.index())
+        } else {
+            let type_hash = {
+                let mut hasher = DefaultHasher::new();
+                for ty in type_arguments {
+                    self.hash_type(ty, &mut hasher);
+                }
+                hasher.finish()
+            };
+            format!("sym_{}_{:x}", symbol_id.index(), type_hash)
+        }
+    }
+
+    fn get_cached_mangled_name(&self, symbol_id: SymbolId, _cache_key: &str) -> Option<String> {
+        self.symbol_table.get_mangled_name(symbol_id)
+    }
+
+    fn cache_mangled_name(&self, symbol_id: SymbolId, _cache_key: String, mangled_name: String) {
+        self.symbol_table.add_mangled_name(symbol_id, mangled_name);
+    }
+
+    fn compute_symbol_hash(&mut self, symbol_name: &str, type_arguments: &[Type]) -> String {
+        let mut hasher = DefaultHasher::new();
+        symbol_name.hash(&mut hasher);
+        for ty in type_arguments {
+            self.hash_type(ty, &mut hasher);
+        }
+        format!("{:x}", hasher.finish())
     }
 
     fn mangle_type_for_name(&mut self, ty: &Type) -> String {

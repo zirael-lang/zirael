@@ -1,7 +1,7 @@
 use lasso::{Spur, ThreadedRodeo};
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
-use std::fmt::{Debug, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 
 pub struct IdentTable {
     interner: ThreadedRodeo,
@@ -31,6 +31,12 @@ impl IdentTable {
 }
 
 impl Debug for Identifier {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", resolve(self))
+    }
+}
+
+impl Display for Identifier {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", resolve(self))
     }

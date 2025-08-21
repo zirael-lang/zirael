@@ -1,8 +1,9 @@
 use crate::hir::{
     ExprContext, HirBody, HirFunction, HirFunctionSignature, HirItem, HirItemKind, HirModule,
     HirParam, HirStruct,
-    expr::{HirExpr, HirExprKind, HirStmt},
+    expr::{AccessKind, HirExpr, HirExprKind, HirStmt},
 };
+use id_arena::Arena;
 use std::{collections::HashMap, ops::Range};
 use zirael_parser::{ast::item::Item, *};
 use zirael_utils::prelude::*;
@@ -12,6 +13,7 @@ pub struct AstLowering<'reports> {
     reports: Reports<'reports>,
     processed_file: Option<SourceFileId>,
     pub folded_vars: HashMap<SymbolId, HirExprKind>,
+    ast_id_arena: Arena<()>,
 }
 
 impl<'reports> AstLowering<'reports> {
@@ -21,6 +23,7 @@ impl<'reports> AstLowering<'reports> {
             reports: reports.clone(),
             processed_file: None,
             folded_vars: HashMap::new(),
+            ast_id_arena: Arena::new(),
         }
     }
 
@@ -155,6 +158,10 @@ impl<'reports> AstLowering<'reports> {
         self.lower_expr_impl(ast_expr, ExprContext::Stmt)
     }
 
+    fn lower_call_args(&mut self, args: &mut Vec<Expr>) -> Vec<HirExpr> {
+        args.iter_mut().map(|arg| self.lower_expr(arg)).collect()
+    }
+
     fn lower_expr_impl(&mut self, ast_expr: &mut Expr, context: ExprContext) -> HirExpr {
         let hir_kind = match &mut ast_expr.kind {
             ExprKind::Literal(lit) => HirExprKind::Literal(lit.clone()),
@@ -207,11 +214,66 @@ impl<'reports> AstLowering<'reports> {
 
             ExprKind::Call { callee, args, call_info } => {
                 let callee_expr = Box::new(self.lower_expr(callee));
-                let arg_exprs: Vec<HirExpr> =
-                    args.iter_mut().map(|arg| self.lower_expr(arg)).collect();
                 HirExprKind::Call {
                     callee: callee_expr,
-                    args: arg_exprs,
+                    args: self.lower_call_args(args),
+                    call_info: call_info.clone(),
+                }
+            }
+
+            ExprKind::StaticCall { callee, args, call_info } => {
+                let ExprKind::FieldAccess(fields) = &mut callee.kind else { unreachable!() };
+
+                let expr = self.lower_expr(&mut fields[1]);
+                HirExprKind::Call {
+                    callee: Box::new(expr),
+                    args: self.lower_call_args(args),
+                    call_info: call_info.clone(),
+                }
+            }
+
+            ExprKind::MethodCall { chain, args, call_info } => {
+                if chain.len() < 2 {
+                    self.error("Invalid method call chain", vec![], vec![]);
+                    return HirExpr {
+                        kind: HirExprKind::Error,
+                        ty: ast_expr.ty.clone(),
+                        span: ast_expr.span.clone(),
+                        id: ast_expr.id,
+                    };
+                }
+
+                let receiver = self.lower_expr(&mut chain[0]);
+                let method_expr = self.lower_expr(chain.last_mut().unwrap());
+                let method =
+                    self.symbol_table.get_symbol_unchecked(&if let HirExprKind::Symbol(id) =
+                        method_expr.kind
+                    {
+                        id
+                    } else {
+                        unreachable!()
+                    });
+                let SymbolKind::Function { signature, .. } = method.kind else { unreachable!() };
+
+                let mut method_args =
+                    vec![if signature.parameters.first().unwrap().ty.is_reference() {
+                        HirExpr {
+                            kind: HirExprKind::Unary {
+                                op: UnaryOp::Ref,
+                                operand: Box::new(receiver),
+                            },
+                            ty: Type::Inferred,
+                            span: Default::default(),
+                            id: self.ast_id_arena.alloc(()),
+                        }
+                    } else {
+                        receiver
+                    }];
+                method_args.extend(self.lower_call_args(args));
+
+                HirExprKind::Call {
+                    callee: Box::new(method_expr),
+                    args: method_args,
                     call_info: call_info.clone(),
                 }
             }
@@ -232,16 +294,26 @@ impl<'reports> AstLowering<'reports> {
             }
 
             ExprKind::FieldAccess(fields) => {
-                let (_, symbol_id) = self.symbol_table.symbol_from_expr(&fields[0]).unwrap();
+                let base = &fields[0].clone();
+                let (_, symbol_id) = self.symbol_table.symbol_from_expr(base).unwrap();
                 fields.remove(0);
 
                 let mut indents = vec![];
                 for field in fields {
                     let (ident, _) = field.as_identifier().unwrap();
-                    indents.push(ident.clone());
+                    indents.push((
+                        ident.clone(),
+                        if field.ty.is_reference() {
+                            AccessKind::Pointer
+                        } else {
+                            AccessKind::Value
+                        },
+                    ));
                 }
+                let main_access =
+                    if base.ty.is_reference() { AccessKind::Pointer } else { AccessKind::Value };
 
-                HirExprKind::FieldAccess { field_symbol: symbol_id, fields: indents }
+                HirExprKind::FieldAccess { field_symbol: symbol_id, main_access, fields: indents }
             }
 
             ExprKind::IndexAccess(object, index) => {

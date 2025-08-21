@@ -1,14 +1,29 @@
-struct Vec2 {
-    x: float,
-    y: float,
+// Generic box that can hold any type
+struct Box<T> {
+    value: T,
 
-    fn zero(): Vec2 {
-        Vec2 { x = 0.0, y = 0.0 }
+    fn new(val: T): Box<T> {
+        Box { value: val }
     }
 }
 
-fn main() {
-    var pair = Pair { first: "Jeff", second: 25 };
+// Generic function
+fn identity<T>(x: T): T {
+    x
+}
 
-    var _test = pair.first;
+fn main() {
+    // Creating generic instances
+    var int_box = Box::new(42);      // Type inferred as Box<int>
+    //var str_box = Box::new("hello"); // Type inferred as Box<string>
+    //var bool_box = Box::new(true);   // Type inferred as Box<bool>
+
+    // Using the boxes
+    //var value = int_box.get();
+    //int_box.set(100);
+
+    // Generic function usage
+    var x = identity(5);      // Returns int
+    var y = identity("test"); // Returns string
+    var z = identity(3.14);   // Returns float
 }

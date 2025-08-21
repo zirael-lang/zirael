@@ -4,16 +4,15 @@ use crate::ir::{
 };
 use itertools::Itertools;
 use std::{
-    collections::{HashMap, HashSet},
-    fmt::format,
+    collections::HashMap,
     hash::{DefaultHasher, Hash as _},
 };
 use zirael_parser::{
-    GenericParameter, MonomorphizationId, SymbolKind, SymbolRelationNode,
-    SymbolRelationNode::Symbol, Type, monomorphized_symbol::MonomorphizedSymbol,
+    GenericParameter, MonomorphizationId, SymbolKind, SymbolRelationNode, Type,
+    monomorphized_symbol::MonomorphizedSymbol,
 };
 use zirael_type_checker::MonomorphizationEntry;
-use zirael_utils::prelude::{Identifier, get_or_intern, resolve, warn};
+use zirael_utils::prelude::{Identifier, get_or_intern, resolve};
 
 impl<'reports> HirLowering<'reports> {
     pub fn process_monomorphization_entries(&mut self, module: &mut IrModule) {
@@ -110,7 +109,13 @@ impl<'reports> HirLowering<'reports> {
             })
             .collect_vec();
 
-        IrStruct { name, methods: struct_def.methods.clone(), fields }
+        let methods = struct_def
+            .methods
+            .iter()
+            .map(|m| self.monomorphize_function(m.name.clone(), m, type_map))
+            .collect_vec();
+
+        IrStruct { name, methods, fields }
     }
 
     fn monomorphize_function(
@@ -240,6 +245,15 @@ impl<'reports> HirLowering<'reports> {
     }
 
     fn substitute_type(&mut self, ty: &Type, type_map: &HashMap<Identifier, Type>) -> Type {
+        self.substitute_type_with_visited(ty, type_map, &mut std::collections::HashSet::new())
+    }
+
+    fn substitute_type_with_visited(
+        &mut self,
+        ty: &Type,
+        type_map: &HashMap<Identifier, Type>,
+        visited: &mut std::collections::HashSet<Identifier>,
+    ) -> Type {
         let new_ty = match ty {
             Type::TypeVariable { id: _, name } => {
                 if let Some(concrete_type) = type_map.get(name) {
@@ -249,36 +263,55 @@ impl<'reports> HirLowering<'reports> {
                 }
             }
 
-            Type::Pointer(inner) => Type::Pointer(Box::new(self.substitute_type(inner, type_map))),
-
-            Type::Reference(inner) => {
-                Type::Reference(Box::new(self.substitute_type(inner, type_map)))
+            Type::Pointer(inner) => {
+                Type::Pointer(Box::new(self.substitute_type_with_visited(inner, type_map, visited)))
             }
 
-            Type::Array(inner, size) => {
-                Type::Array(Box::new(self.substitute_type(inner, type_map)), *size)
-            }
+            Type::Reference(inner) => Type::Reference(Box::new(
+                self.substitute_type_with_visited(inner, type_map, visited),
+            )),
+
+            Type::Array(inner, size) => Type::Array(
+                Box::new(self.substitute_type_with_visited(inner, type_map, visited)),
+                *size,
+            ),
 
             Type::Named { name, generics } => {
                 if type_map.contains_key(name) {
-                    return self.substitute_type(type_map.get(name).unwrap(), type_map);
+                    if visited.contains(name) {
+                        return ty.clone();
+                    }
+
+                    visited.insert(*name);
+                    let result = self.substitute_type_with_visited(
+                        type_map.get(name).unwrap(),
+                        type_map,
+                        visited,
+                    );
+                    visited.remove(name);
+                    return result;
                 }
 
                 if generics.is_empty() {
                     ty.clone()
                 } else {
-                    let substituted_generics =
-                        generics.iter().map(|g| self.substitute_type(g, type_map)).collect();
+                    let substituted_generics = generics
+                        .iter()
+                        .map(|g| self.substitute_type_with_visited(g, type_map, visited))
+                        .collect();
 
                     Type::Named { name: *name, generics: substituted_generics }
                 }
             }
 
             Type::Function { params, return_type } => {
-                let substituted_params =
-                    params.iter().map(|p| self.substitute_type(p, type_map)).collect();
+                let substituted_params = params
+                    .iter()
+                    .map(|p| self.substitute_type_with_visited(p, type_map, visited))
+                    .collect();
 
-                let substituted_return = Box::new(self.substitute_type(return_type, type_map));
+                let substituted_return =
+                    Box::new(self.substitute_type_with_visited(return_type, type_map, visited));
 
                 Type::Function { params: substituted_params, return_type: substituted_return }
             }

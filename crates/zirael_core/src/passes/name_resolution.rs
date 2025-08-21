@@ -1,7 +1,7 @@
 use crate::prelude::{WalkerContext, warn};
 use zirael_parser::{
-    AstWalker, Expr, ScopeType, Symbol, SymbolId, SymbolKind, SymbolRelationNode, SymbolTable,
-    Type, impl_ast_walker, item::Item,
+    AstWalker, CallInfo, Expr, ExprKind, ScopeType, Symbol, SymbolId, SymbolKind,
+    SymbolRelationNode, SymbolTable, Type, impl_ast_walker, item::Item,
 };
 use zirael_utils::prelude::*;
 
@@ -47,7 +47,7 @@ impl ExpectedSymbol {
             Self::Struct => "struct",
             Self::Enum => "enum",
             Self::Parameter => "parameter",
-            Self::Type => "type",
+            Self::Type => "struct or enum",
             Self::Value => "parameter, constant, or variable",
             Self::Any => "symbol",
         }
@@ -134,6 +134,20 @@ impl<'reports> NameResolution<'reports> {
         }
         report
     }
+
+    fn resolve_field_chain(&mut self, fields: &mut Vec<Expr>) {
+        let base = &mut fields[0];
+        let span = base.span.clone();
+        let Some((ident, ident_sym_id)) = base.as_identifier_mut() else {
+            self.error("expected identifier in field access", vec![], vec![]);
+            return;
+        };
+
+        if let Some(id) = self.resolve_identifier(ident, span, ExpectedSymbol::Value) {
+            *ident_sym_id = Some(id);
+            self.symbol_table.mark_used(id).expect("invalid symbol id");
+        }
+    }
 }
 
 impl<'reports> AstWalker<'reports> for NameResolution<'reports> {
@@ -183,17 +197,7 @@ impl<'reports> AstWalker<'reports> for NameResolution<'reports> {
     }
 
     fn visit_field_access(&mut self, fields: &mut Vec<Expr>) {
-        let base = &mut fields[0];
-        let span = base.span.clone();
-        let Some((ident, ident_sym_id)) = base.as_identifier_mut() else {
-            self.error("expected identifier in field access", vec![], vec![]);
-            return;
-        };
-
-        if let Some(id) = self.resolve_identifier(ident, span, ExpectedSymbol::Value) {
-            *ident_sym_id = Some(id);
-            self.symbol_table.mark_used(id).expect("invalid symbol id");
-        }
+        self.resolve_field_chain(fields);
     }
 
     fn visit_type(&mut self, _ty: &mut Type) {
@@ -207,6 +211,51 @@ impl<'reports> AstWalker<'reports> for NameResolution<'reports> {
                     self.symbol_table.mark_used(sym.id).expect("invalid symbol id");
                 }
             }
+        }
+    }
+
+    fn visit_method_call(
+        &mut self,
+        _chain: &mut Vec<Expr>,
+        _args: &mut Vec<Expr>,
+        _info: &mut Option<CallInfo>,
+    ) {
+        self.resolve_field_chain(_chain);
+
+        for arg in _args {
+            self.visit_expr(arg);
+        }
+    }
+
+    fn visit_static_call(
+        &mut self,
+        _callee: &mut Expr,
+        _args: &mut Vec<Expr>,
+        _: &mut Option<CallInfo>,
+    ) {
+        let ExprKind::FieldAccess(fields) = &mut _callee.kind else {
+            self.error("expected field access in static call", vec![], vec![]);
+            return;
+        };
+
+        let base = &mut fields[0];
+        let span = base.span.clone();
+        let Some((ident, ident_sym_id)) = base.as_identifier_mut() else {
+            self.error("expected identifier in field access", vec![], vec![]);
+            return;
+        };
+
+        if let Some(id) = self.resolve_identifier(ident, span, ExpectedSymbol::Type) {
+            *ident_sym_id = Some(id);
+
+            self.symbol_table.new_relation(
+                SymbolRelationNode::Symbol(self.current_item.unwrap()),
+                SymbolRelationNode::Symbol(id),
+            );
+        }
+
+        for arg in _args {
+            self.visit_expr(arg);
         }
     }
 }

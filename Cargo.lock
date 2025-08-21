@@ -1350,6 +1350,7 @@ dependencies = [
 name = "zirael_hir"
 version = "0.1.0"
 dependencies = [
+ "id-arena",
  "zirael_parser",
  "zirael_utils",
 ]

@@ -24,6 +24,9 @@ pub enum ExprKind {
     Call { callee: Box<Expr>, args: Vec<Expr>, call_info: Option<CallInfo> },
     FieldAccess(Vec<Expr>),
     IndexAccess(Box<Expr>, Box<Expr>),
+    // the last one in the chain is the method to call
+    MethodCall { chain: Vec<Expr>, args: Vec<Expr>, call_info: Option<CallInfo> },
+    StaticCall { callee: Box<Expr>, args: Vec<Expr>, call_info: Option<CallInfo> },
     CouldntParse(CouldntParse),
     StructInit { name: Box<Expr>, fields: HashMap<Identifier, Expr>, call_info: Option<CallInfo> },
 }
@@ -111,6 +114,8 @@ impl ExprKind {
             Self::Call { .. } => "call",
             Self::FieldAccess(_) => "field access",
             Self::IndexAccess(_, _) => "index access",
+            Self::MethodCall { .. } => "method call",
+            Self::StaticCall { .. } => "static call",
             Self::StructInit { .. } => "struct constructor",
             Self::CouldntParse(_) => "couldnt parse",
         }

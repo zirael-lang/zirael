@@ -8,6 +8,7 @@ repository.workspace = true
 [dependencies]
 zirael_parser = { workspace = true }
 zirael_utils = { workspace = true }
+id-arena = { workspace = true }
 
 [lints]
 workspace = true

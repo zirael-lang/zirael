@@ -40,6 +40,10 @@ impl Type {
     pub fn is_float(&self) -> bool {
         matches!(self, Self::Float)
     }
+
+    pub fn is_reference(&self) -> bool {
+        matches!(self, Self::Reference(_))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

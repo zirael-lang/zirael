@@ -62,6 +62,16 @@ pub struct FunctionSignature {
     pub return_type: Type,
 }
 
+impl FunctionSignature {
+    pub fn is_static(&self) -> bool {
+        if let Some(first) = self.parameters.first() {
+            first.name != get_or_intern("self")
+        } else {
+            true
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Parameter {
     pub name: Identifier,

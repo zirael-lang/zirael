@@ -244,7 +244,10 @@ impl Gen for IrExpr {
             IrExprKind::Literal(lit) => {
                 let lit = match lit {
                     Literal::Integer(int) => int.to_string(),
-                    Literal::Float(float) => float.to_string(),
+                    Literal::Float(float) => {
+                        let s = float.to_string();
+                        if s.contains('.') { format!("{}f", s) } else { format!("{}.0f", s) }
+                    }
                     Literal::Char(char) => format!("'{char}'"),
                     Literal::String(string) => format!("\"{string}\""),
                     Literal::Bool(bool) => {
@@ -350,14 +353,10 @@ impl Gen for IrExpr {
                 p.write(op);
                 p.write(" ");
                 rhs.generate(p);
-                p.write(";");
             }
             IrExprKind::FieldAccess(fields) => {
-                for (i, field) in fields.iter().enumerate() {
-                    if i != 0 {
-                        p.write(".");
-                    }
-                    p.write(field);
+                for part in fields {
+                    p.write(part);
                 }
             }
             _ => {}

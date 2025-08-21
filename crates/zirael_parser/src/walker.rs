@@ -1,5 +1,5 @@
 use crate::{
-    AstId, LexedModule, ModuleId, Return, ScopeType, SymbolTable,
+    AstId, CallInfo, LexedModule, ModuleId, Return, ScopeType, SymbolTable,
     ast::{
         Abi, Ast, Attribute, BinaryOp, EnumDeclaration, EnumVariant, EnumVariantData, Expr,
         ExprKind, Function, FunctionModifiers, FunctionSignature, GenericArg, GenericParameter,
@@ -254,6 +254,12 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
                 }
             }
             ExprKind::FieldAccess(exprs) => self.visit_field_access(exprs),
+            ExprKind::MethodCall { chain, args, call_info } => {
+                self.visit_method_call(chain, args, call_info)
+            }
+            ExprKind::StaticCall { callee, args, call_info } => {
+                self.visit_static_call(callee, args, call_info)
+            }
             ExprKind::IndexAccess(expr, index) => {
                 self.walk_expr(expr);
                 self.walk_expr(index);
@@ -437,6 +443,20 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
     fn visit_return(&mut self, _ret: &mut Return) {}
     fn visit_struct_init(&mut self, _name: &mut Expr, _fields: &mut HashMap<Identifier, Expr>) {}
     fn visit_field_access(&mut self, _exprs: &mut Vec<Expr>) {}
+    fn visit_method_call(
+        &mut self,
+        _chain: &mut Vec<Expr>,
+        _args: &mut Vec<Expr>,
+        _call_info: &mut Option<CallInfo>,
+    ) {
+    }
+    fn visit_static_call(
+        &mut self,
+        _callee: &mut Expr,
+        _args: &mut Vec<Expr>,
+        _call_info: &mut Option<CallInfo>,
+    ) {
+    }
 }
 
 #[macro_export]

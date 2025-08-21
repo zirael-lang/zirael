@@ -54,14 +54,14 @@ impl<'reports> MemoryAnalysis<'reports> {
             );
             return;
         }
-
-        let sym_id = match expr.kind {
-            ExprKind::Identifier(_, symbol_id) => symbol_id.unwrap(),
-            ExprKind::FieldAccess(_) | ExprKind::IndexAccess(_, _) => {
-                todo!("not implemented")
-            }
-            _ => unreachable!(),
-        };
+        //
+        // let sym_id = match expr.kind {
+        //     ExprKind::Identifier(_, symbol_id) => symbol_id.unwrap(),
+        //     ExprKind::FieldAccess(_) | ExprKind::IndexAccess(_, _) => {
+        //         todo!("not implemented")
+        //     }
+        //     _ => unreachable!(),
+        // };
     }
 
     fn handle_invalid_box_operation(&mut self, expr: &Expr) {

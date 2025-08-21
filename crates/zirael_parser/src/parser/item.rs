@@ -88,12 +88,22 @@ impl<'a> Parser<'a> {
             let attrs = self.parse_attrs();
 
             if self.check_keyword(Keyword::Fn) {
-                if let Some(item) = self.parse_item() {
-                    if let ItemKind::Function(_) = item.kind {
-                        methods.push(item.clone());
-                    } else {
-                        self.error_at("only functions are allowed as struct methods", item.span);
-                    }
+                self.advance();
+                let method_id = self.fresh_id();
+                let (method_kind, method_name) = self.parse_fn(method_id);
+
+                if let ItemKind::Function(func) = method_kind {
+                    let method_item = Item {
+                        attributes: attrs,
+                        name: method_name,
+                        kind: ItemKind::Function(func),
+                        id: method_id,
+                        span: self.prev_span(),
+                        symbol_id: None,
+                    };
+                    methods.push(method_item);
+                } else {
+                    self.error_at_current("expected function after 'fn' keyword");
                 }
             } else if let Some(field_name) = self.expect_identifier() {
                 self.expect(TokenKind::Colon);
@@ -122,6 +132,10 @@ impl<'a> Parser<'a> {
                     break;
                 }
             }
+        }
+
+        if !self.match_token(TokenKind::BraceClose) {
+            self.error_at_current("expected '}' to close struct");
         }
 
         (
@@ -190,7 +204,6 @@ impl<'a> Parser<'a> {
 
         let body =
             if self.match_token(TokenKind::BraceOpen) { Some(self.parse_block()) } else { None };
-        self.match_token(TokenKind::BraceClose);
 
         let signature = FunctionSignature { generics, parameters, return_type };
         let function = Function {
@@ -300,7 +313,21 @@ impl<'a> Parser<'a> {
             self.add_report(report);
         }
 
-        self.validate_variadic(params, span);
+        self.validate_variadic(params, span.clone());
+        self.validate_self(params, span);
+    }
+
+    pub fn validate_self(&mut self, params: &[Parameter], span: Span) {
+        let mut seen_self = false;
+        for param in params {
+            if param.name == get_or_intern("self") {
+                if seen_self {
+                    self.error_at("self parameter can only be used once", param.span.clone());
+                } else {
+                    seen_self = true;
+                }
+            }
+        }
     }
 
     pub fn validate_variadic(&mut self, params: &[Parameter], span: Span) {
@@ -325,13 +352,20 @@ impl<'a> Parser<'a> {
         let span = self.peek_span();
         let variadic = self.match_triple_dot();
 
+        let is_ref = self.match_token(TokenKind::BitwiseAnd);
         let name = self.expect_identifier()?;
-        self.expect_message(TokenKind::Colon, "every parameter requires a type");
-        let ty = self.parse_type();
+        let ty = if name == get_or_intern("self") {
+            if is_ref { Type::Reference(Box::new(Type::Inferred)) } else { Type::Inferred }
+        } else {
+            self.expect_message(TokenKind::Colon, "every parameter requires a type");
+            let ty = self.parse_type();
 
-        let Some(ty) = ty else {
-            self.error_at_current("every parameter requires a type");
-            return None;
+            let Some(ty) = ty else {
+                self.error_at_current("every parameter requires a type");
+                return None;
+            };
+
+            ty
         };
 
         let default_value =

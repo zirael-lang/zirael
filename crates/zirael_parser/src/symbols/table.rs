@@ -41,6 +41,7 @@ pub struct SymbolTableImpl {
     pub name_lookup: HashMap<(Identifier, ScopeId), SymbolId>,
     pub symbol_relations: SymbolRelations,
     pub mangled_names: HashMap<SymbolId, String>,
+    pub struct_methods_lookup: HashMap<SymbolId, Vec<SymbolId>>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -73,6 +74,7 @@ impl Default for SymbolTableImpl {
             symbol_relations: SymbolRelations::new(),
             current_traversal_scope: global_scope_id,
             mangled_names: HashMap::new(),
+            struct_methods_lookup: HashMap::new(),
         }
     }
 }
@@ -458,6 +460,21 @@ impl SymbolTable {
         self.write(|table| {
             table.mangled_names.insert(id, name);
         });
+    }
+
+    pub fn add_struct_method(&self, struct_id: SymbolId, method_id: SymbolId) {
+        self.write(|table| {
+            table.struct_methods_lookup.entry(struct_id).or_default().push(method_id);
+        })
+    }
+
+    /// tries to look if the provided id is a struct's method
+    pub fn is_a_method(&self, id: SymbolId) -> Option<SymbolId> {
+        self.read(|table| {
+            table.struct_methods_lookup.iter().find_map(|(struct_id, methods)| {
+                if methods.contains(&id) { Some(*struct_id) } else { None }
+            })
+        })
     }
 }
 

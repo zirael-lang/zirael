@@ -158,6 +158,49 @@ impl<'a> Parser<'a> {
         )
     }
 
+    fn parse_method_call(&mut self, base: Expr) -> Expr {
+        let start_span = base.span.clone();
+
+        let mut chain = vec![base];
+
+        self.advance();
+        let method_name = if let Some(ident) = self.expect_identifier() {
+            let method_span = self.prev_span();
+            self.new_expr(ExprKind::Identifier(ident, None), method_span)
+        } else {
+            self.error_at_current("expected method name after '.'");
+            let error_span = self.prev_span();
+            self.new_expr(ExprKind::couldnt_parse(), error_span)
+        };
+
+        chain.push(method_name);
+
+        self.advance();
+        let mut args = Vec::new();
+
+        if !self.check(&TokenKind::ParenClose) {
+            loop {
+                args.push(self.parse_expr());
+
+                if self.match_token(TokenKind::Comma) {
+                    continue;
+                }
+
+                break;
+            }
+        }
+
+        if !self.match_token(TokenKind::ParenClose) {
+            self.error_at_current("expected ')' after method arguments");
+        }
+
+        let end_span = self.prev_span();
+        self.new_expr(
+            ExprKind::MethodCall { chain, args, call_info: None },
+            start_span.to(end_span),
+        )
+    }
+
     fn parse_field_access(&mut self, base: Expr) -> Expr {
         let start_span = base.span.clone();
         let mut field_chain = vec![base];
@@ -175,6 +218,23 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_index_access(&mut self, base: Expr) -> Expr {
+        let start_span = base.span.clone();
+        self.advance();
+
+        let index = self.parse_expr();
+
+        if !self.match_token(TokenKind::BracketClose) {
+            self.error_at_current("expected ']' to close index access");
+        }
+
+        let end_span = self.prev_span();
+        self.new_expr(
+            ExprKind::IndexAccess(Box::new(base), Box::new(index)),
+            start_span.to(end_span),
+        )
+    }
+
     fn parse_postfix(&mut self) -> Expr {
         let mut expr = self.parse_primary();
 
@@ -184,8 +244,24 @@ impl<'a> Parser<'a> {
                     TokenKind::ParenOpen => {
                         expr = self.parse_function_call(expr);
                     }
+                    TokenKind::DoubleColon => {
+                        expr = self.parse_static_call(expr);
+                    }
                     TokenKind::Dot => {
+                        if let Some(next_token) = self.peek_ahead(1) {
+                            if let TokenKind::Identifier(_) = &next_token.kind {
+                                if let Some(third_token) = self.peek_ahead(2) {
+                                    if third_token.kind == TokenKind::ParenOpen {
+                                        expr = self.parse_method_call(expr);
+                                        continue;
+                                    }
+                                }
+                            }
+                        }
                         expr = self.parse_field_access(expr);
+                    }
+                    TokenKind::BracketOpen => {
+                        expr = self.parse_index_access(expr);
                     }
                     _ => break,
                 }
@@ -364,6 +440,55 @@ impl<'a> Parser<'a> {
                 call_info: None,
                 fields,
             },
+            start_span.to(end_span),
+        )
+    }
+
+    fn parse_static_call(&mut self, type_expr: Expr) -> Expr {
+        let start_span = type_expr.span.clone();
+
+        self.advance();
+
+        let method_name = if let Some(ident) = self.expect_identifier() {
+            let method_span = self.prev_span();
+            self.new_expr(ExprKind::Identifier(ident, None), method_span)
+        } else {
+            self.error_at_current("expected method name after '::'");
+            let error_span = self.prev_span();
+            self.new_expr(ExprKind::couldnt_parse(), error_span)
+        };
+
+        let callee = {
+            let combined_span = start_span.clone().to(method_name.span.clone());
+            self.new_expr(ExprKind::FieldAccess(vec![type_expr, method_name]), combined_span)
+        };
+
+        if !self.match_token(TokenKind::ParenOpen) {
+            self.error_at_current("expected '(' after static method name");
+            return callee;
+        }
+
+        let mut args = Vec::new();
+
+        if !self.check(&TokenKind::ParenClose) {
+            loop {
+                args.push(self.parse_expr());
+
+                if self.match_token(TokenKind::Comma) {
+                    continue;
+                }
+
+                break;
+            }
+        }
+
+        if !self.match_token(TokenKind::ParenClose) {
+            self.error_at_current("expected ')' after static method arguments");
+        }
+
+        let end_span = self.prev_span();
+        self.new_expr(
+            ExprKind::StaticCall { callee: Box::new(callee), args, call_info: None },
             start_span.to(end_span),
         )
     }

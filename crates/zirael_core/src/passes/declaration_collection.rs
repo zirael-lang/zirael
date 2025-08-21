@@ -273,15 +273,30 @@ impl<'reports> AstWalker<'reports> for DeclarationCollection<'reports> {
                     &SymbolKind::Struct {
                         generics: struct_def.generics.clone(),
                         fields: struct_def.fields.clone(),
+                        methods: vec![],
                     },
                     struct_def.span.clone(),
                 );
-                self.symbol_table.create_scope(ScopeType::Struct(struct_def.id));
+                let mut methods = vec![];
 
+                self.symbol_table.create_scope(ScopeType::Struct(struct_def.id));
                 for func in &mut struct_def.methods {
                     self.walk_item(func);
+
+                    let func_id = func.symbol_id.unwrap();
+                    self.symbol_table.add_struct_method(sym.unwrap(), func_id);
+                    methods.push(func_id);
                 }
                 self.symbol_table.exit_scope().unwrap();
+
+                self.symbol_table
+                    .update_symbol_kind(sym.unwrap(), |kind| SymbolKind::Struct {
+                        generics: struct_def.generics.clone(),
+                        fields: struct_def.fields.clone(),
+                        methods: methods.clone(),
+                    })
+                    .unwrap();
+
                 sym
             }
             ItemKind::Import(..) => None,

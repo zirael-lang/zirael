@@ -1,6 +1,7 @@
 mod ctx;
 mod errors;
 mod expressions;
+mod fields;
 pub mod monomorphization;
 mod structs;
 mod substitution;
@@ -18,28 +19,35 @@ impl_ast_walker!(TypeInference, {
 
 impl<'reports> TypeInference<'reports> {
     pub fn try_monomorphize_named_type(&mut self, ty: Type) -> Type {
-        if let Type::Named { name, generics } = &ty {
-            if let Some(symbol) = self.symbol_table.lookup_symbol(name) {
-                if let SymbolKind::Struct { generics: generic_params, .. } = &symbol.kind {
-                    let all_concrete = generics
-                        .iter()
-                        .all(|g| !matches!(g, Type::TypeVariable { .. } | Type::Inferred));
-                    if all_concrete && !generic_params.is_empty() {
-                        let mut generic_map = HashMap::new();
-                        for (g, ty) in generic_params.iter().zip(generics.iter()) {
-                            generic_map.insert(g.name, ty.clone());
+        match &ty {
+            Type::Named { name, generics } => {
+                if let Some(symbol) = self.symbol_table.lookup_symbol(name) {
+                    if let SymbolKind::Struct { generics: generic_params, .. } = &symbol.kind {
+                        let all_concrete = generics
+                            .iter()
+                            .all(|g| !matches!(g, Type::TypeVariable { .. } | Type::Inferred));
+                        if all_concrete && !generic_params.is_empty() {
+                            let mut generic_map = HashMap::new();
+                            for (g, ty) in generic_params.iter().zip(generics.iter()) {
+                                generic_map.insert(g.name, ty.clone());
+                            }
+                            let monomorphized_id =
+                                self.record_monomorphization_with_id(symbol.id, &generic_map, None);
+                            return Type::MonomorphizedSymbol(MonomorphizedSymbol {
+                                id: monomorphized_id,
+                                display_ty: Box::new(ty),
+                            });
                         }
-                        let monomorphized_id =
-                            self.record_monomorphization_with_id(symbol.id, &generic_map, None);
-                        return Type::MonomorphizedSymbol(MonomorphizedSymbol {
-                            id: monomorphized_id,
-                            display_ty: Box::new(ty),
-                        });
                     }
                 }
+                ty
             }
+            Type::Reference(inner) => {
+                Type::Reference(Box::new(self.try_monomorphize_named_type(*inner.clone())))
+            }
+
+            _ => ty,
         }
-        ty
     }
 
     pub fn eq(&mut self, left: &Type, right: &Type) -> bool {
@@ -118,6 +126,48 @@ impl<'reports> TypeInference<'reports> {
             _ => false,
         }
     }
+
+    fn get_struct_type_for_method(&self, func: &Function) -> Option<Type> {
+        if let Some(func_symbol) = self.symbol_table.lookup_symbol(&func.name) {
+            if let Some(struct_symbol_id) = self.symbol_table.is_a_method(func_symbol.id) {
+                let struct_symbol = self.symbol_table.get_symbol_unchecked(&struct_symbol_id);
+
+                if let SymbolKind::Struct { generics, .. } = &struct_symbol.kind {
+                    let generic_names = generics
+                        .iter()
+                        .map(|g| Type::Named { name: g.name.clone(), generics: vec![] })
+                        .collect::<Vec<_>>();
+
+                    return Some(Type::Named { name: struct_symbol.name, generics: generic_names });
+                }
+            }
+        }
+        None
+    }
+
+    fn resolve_self_parameter_type(&self, param: &Parameter, struct_type: &Option<Type>) -> Type {
+        match struct_type {
+            Some(struct_ty) => match &param.ty {
+                Type::Reference(inner) => Type::Reference(Box::new(struct_ty.clone())),
+                _ => struct_ty.clone(),
+            },
+            None => param.ty.clone(),
+        }
+    }
+
+    fn get_generic_type_vars(
+        &mut self,
+        generics: &Vec<GenericParameter>,
+    ) -> HashMap<Identifier, Type> {
+        if !generics.is_empty() {
+            generics
+                .iter()
+                .map(|g| (g.name.clone(), self.ctx.fresh_type_var(Some(g.name.clone()))))
+                .collect::<HashMap<_, _>>()
+        } else {
+            HashMap::new()
+        }
+    }
 }
 
 impl<'reports> AstWalker<'reports> for TypeInference<'reports> {
@@ -136,14 +186,13 @@ impl<'reports> AstWalker<'reports> for TypeInference<'reports> {
         self.walk_function_modifiers(&mut func.modifiers);
         self.walk_function_signature(&mut func.signature);
 
-        let generic_type_vars = if !func.signature.generics.is_empty() {
-            func.signature
-                .generics
-                .iter()
-                .map(|g| (g.name, self.ctx.fresh_type_var(Some(g.name))))
-                .collect::<HashMap<_, _>>()
-        } else {
-            HashMap::new()
+        let generic_type_vars = self.get_generic_type_vars(&func.signature.generics);
+
+        let struct_type = self.get_struct_type_for_method(func);
+        if !func.signature.is_static()
+            && let Some(param) = func.signature.parameters.get_mut(0)
+        {
+            param.ty = self.resolve_self_parameter_type(&param, &struct_type);
         };
 
         for param in &mut func.signature.parameters {
@@ -153,6 +202,7 @@ impl<'reports> AstWalker<'reports> for TypeInference<'reports> {
                 } else {
                     param.ty.clone()
                 };
+
                 let mono_type = self.try_monomorphize_named_type(param_type);
                 param.ty = mono_type.clone();
                 self.ctx.add_variable(param_id, mono_type);
@@ -178,13 +228,10 @@ impl<'reports> AstWalker<'reports> for TypeInference<'reports> {
 
     fn walk_struct_declaration(&mut self, _struct: &mut StructDeclaration) {
         self.push_scope(ScopeType::Struct(_struct.id));
+        let generic_type_vars = self.get_generic_type_vars(&_struct.generics);
 
         for generic in &mut _struct.generics {
-            self.walk_generic_parameter(generic);
-
-            if !generic.constraints.is_empty() {
-                warn!("constraints on generic parameters are not supported yet")
-            }
+            
         }
 
         for field in &mut _struct.fields {

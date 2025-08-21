@@ -67,6 +67,7 @@ impl<'reports> TypeInference<'reports> {
                 }
             }
             ExprKind::Assign(lhs, rhs) => self.infer_assignment(lhs, rhs),
+            ExprKind::AssignOp(lhs, op, rhs) => self.infer_assign_op(lhs, op, rhs),
             ExprKind::Block(stmts) => self.infer_block(stmts, expr.id),
             ExprKind::Unary(op, expr) => self.infer_unary(op, expr),
             ExprKind::Binary { left, op, right } => self.infer_binary(left, op, right),
@@ -75,7 +76,14 @@ impl<'reports> TypeInference<'reports> {
             ExprKind::StructInit { name, fields, call_info } => {
                 self.infer_struct_init(name, fields, call_info)
             }
-            ExprKind::FieldAccess(fields) => self.infer_field(fields),
+            ExprKind::FieldAccess(fields) => self.infer_field_access(fields),
+            ExprKind::IndexAccess(expr, index) => self.infer_index_access(expr, index),
+            ExprKind::MethodCall { chain, args, call_info } => {
+                self.infer_method_call(chain, args, call_info)
+            }
+            ExprKind::StaticCall { callee, args, call_info } => {
+                self.infer_static_call(callee, args, call_info)
+            }
             _ => {
                 warn!("unimplemented expr: {:#?}", expr);
                 Type::Error
@@ -85,112 +93,86 @@ impl<'reports> TypeInference<'reports> {
         ty
     }
 
-    fn check_field(&mut self, current_type: &Type, expr_fields: &[Expr], index: usize) -> Type {
-        if index >= expr_fields.len() {
-            return current_type.clone();
-        }
+    fn infer_assign_op(&mut self, lhs: &mut Expr, op: &BinaryOp, rhs: &mut Expr) -> Type {
+        let lhs_ty = self.infer_expr(lhs);
+        let rhs_ty = self.infer_expr(rhs);
 
-        let (field_name, _) = match expr_fields[index].as_identifier() {
-            Some(id) => id,
-            None => {
-                self.non_struct_type(expr_fields[index].span.clone());
-                return Type::Error;
-            }
-        };
-
-        let field_span = expr_fields[index].span.clone();
-        let field_type = self.get_field_type(current_type, &resolve(&field_name), field_span);
-
-        match field_type {
-            Type::Error => Type::Error,
-            _ => self.check_field(&field_type, expr_fields, index + 1),
-        }
-    }
-
-    fn get_field_type(&mut self, current_type: &Type, field_name: &str, field_span: Span) -> Type {
-        let struct_fields = match current_type {
-            Type::Named { name, .. } => {
-                let sym = match self.symbol_table.lookup_symbol(name) {
-                    Some(sym) => sym,
-                    None => return Type::Error,
-                };
-
-                match sym.kind.clone() {
-                    SymbolKind::Struct { fields, .. } => fields,
-                    _ => {
-                        self.non_struct_type(field_span);
-                        return Type::Error;
-                    }
-                }
-            }
-            Type::MonomorphizedSymbol(sym) => {
-                if let Some(entry) = self.mono_table.get_entry(sym.id) {
-                    let sym = self.symbol_table.get_symbol_unchecked(&entry.original_id);
-
-                    match sym.kind.clone() {
-                        SymbolKind::Struct { fields, .. } => {
-                            entry.monomorphized_fields.clone().unwrap_or(fields)
-                        }
-                        _ => {
-                            self.non_struct_type(field_span);
-                            return Type::Error;
-                        }
-                    }
+        let result_ty = match op {
+            BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Rem => {
+                if lhs_ty.is_int() && rhs_ty.is_int() {
+                    lhs_ty.clone()
+                } else if (lhs_ty.is_float() && rhs_ty.is_int())
+                    || (lhs_ty.is_int() && rhs_ty.is_float())
+                {
+                    Type::Float
+                } else if lhs_ty.is_float() && rhs_ty.is_float() {
+                    Type::Float
                 } else {
-                    self.non_struct_type(field_span);
-                    return Type::Error;
+                    self.error(
+                        &format!(
+                            "cannot perform arithmetic assignment operation on {} and {}",
+                            self.format_type(&lhs_ty).dimmed().bold(),
+                            self.format_type(&rhs_ty).dimmed().bold()
+                        ),
+                        vec![("here".to_string(), lhs.span.clone())],
+                        vec![],
+                    );
+                    Type::Error
                 }
             }
-            _ => {
-                self.non_struct_type(field_span);
-                return Type::Error;
-            }
-        };
 
-        match struct_fields.iter().find(|f| resolve(&f.name) == field_name) {
-            Some(field) => field.ty.clone(),
-            None => {
-                self.field_not_found_error(field_name, current_type, field_span);
+            BinaryOp::BitAnd
+            | BinaryOp::BitOr
+            | BinaryOp::BitXor
+            | BinaryOp::Shl
+            | BinaryOp::Shr => {
+                if lhs_ty.is_int() && rhs_ty.is_int() {
+                    lhs_ty.clone()
+                } else {
+                    self.error(
+                        &format!(
+                            "bitwise assignment operations can only be applied to integer types, found {} and {}",
+                            self.format_type(&lhs_ty).dimmed().bold(),
+                            self.format_type(&rhs_ty).dimmed().bold()
+                        ),
+                        vec![("here".to_string(), lhs.span.clone())],
+                        vec![],
+                    );
+                    Type::Error
+                }
+            }
+
+            BinaryOp::Eq
+            | BinaryOp::Ne
+            | BinaryOp::Lt
+            | BinaryOp::Le
+            | BinaryOp::Gt
+            | BinaryOp::Ge => {
+                self.error(
+                    "comparison operators cannot be used in assignment operations",
+                    vec![("here".to_string(), lhs.span.clone())],
+                    vec![],
+                );
                 Type::Error
             }
-        }
-    }
 
-    fn infer_field(&mut self, fields: &[Expr]) -> Type {
-        if fields.is_empty() {
+            BinaryOp::And | BinaryOp::Or => {
+                self.error(
+                    "logical operators cannot be used in assignment operations",
+                    vec![("here".to_string(), lhs.span.clone())],
+                    vec![],
+                );
+                Type::Error
+            }
+        };
+
+        if result_ty != Type::Error
+            && !self.expect_type(&lhs_ty, &result_ty, &lhs.span, "assignment operation")
+        {
             return Type::Error;
         }
 
-        let base = fields[0].as_identifier();
-        let first_span = fields[0].span.clone();
-
-        if let Some((_, Some(sym_id))) = base {
-            let var = match self.ctx.get_variable(*sym_id) {
-                Some(var) => var.clone(),
-                None => return Type::Error,
-            };
-
-            if fields.len() > 1 { self.check_field(&var, fields, 1) } else { var }
-        } else {
-            self.non_struct_type(first_span);
-            Type::Error
-        }
-    }
-
-    fn non_struct_type(&mut self, span: Span) {
-        self.error(
-            "cannot access field of non-struct type",
-            vec![("in this field access".to_string(), span)],
-            vec![],
-        )
-    }
-
-    fn field_not_found_error(&mut self, field_name: &str, ty: &Type, span: Span) {
-        self.error(
-            &format!("couldn't find field {field_name} on type {}", self.format_type(ty)),
-            vec![("in this field access".to_string(), span)],
-            vec![],
-        )
+        Type::Void
     }
 
     fn infer_unary(&mut self, op: &UnaryOp, expr: &mut Expr) -> Type {
@@ -348,20 +330,42 @@ impl<'reports> TypeInference<'reports> {
         block_type
     }
 
-    fn infer_call(
+    pub fn infer_call(
         &mut self,
         callee: &mut Expr,
         args: &mut Vec<Expr>,
         call_info: &mut Option<CallInfo>,
     ) -> Type {
-        // Handles both direct function calls and generic function instantiations.
         if let Some((_, Some(sym_id))) = callee.as_identifier_mut() {
             let sym = self.symbol_table().get_symbol_unchecked(sym_id);
             if let SymbolKind::Function { signature, .. } = &sym.kind {
-                // Map for tracking generic parameter substitutions during this call.
+                let mut params = signature.parameters.clone();
+                let expected_arg_count = if signature.is_static() {
+                    signature.parameters.len()
+                } else {
+                    signature.parameters.len() - 1
+                };
+
+                if args.len() != expected_arg_count {
+                    self.error(
+                        &format!(
+                            "wrong number of arguments: expected {}, found {}",
+                            expected_arg_count,
+                            args.len()
+                        ),
+                        vec![("in this call".to_string(), callee.span.clone())],
+                        vec![],
+                    );
+                    return Type::Error;
+                }
+
                 let mut generic_mapping = HashMap::new();
-                let mut param_types: Vec<Type> = Vec::with_capacity(signature.parameters.len());
-                for param in &signature.parameters {
+                let mut param_types: Vec<Type> = Vec::new();
+
+                let params_to_check =
+                    if signature.is_static() { &params[..] } else { &params[1..] };
+
+                for param in params_to_check.iter() {
                     let param_type = if !generic_mapping.is_empty() {
                         self.substitute_type_with_map(&param.ty, &generic_mapping)
                     } else {
@@ -369,21 +373,21 @@ impl<'reports> TypeInference<'reports> {
                     };
                     param_types.push(param_type);
                 }
+
                 let mut valid = true;
-                for (i, (arg, param)) in
-                    args.iter_mut().zip(signature.parameters.iter()).enumerate()
-                {
+                for (i, (arg, param)) in args.iter_mut().zip(params_to_check.iter()).enumerate() {
                     let arg_type = self.infer_expr(arg);
                     let mono_type = self.try_monomorphize_named_type(arg_type);
                     arg.ty = mono_type.clone();
-                    if !signature.generics.is_empty() {
-                        self.infer_generic_types(&param.ty, &mono_type, &mut generic_mapping);
-                    }
+
+                    self.infer_generic_types(&param.ty, &mono_type, &mut generic_mapping);
+
                     let param_type = if !generic_mapping.is_empty() {
                         self.substitute_type_with_map(&param.ty, &generic_mapping)
                     } else {
                         param.ty.clone()
                     };
+
                     if !self.expect_type(
                         &param_type,
                         &mono_type,
@@ -393,6 +397,7 @@ impl<'reports> TypeInference<'reports> {
                         valid = false;
                     }
                 }
+
                 if !valid {
                     return Type::Error;
                 }
