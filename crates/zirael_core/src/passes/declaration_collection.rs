@@ -264,6 +264,17 @@ impl<'reports> AstWalker<'reports> for DeclarationCollection<'reports> {
                 }
 
                 self.symbol_table.exit_scope().unwrap();
+                
+                self.symbol_table.update_symbol_kind(sym.unwrap(), |mut kind| {
+                    if let SymbolKind::Function {
+                        signature,
+                        ..
+                    } = kind {
+                        *signature = func.signature.clone();
+                    }
+                    
+                    kind.clone()
+                }).unwrap();
 
                 sym
             }

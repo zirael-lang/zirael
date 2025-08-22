@@ -365,16 +365,15 @@ impl<'reports> HirLowering<'reports> {
                 IrExprKind::Call(identifier, args)
             }
             HirExprKind::StructInit { name, fields, call_info } => {
-                // TODO: remove duplicated code
-                println!("{:?}", call_info);
-                let constructor_identifier = if let Some(call_info) = call_info {
+                let constructor_identifier = if let Some(call_info) = &call_info {
                     if let Some(mono_id) = call_info.monomorphized_id {
                         self.get_monomorphized_name(mono_id)
                     } else {
                         self.mangle_symbol(call_info.original_symbol)
                     }
                 } else if let HirExprKind::Symbol(id) = name.kind {
-                    self.mangle_symbol(id)
+                    let mangled = self.mangle_symbol(id);
+                    mangled
                 } else {
                     unreachable!("Invalid struct init expression structure")
                 };
@@ -417,6 +416,35 @@ impl<'reports> HirLowering<'reports> {
             _ => IrExprKind::Symbol(String::new()),
         };
 
-        IrExpr { ty: self.lower_type(expr.ty), kind }
+        let mut expr_type = self.lower_type(expr.ty);
+
+        let mut fixed_kind = kind;
+        if let IrExprKind::StructInit(constructor_name, fields) = &fixed_kind {
+            if let Type::Named { name: struct_name, generics } = &expr_type {
+                if !generics.is_empty()
+                    && generics.iter().any(|g| matches!(g, Type::TypeVariable { .. }))
+                {
+                    for (mono_id, entry) in &self.mono_table.entries {
+                        let original_symbol =
+                            self.symbol_table.get_symbol_unchecked(&entry.original_id);
+                        if let SymbolKind::Struct { .. } = original_symbol.kind {
+                            if original_symbol.name == *struct_name {
+                                let mono_name = self.get_monomorphized_name(*mono_id);
+                                let new_type = Type::Named {
+                                    name: get_or_intern(&format!("struct {}", mono_name)),
+                                    generics: vec![],
+                                };
+                                expr_type = new_type;
+
+                                fixed_kind = IrExprKind::StructInit(mono_name, fields.clone());
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        IrExpr { ty: expr_type, kind: fixed_kind }
     }
 }

@@ -82,10 +82,10 @@ impl<'reports> TypeInference<'reports> {
             let concrete_generics: Vec<Type> = generics
                 .iter()
                 .map(|g| {
-                    generic_mapping.get(&g.name).cloned().unwrap_or_else(|| Type::TypeVariable {
-                        id: self.ctx.next_type_var_id(),
-                        name: g.name,
-                    })
+                    generic_mapping
+                        .get(&g.name)
+                        .cloned()
+                        .expect("generic mapping should contain all generics")
                 })
                 .collect();
 

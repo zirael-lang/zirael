@@ -145,7 +145,7 @@ impl<'reports> HirLowering<'reports> {
             .iter()
             .map(|param| {
                 let substituted_ty = self.substitute_type(&param.ty, type_map);
-                IrParam { name: param.name.clone().to_string(), ty: substituted_ty }
+                IrParam { name: self.mangle_symbol(param.symbol_id.unwrap()), ty: substituted_ty }
             })
             .collect();
 

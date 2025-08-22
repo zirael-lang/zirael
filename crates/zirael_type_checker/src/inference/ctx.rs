@@ -4,11 +4,10 @@ use zirael_utils::{ident_table::Identifier, prelude::get_or_intern};
 
 #[derive(Debug, Clone, Default)]
 pub struct TypeInferenceContext {
-    variables: HashMap<SymbolId, Type>,
-    next_type_var_id: usize,
+    pub variables: HashMap<SymbolId, Type>,
+    pub next_type_var_id: usize,
     pub generic_params: HashMap<Identifier, usize>,
 }
-
 impl TypeInferenceContext {
     pub fn new() -> Self {
         Self { variables: HashMap::new(), next_type_var_id: 0, generic_params: HashMap::new() }
