@@ -1,15 +1,13 @@
 use crate::TypeInference;
 use std::collections::HashMap;
-use zirael_parser::{
-    MonomorphizationId, StructField, SymbolId, Type,
-};
+use zirael_parser::{FunctionSignature, MonomorphizationId, StructField, SymbolId, Type};
 use zirael_utils::prelude::Identifier;
 
 #[derive(Debug, Clone)]
 pub struct MonomorphizationEntry {
     pub original_id: SymbolId,
     pub concrete_types: HashMap<Identifier, Type>,
-    pub monomorphized_fields: Option<Vec<StructField>>,
+    pub data: Option<MonomorphizationData>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -21,6 +19,16 @@ impl MonomorphizationTable {
     pub fn get_entry(&self, id: MonomorphizationId) -> Option<&MonomorphizationEntry> {
         self.entries.get(&id)
     }
+
+    pub fn get_entry_mut(&mut self, id: MonomorphizationId) -> Option<&mut MonomorphizationEntry> {
+        self.entries.get_mut(&id)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum MonomorphizationData {
+    Fields(Vec<StructField>),
+    Signature(FunctionSignature),
 }
 
 impl<'reports> TypeInference<'reports> {
@@ -29,7 +37,7 @@ impl<'reports> TypeInference<'reports> {
         original_id: SymbolId,
         concrete_types: &HashMap<Identifier, Type>,
         id: MonomorphizationId,
-        monomorphized_fields: Option<Vec<StructField>>,
+        monomorphized_data: Option<MonomorphizationData>,
     ) {
         if concrete_types.is_empty() {
             return;
@@ -48,7 +56,7 @@ impl<'reports> TypeInference<'reports> {
             MonomorphizationEntry {
                 concrete_types: concrete_types.clone(),
                 original_id,
-                monomorphized_fields,
+                data: monomorphized_data,
             },
         );
     }
@@ -57,7 +65,7 @@ impl<'reports> TypeInference<'reports> {
         &mut self,
         symbol_id: SymbolId,
         concrete_types: &HashMap<Identifier, Type>,
-        monomorphized_fields: Option<Vec<StructField>>,
+        data: Option<MonomorphizationData>,
     ) -> MonomorphizationId {
         let candidate_ids: Vec<_> = self
             .mono_table
@@ -94,7 +102,7 @@ impl<'reports> TypeInference<'reports> {
             }
         }
         let mono_id = self.next_monomorphization_id();
-        self.record_monomorphization(symbol_id, concrete_types, mono_id, monomorphized_fields);
+        self.record_monomorphization(symbol_id, concrete_types, mono_id, data);
         mono_id
     }
 

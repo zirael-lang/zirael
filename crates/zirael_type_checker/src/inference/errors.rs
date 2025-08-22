@@ -1,6 +1,8 @@
 use crate::inference::TypeInference;
 use zirael_parser::Type;
-use zirael_utils::prelude::{Colorize, ReportBuilder, ReportKind, SourceFileId, Span, resolve};
+use zirael_utils::prelude::{
+    Colorize, ReportBuilder, ReportKind, SourceFileId, Span, debug, resolve,
+};
 
 impl<'reports> TypeInference<'reports> {
     fn file_id(&self) -> SourceFileId {
@@ -79,6 +81,8 @@ impl<'reports> TypeInference<'reports> {
             ReportKind::Error,
         )
         .label("here", span);
+
+        debug!("mismatched return type: \n  expected: {:?}\n  found: {:?}", expected, found);
 
         self.reports.add(self.file_id(), report);
     }

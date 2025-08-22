@@ -246,6 +246,17 @@ impl SymbolTable {
         self.read(|table| table.symbols.get(*id).cloned().unwrap())
     }
 
+    pub fn get_symbol_unchecked_mut<R>(
+        &self,
+        id: &SymbolId,
+        f: impl FnOnce(&mut Symbol) -> R,
+    ) -> R {
+        self.write(|table| {
+            let symbol = table.symbols.get_mut(*id).unwrap();
+            f(symbol)
+        })
+    }
+
     pub fn mark_used(&self, id: SymbolId) -> Result<(), SymbolTableError> {
         self.write(|table| {
             if let Some(symbol) = table.symbols.get_mut(id) {
@@ -462,18 +473,32 @@ impl SymbolTable {
         });
     }
 
-    pub fn add_struct_method(&self, struct_id: SymbolId, method_id: SymbolId) {
-        self.write(|table| {
-            table.struct_methods_lookup.entry(struct_id).or_default().push(method_id);
+    pub fn get_struct_methods(&self, struct_id: SymbolId) -> Option<Vec<SymbolId>> {
+        self.read(|table| table.struct_methods_lookup.get(&struct_id).cloned())
+    }
+
+    pub fn is_a_method(&self, symbol_id: SymbolId) -> Option<SymbolId> {
+        self.read(|table| {
+            for (&struct_id, methods) in &table.struct_methods_lookup {
+                if methods.contains(&symbol_id) {
+                    return Some(struct_id);
+                }
+            }
+            None
         })
     }
 
-    /// tries to look if the provided id is a struct's method
-    pub fn is_a_method(&self, id: SymbolId) -> Option<SymbolId> {
-        self.read(|table| {
-            table.struct_methods_lookup.iter().find_map(|(struct_id, methods)| {
-                if methods.contains(&id) { Some(*struct_id) } else { None }
-            })
+    pub fn add_struct_method(&self, struct_id: SymbolId, method_id: SymbolId) {
+        self.write(|table| {
+            table.struct_methods_lookup.entry(struct_id).or_insert_with(Vec::new).push(method_id);
+
+            if let Some(symbol) = table.symbols.get_mut(struct_id) {
+                if let SymbolKind::Struct { methods, .. } = &mut symbol.kind {
+                    if !methods.contains(&method_id) {
+                        methods.push(method_id);
+                    }
+                }
+            }
         })
     }
 }

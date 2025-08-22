@@ -1,4 +1,4 @@
-use crate::{TypeInference, inference::ctx::TypeInferenceContext};
+use crate::{MonomorphizationData, TypeInference, inference::ctx::TypeInferenceContext};
 use std::{fmt::format, rc::Rc};
 use zirael_parser::{AstWalker, CallInfo, Expr, ExprKind, SymbolId, SymbolKind, Type};
 use zirael_utils::prelude::{Colorize, Span, get_or_intern, resolve};
@@ -164,8 +164,16 @@ impl<'reports> TypeInference<'reports> {
                 if let Some(entry) = self.mono_table.get_entry(sym.id) {
                     let sym = self.symbol_table.get_symbol_unchecked(&entry.original_id);
                     match sym.kind.clone() {
-                        SymbolKind::Struct { fields, .. } => {
-                            entry.monomorphized_fields.clone().unwrap_or(fields)
+                        SymbolKind::Struct { fields: struct_fields, .. } => {
+                            if let Some(data) = &entry.data {
+                                if let MonomorphizationData::Fields(fields) = data {
+                                    fields.clone()
+                                } else {
+                                    struct_fields
+                                }
+                            } else {
+                                struct_fields
+                            }
                         }
                         _ => {
                             self.non_struct_type(field_span, file!(), line!());

@@ -1,4 +1,4 @@
-use crate::inference::TypeInference;
+use crate::{MonomorphizationData, inference::TypeInference};
 use std::collections::HashMap;
 use zirael_parser::{
     AstId, AstWalker, BinaryOp, CallInfo, Expr, ExprKind, Literal, ScopeType, Stmt, StmtKind,
@@ -7,7 +7,13 @@ use zirael_parser::{
 use zirael_utils::prelude::{Colorize, Identifier, Span, resolve, warn};
 
 impl<'reports> TypeInference<'reports> {
-    fn expect_type(&mut self, expected: &Type, actual: &Type, span: &Span, context: &str) -> bool {
+    pub(crate) fn expect_type(
+        &mut self,
+        expected: &Type,
+        actual: &Type,
+        span: &Span,
+        context: &str,
+    ) -> bool {
         if !self.eq(expected, actual) {
             self.error(
                 &format!(
@@ -41,9 +47,8 @@ impl<'reports> TypeInference<'reports> {
         let mut valid = true;
         for (i, (arg, param_type)) in args.iter_mut().zip(params.iter()).enumerate() {
             let arg_type = self.infer_expr(arg);
-            let mono_type = self.try_monomorphize_named_type(arg_type);
-            arg.ty = mono_type.clone();
-            if !self.expect_type(param_type, &mono_type, &arg.span, &format!("argument {}", i + 1))
+            self.try_monomorphize_named_type(&mut arg.ty);
+            if !self.expect_type(param_type, &mut arg.ty, &arg.span, &format!("argument {}", i + 1))
             {
                 valid = false;
             }
@@ -339,7 +344,8 @@ impl<'reports> TypeInference<'reports> {
         if let Some((_, Some(sym_id))) = callee.as_identifier_mut() {
             let sym = self.symbol_table().get_symbol_unchecked(sym_id);
             if let SymbolKind::Function { signature, .. } = &sym.kind {
-                let mut params = signature.parameters.clone();
+                let signature = &mut signature.clone();
+
                 let expected_arg_count = if signature.is_static() {
                     signature.parameters.len()
                 } else {
@@ -359,55 +365,67 @@ impl<'reports> TypeInference<'reports> {
                     return Type::Error;
                 }
 
-                let mut generic_mapping = HashMap::new();
-                let mut param_types: Vec<Type> = Vec::new();
-
-                let params_to_check =
-                    if signature.is_static() { &params[..] } else { &params[1..] };
-
-                for param in params_to_check.iter() {
-                    let param_type = if !generic_mapping.is_empty() {
-                        self.substitute_type_with_map(&param.ty, &generic_mapping)
-                    } else {
-                        param.ty.clone()
-                    };
-                    param_types.push(param_type);
+                for arg in args.iter_mut() {
+                    self.infer_expr(arg);
+                    self.try_monomorphize_named_type(&mut arg.ty);
                 }
 
+                let mut generic_mapping = HashMap::new();
+
+                if !signature.generics.is_empty() {
+                    for generic in signature.generics.iter() {
+                        if !self.ctx.is_generic_parameter(generic.name) {
+                            let _type_var = self.ctx.fresh_type_var(Some(generic.name));
+                        }
+                    }
+                }
+
+                let params_to_check = if signature.is_static() {
+                    &mut signature.parameters[..]
+                } else {
+                    &mut signature.parameters[1..]
+                };
+
                 let mut valid = true;
-                for (i, (arg, param)) in args.iter_mut().zip(params_to_check.iter()).enumerate() {
-                    let arg_type = self.infer_expr(arg);
-                    let mono_type = self.try_monomorphize_named_type(arg_type);
-                    arg.ty = mono_type.clone();
+                for (i, (arg, param)) in args.iter().zip(params_to_check.iter()).enumerate() {
+                    self.infer_generic_types(&param.ty, &arg.ty, &mut generic_mapping);
+                }
 
-                    self.infer_generic_types(&param.ty, &mono_type, &mut generic_mapping);
+                let mut concrete_params = params_to_check.to_vec();
+                for param in concrete_params.iter_mut() {
+                    self.substitute_type_with_map(&mut param.ty, &generic_mapping);
+                }
 
-                    let param_type = if !generic_mapping.is_empty() {
-                        self.substitute_type_with_map(&param.ty, &generic_mapping)
-                    } else {
-                        param.ty.clone()
-                    };
-
+                for (i, (arg, param)) in args.iter().zip(concrete_params.iter()).enumerate() {
                     if !self.expect_type(
-                        &param_type,
-                        &mono_type,
+                        &param.ty,
+                        &arg.ty,
                         &arg.span,
                         &format!("argument {}", i + 1),
                     ) {
                         valid = false;
                     }
                 }
+                signature.parameters = concrete_params.clone();
 
                 if !valid {
                     return Type::Error;
                 }
+
+                let mut return_type = signature.return_type.clone();
+                self.substitute_type_with_map(&mut return_type, &generic_mapping);
+                signature.return_type = return_type.clone();
 
                 let monomorphized_id = if !generic_mapping.is_empty() && valid {
                     let all_generics_mapped =
                         signature.generics.iter().all(|g| generic_mapping.contains_key(&g.name));
 
                     if all_generics_mapped {
-                        Some(self.record_monomorphization_with_id(*sym_id, &generic_mapping, None))
+                        Some(self.record_monomorphization_with_id(
+                            *sym_id,
+                            &generic_mapping,
+                            Some(MonomorphizationData::Signature(signature.clone())),
+                        ))
                     } else {
                         None
                     }
@@ -421,11 +439,7 @@ impl<'reports> TypeInference<'reports> {
                     concrete_types: generic_mapping.clone(),
                 });
 
-                return if !generic_mapping.is_empty() {
-                    self.substitute_type_with_map(&signature.return_type, &generic_mapping)
-                } else {
-                    signature.return_type.clone()
-                };
+                return return_type;
             } else {
                 self.error(
                     &format!("cannot call non-function type: {}", sym.kind.name()),
@@ -435,6 +449,7 @@ impl<'reports> TypeInference<'reports> {
                 return Type::Error;
             }
         }
+
         let callee_type = self.infer_expr(callee);
         match callee_type {
             Type::Function { params, return_type } => {

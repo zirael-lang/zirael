@@ -6,24 +6,10 @@ struct Box<T> {
         Box { value: val }
     }
 }
-
-// Generic function
-fn identity<T>(x: T): T {
-    x
-}
-
 fn main() {
     // Creating generic instances
-    var int_box = Box::new(42);      // Type inferred as Box<int>
+    var _int_box = Box::new(42);      // Type inferred as Box<int>
+    //var _float_box = Box { value: 3.14 };
     //var str_box = Box::new("hello"); // Type inferred as Box<string>
     //var bool_box = Box::new(true);   // Type inferred as Box<bool>
-
-    // Using the boxes
-    //var value = int_box.get();
-    //int_box.set(100);
-
-    // Generic function usage
-    var x = identity(5);      // Returns int
-    var y = identity("test"); // Returns string
-    var z = identity(3.14);   // Returns float
 }

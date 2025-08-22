@@ -6,7 +6,7 @@ use zirael_utils::{ident_table::Identifier, prelude::get_or_intern};
 pub struct TypeInferenceContext {
     variables: HashMap<SymbolId, Type>,
     next_type_var_id: usize,
-    generic_params: HashMap<Identifier, usize>,
+    pub generic_params: HashMap<Identifier, usize>,
 }
 
 impl TypeInferenceContext {

@@ -1,6 +1,6 @@
 use crate::ir::HirLowering;
 use std::hash::{DefaultHasher, Hash as _, Hasher as _};
-use zirael_parser::{Symbol, SymbolId, Type};
+use zirael_parser::{MonomorphizationId, Symbol, SymbolId, Type, Type::MonomorphizedSymbol};
 use zirael_utils::{
     ident_table::resolve,
     prelude::{Mode, strip_same_root, warn},
@@ -9,13 +9,13 @@ use zirael_utils::{
 impl<'reports> HirLowering<'reports> {
     pub fn mangle_symbol(&mut self, sym_id: SymbolId) -> String {
         if self.mode == Mode::Debug {
-            self.mangle_debug_symbol(sym_id, &[])
+            self.mangle_debug_symbol(sym_id, None, &[])
         } else {
-            self.mangle_release_symbol(sym_id, &[])
+            self.mangle_release_symbol(sym_id, None, &[])
         }
     }
 
-    pub fn get_sym_name(&self, sym: &Symbol) -> String {
+    pub fn get_sym_name(&mut self, sym: &Symbol, mono_id: Option<MonomorphizationId>) -> String {
         let base = resolve(&sym.name);
 
         if let Some(parent_struct) = self.symbol_table.is_a_method(sym.id) {
@@ -30,20 +30,26 @@ impl<'reports> HirLowering<'reports> {
     pub fn mangle_monomorphized_symbol(
         &mut self,
         original_sym_id: SymbolId,
+        mono_id: MonomorphizationId,
         type_arguments: &[Type],
     ) -> String {
         if self.mode == Mode::Debug {
-            self.mangle_debug_symbol(original_sym_id, type_arguments)
+            self.mangle_debug_symbol(original_sym_id, Some(mono_id), type_arguments)
         } else {
-            self.mangle_release_symbol(original_sym_id, type_arguments)
+            self.mangle_release_symbol(original_sym_id, Some(mono_id), type_arguments)
         }
     }
 
-    fn mangle_debug_symbol(&mut self, sym_id: SymbolId, type_arguments: &[Type]) -> String {
+    fn mangle_debug_symbol(
+        &mut self,
+        sym_id: SymbolId,
+        mono_id: Option<MonomorphizationId>,
+        type_arguments: &[Type],
+    ) -> String {
         let symbol = self.symbol_table.get_symbol_unchecked(&sym_id);
         let canonical_symbol = self.symbol_table.get_symbol_unchecked(&symbol.canonical_symbol);
 
-        let base_name = format!("__zirael_{}", self.get_sym_name(&canonical_symbol));
+        let base_name = format!("__zirael_{}", self.get_sym_name(&canonical_symbol, mono_id));
 
         if type_arguments.is_empty() {
             base_name
@@ -57,7 +63,12 @@ impl<'reports> HirLowering<'reports> {
         }
     }
 
-    fn mangle_release_symbol(&mut self, sym_id: SymbolId, type_arguments: &[Type]) -> String {
+    fn mangle_release_symbol(
+        &mut self,
+        sym_id: SymbolId,
+        mono_id: Option<MonomorphizationId>,
+        type_arguments: &[Type],
+    ) -> String {
         let symbol = self.symbol_table.get_symbol_unchecked(&sym_id);
         let canonical_id = symbol.canonical_symbol;
 
@@ -67,14 +78,19 @@ impl<'reports> HirLowering<'reports> {
         }
 
         let canonical_symbol = self.symbol_table.get_symbol_unchecked(&canonical_id);
-        let result = self.build_mangled_name(&canonical_symbol, type_arguments);
+        let result = self.build_mangled_name(&canonical_symbol, mono_id, type_arguments);
 
         self.cache_mangled_name(canonical_id, cache_key, result.clone());
         result
     }
 
-    fn build_mangled_name(&mut self, symbol: &Symbol, type_arguments: &[Type]) -> String {
-        let symbol_name = self.get_sym_name(symbol);
+    fn build_mangled_name(
+        &mut self,
+        symbol: &Symbol,
+        mono_id: Option<MonomorphizationId>,
+        type_arguments: &[Type],
+    ) -> String {
+        let symbol_name = self.get_sym_name(symbol, mono_id);
         let symbol_file = self.symbol_table.get_symbol_module(symbol.scope).unwrap();
         let file_path = self.sources.get_unchecked(symbol_file).path();
         let base_path = strip_same_root(file_path, self.root.clone()).with_extension("");

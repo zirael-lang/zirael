@@ -149,11 +149,6 @@ impl Gen for IrStruct {
         cg.dedent();
         cg.write("};");
         cg.newline();
-
-        for method in &self.methods {
-            cg.newline();
-            method.generate(cg);
-        }
     }
 }
 

@@ -1,65 +1,61 @@
 use crate::TypeInference;
 use std::collections::HashMap;
-use zirael_parser::{SymbolKind, Type};
+use zirael_parser::{GenericParameter, SymbolKind, Type};
 use zirael_utils::prelude::Identifier;
 
 impl<'reports> TypeInference<'reports> {
     pub fn substitute_generic_params(
         &mut self,
-        ty: &Type,
-        struct_kind: &SymbolKind,
+        ty: &mut Type,
+        params: &Vec<GenericParameter>,
         generics: &[Type],
-    ) -> Type {
-        if let SymbolKind::Struct { generics: generic_params, .. } = struct_kind {
-            let mut param_map = HashMap::new();
-            for (param, concrete) in generic_params.iter().zip(generics.iter()) {
-                param_map.insert(param.name, concrete.clone());
-            }
-
-            return self.substitute_type_with_map(ty, &param_map);
+    ) {
+        let mut param_map = HashMap::new();
+        for (param, concrete) in params.iter().zip(generics.iter()) {
+            param_map.insert(param.name, concrete.clone());
         }
 
-        ty.clone()
+        self.substitute_type_with_map(ty, &param_map);
     }
 
     pub fn substitute_type_with_map(
         &mut self,
-        ty: &Type,
+        ty: &mut Type,
         param_map: &HashMap<Identifier, Type>,
-    ) -> Type {
-        let ty = match ty {
+    ) {
+        if param_map.is_empty() {
+            return;
+        }
+
+        match ty {
             Type::Named { name, generics } if generics.is_empty() => {
                 if let Some(concrete) = param_map.get(name) {
-                    return concrete.clone();
+                    *ty = concrete.clone();
                 }
-                ty.clone()
             }
-            Type::Named { name, generics } => Type::Named {
-                name: *name,
-                generics: generics
-                    .iter()
-                    .map(|g| self.substitute_type_with_map(g, param_map))
-                    .collect(),
-            },
+            Type::Named { name, generics } => {
+                for generic in generics.iter_mut() {
+                    self.substitute_type_with_map(generic, param_map);
+                }
+            }
             Type::Pointer(inner) => {
-                Type::Pointer(Box::new(self.substitute_type_with_map(inner, param_map)))
+                self.substitute_type_with_map(inner, param_map);
             }
             Type::Reference(inner) => {
-                Type::Reference(Box::new(self.substitute_type_with_map(inner, param_map)))
+                self.substitute_type_with_map(inner, param_map);
             }
-            Type::Array(inner, size) => {
-                Type::Array(Box::new(self.substitute_type_with_map(inner, param_map)), *size)
+            Type::Array(inner, _size) => {
+                self.substitute_type_with_map(inner, param_map);
             }
-            Type::Function { params, return_type } => Type::Function {
-                params: params
-                    .iter()
-                    .map(|p| self.substitute_type_with_map(p, param_map))
-                    .collect(),
-                return_type: Box::new(self.substitute_type_with_map(return_type, param_map)),
-            },
-            _ => ty.clone(),
-        };
+            Type::Function { params, return_type } => {
+                for param in params.iter_mut() {
+                    self.substitute_type_with_map(param, param_map);
+                }
+                self.substitute_type_with_map(return_type, param_map);
+            }
+            _ => {}
+        }
 
-        self.try_monomorphize_named_type(ty)
+        self.try_monomorphize_named_type(ty);
     }
 }

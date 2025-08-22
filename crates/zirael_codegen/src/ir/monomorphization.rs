@@ -4,20 +4,34 @@ use crate::ir::{
 };
 use itertools::Itertools;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     hash::{DefaultHasher, Hash as _},
 };
 use zirael_parser::{
-    GenericParameter, MonomorphizationId, SymbolKind, SymbolRelationNode, Type,
-    monomorphized_symbol::MonomorphizedSymbol,
+    Function, FunctionSignature, GenericParameter, MonomorphizationId, Symbol, SymbolId,
+    SymbolKind, SymbolRelationNode, Type, monomorphized_symbol::MonomorphizedSymbol,
 };
-use zirael_type_checker::MonomorphizationEntry;
+use zirael_type_checker::{MonomorphizationData, MonomorphizationEntry};
 use zirael_utils::prelude::{Identifier, get_or_intern, resolve};
 
 impl<'reports> HirLowering<'reports> {
     pub fn process_monomorphization_entries(&mut self, module: &mut IrModule) {
         // TODO: find a way to do that without cloning the entries
-        for (id, entry) in self.mono_table.entries.clone() {
+        let entries: Vec<_> = self.mono_table.entries.clone().into_iter().collect();
+
+        let (struct_entries, func_entries): (Vec<_>, Vec<_>) =
+            entries.into_iter().partition(|(_, entry)| {
+                let symbol = self.symbol_table.get_symbol_unchecked(&entry.original_id);
+                matches!(symbol.kind, SymbolKind::Struct { .. })
+            });
+
+        for (id, entry) in struct_entries {
+            if let Some(monomorphized_item) = self.create_monomorphized_item(&id, &entry, module) {
+                module.mono_items.push(monomorphized_item);
+            }
+        }
+
+        for (id, entry) in func_entries {
             if let Some(monomorphized_item) = self.create_monomorphized_item(&id, &entry, module) {
                 module.mono_items.push(monomorphized_item);
             }
@@ -38,9 +52,8 @@ impl<'reports> HirLowering<'reports> {
         Some(
             generics
                 .iter()
-                .filter_map(|param| concrete_types.get(&param.name))
-                .cloned()
-                .collect::<Vec<_>>(),
+                .map(|param| concrete_types.get(&param.name).cloned())
+                .collect::<Option<Vec<_>>>()?,
         )
     }
 
@@ -58,15 +71,22 @@ impl<'reports> HirLowering<'reports> {
 
         self.current_mono_id = Some(id.clone());
         match (&original_symbol.kind, &original_item.kind) {
-            (SymbolKind::Function { signature, .. }, IrItemKind::Function(func)) => {
-                let Some(type_arguments) =
-                    self.get_type_arguments(&signature.generics, concrete_types)
-                else {
-                    return None;
+            (SymbolKind::Function { signature: sig, .. }, IrItemKind::Function(func)) => {
+                let signature = if let Some(data) = &entry.data
+                    && let MonomorphizationData::Signature(signature) = data
+                {
+                    signature
+                } else {
+                    sig
                 };
-                let mangled_name = self.mangle_monomorphized_symbol(original_id, &type_arguments);
-                let monomorphized_function =
-                    self.monomorphize_function(mangled_name.clone(), func, concrete_types);
+
+                let mangled_name = self.get_monomorphized_name(*id);
+                let monomorphized_function = self.monomorphize_function(
+                    mangled_name.clone(),
+                    signature,
+                    func,
+                    concrete_types,
+                );
 
                 Some(IrItem {
                     name: mangled_name,
@@ -79,7 +99,9 @@ impl<'reports> HirLowering<'reports> {
                 let Some(type_arguments) = self.get_type_arguments(generics, concrete_types) else {
                     return None;
                 };
-                let mangled_name = self.mangle_monomorphized_symbol(original_id, &type_arguments);
+
+                let mangled_name =
+                    self.mangle_monomorphized_symbol(original_id, *id, &type_arguments);
                 let monomorphized_struct =
                     self.monomorphize_struct(mangled_name.clone(), struct_def, concrete_types);
 
@@ -103,37 +125,32 @@ impl<'reports> HirLowering<'reports> {
         let fields = struct_def
             .fields
             .iter()
-            .map(|field| IrField {
-                name: field.name.clone(),
-                ty: self.substitute_type(&field.ty, type_map),
+            .map(|field| {
+                let substituted_ty = self.substitute_type(&field.ty, type_map);
+                IrField { name: field.name.clone(), ty: substituted_ty }
             })
             .collect_vec();
-
-        let methods = struct_def
-            .methods
-            .iter()
-            .map(|m| self.monomorphize_function(m.name.clone(), m, type_map))
-            .collect_vec();
-
-        IrStruct { name, methods, fields }
+        IrStruct { name, fields }
     }
 
     fn monomorphize_function(
         &mut self,
         name: String,
+        signature: &FunctionSignature,
         original: &IrFunction,
         type_map: &HashMap<Identifier, Type>,
     ) -> IrFunction {
-        let parameters = original
+        let parameters = signature
             .parameters
             .iter()
-            .map(|param| IrParam {
-                name: param.name.clone(),
-                ty: self.substitute_type(&param.ty, type_map),
+            .map(|param| {
+                let substituted_ty = self.substitute_type(&param.ty, type_map);
+                IrParam { name: param.name.clone().to_string(), ty: substituted_ty }
             })
             .collect();
 
-        let return_type = self.substitute_type(&original.return_type, type_map);
+        let mut return_type = self.substitute_type(&signature.return_type, type_map);
+        return_type = self.lower_type(return_type.clone());
 
         let body = original.body.as_ref().map(|body| self.monomorphize_block(body, type_map));
 
@@ -180,7 +197,7 @@ impl<'reports> HirLowering<'reports> {
         }
     }
 
-    fn monomorphize_expr(
+    pub fn monomorphize_expr(
         &mut self,
         original: &IrExpr,
         type_map: &HashMap<Identifier, Type>,
@@ -245,14 +262,14 @@ impl<'reports> HirLowering<'reports> {
     }
 
     fn substitute_type(&mut self, ty: &Type, type_map: &HashMap<Identifier, Type>) -> Type {
-        self.substitute_type_with_visited(ty, type_map, &mut std::collections::HashSet::new())
+        self.substitute_type_with_visited(ty, type_map, &mut HashSet::new())
     }
 
     fn substitute_type_with_visited(
         &mut self,
         ty: &Type,
         type_map: &HashMap<Identifier, Type>,
-        visited: &mut std::collections::HashSet<Identifier>,
+        visited: &mut HashSet<Identifier>,
     ) -> Type {
         let new_ty = match ty {
             Type::TypeVariable { id: _, name } => {
@@ -396,16 +413,30 @@ impl<'reports> HirLowering<'reports> {
         }
     }
 
+    pub fn get_generics_for_symbol(&self, symbol: &Symbol) -> Vec<GenericParameter> {
+        if let SymbolKind::Function { signature, .. } = &symbol.kind {
+            let mut generics = vec![];
+
+            if let Some(parent_struct) = self.symbol_table.is_a_method(symbol.canonical_symbol) {
+                let parent_struct = self.symbol_table.get_symbol_unchecked(&parent_struct);
+                if let SymbolKind::Struct { generics: gens, .. } = &parent_struct.kind {
+                    generics.extend(gens.clone());
+                }
+            }
+            generics.extend(signature.generics.clone());
+
+            generics
+        } else if let SymbolKind::Struct { generics, .. } = &symbol.kind {
+            generics.clone()
+        } else {
+            unreachable!()
+        }
+    }
+
     pub fn get_monomorphized_name(&mut self, mono_id: MonomorphizationId) -> String {
         if let Some(entry) = self.mono_table.entries.get(&mono_id) {
             let original_symbol = self.symbol_table.get_symbol_unchecked(&entry.original_id);
-            let generics = if let SymbolKind::Function { signature, .. } = &original_symbol.kind {
-                &signature.generics
-            } else if let SymbolKind::Struct { generics, .. } = &original_symbol.kind {
-                generics
-            } else {
-                unreachable!()
-            };
+            let generics = self.get_generics_for_symbol(&original_symbol);
 
             let type_arguments: Vec<Type> = generics
                 .iter()
@@ -413,9 +444,9 @@ impl<'reports> HirLowering<'reports> {
                 .cloned()
                 .collect();
 
-            return self.mangle_monomorphized_symbol(entry.original_id, &type_arguments);
+            return self.mangle_monomorphized_symbol(entry.original_id, mono_id, &type_arguments);
         }
 
-        panic!("Monomorphization ID {mono_id:?} not found in mono_id_map")
+        panic!("Monomorphization ID {mono_id:?} not found")
     }
 }

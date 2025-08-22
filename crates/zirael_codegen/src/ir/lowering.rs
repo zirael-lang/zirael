@@ -15,7 +15,7 @@ use zirael_parser::{
 use zirael_type_checker::MonomorphizationTable;
 use zirael_utils::prelude::{
     Colorize as _, Mode, ReportBuilder, ReportKind, Reports, SourceFileId, Sources, debug,
-    get_or_intern, resolve,
+    get_or_intern, resolve, warn,
 };
 
 pub fn lower_hir_to_ir<'reports>(
@@ -41,6 +41,7 @@ pub struct HirLowering<'reports> {
     pub reports: Reports<'reports>,
     pub current_mono_id: Option<MonomorphizationId>,
     pub current_symbol_id: Option<SymbolId>,
+    pub current_items: Vec<IrItem>,
 }
 
 impl<'reports> HirLowering<'reports> {
@@ -62,6 +63,7 @@ impl<'reports> HirLowering<'reports> {
             root,
             current_mono_id: None,
             current_symbol_id: None,
+            current_items: vec![],
         }
     }
 
@@ -97,34 +99,6 @@ impl<'reports> HirLowering<'reports> {
                     Type::Named { name, generics }
                 }
             }
-            Type::Named { name, generics } if !generics.is_empty() => {
-                for (mono_id, entry) in &self.mono_table.entries {
-                    if let Some(symbol) = self.symbol_table.lookup_symbol(&name) {
-                        if entry.original_id == symbol.id {
-                            if let SymbolKind::Struct { generics: generic_params, .. } =
-                                &symbol.kind
-                            {
-                                if generic_params.len() == generics.len() {
-                                    let types_match = generic_params
-                                        .iter()
-                                        .zip(generics.iter())
-                                        .all(|(param, ty)| {
-                                            entry.concrete_types.get(&param.name) == Some(ty)
-                                        });
-                                    if types_match {
-                                        let mono_sym = MonomorphizedSymbol {
-                                            id: *mono_id,
-                                            display_ty: Box::new(Type::Named { name, generics }),
-                                        };
-                                        return self.handle_monomorphized_symbol(&mono_sym, true);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                Type::Named { name, generics }
-            }
             _ => ty,
         }
     }
@@ -140,6 +114,7 @@ impl<'reports> HirLowering<'reports> {
                 ir_module.items.push(ir_item);
             }
         }
+        ir_module.items.extend(self.current_items.drain(..));
         self.pop_scope();
 
         if !self.mono_table.entries.is_empty() {
@@ -192,12 +167,11 @@ impl<'reports> HirLowering<'reports> {
     ) -> IrStruct {
         self.push_scope(ScopeType::Struct(hir_struct.id));
 
-        let mut items = vec![];
         for item in hir_struct.methods.iter_mut() {
-            if let HirItemKind::Function(func) = &mut item.kind {
-                self.current_symbol_id = Some(item.symbol_id);
-                let name = self.mangle_symbol(item.symbol_id);
-                items.push(self.lower_function(name, func));
+            if let Some(item) = self.lower_item(item) {
+                self.current_items.push(item);
+            } else {
+                warn!("failed to lower method")
             }
         }
 
@@ -210,7 +184,6 @@ impl<'reports> HirLowering<'reports> {
                     ty: self.lower_type(field.ty.clone()),
                 })
                 .collect_vec(),
-            methods: items,
             name,
         }
     }
@@ -393,6 +366,7 @@ impl<'reports> HirLowering<'reports> {
             }
             HirExprKind::StructInit { name, fields, call_info } => {
                 // TODO: remove duplicated code
+                println!("{:?}", call_info);
                 let constructor_identifier = if let Some(call_info) = call_info {
                     if let Some(mono_id) = call_info.monomorphized_id {
                         self.get_monomorphized_name(mono_id)

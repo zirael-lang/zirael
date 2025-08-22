@@ -50,7 +50,6 @@ pub struct IrFunction {
 pub struct IrStruct {
     pub name: String,
     pub fields: Vec<IrField>,
-    pub methods: Vec<IrFunction>,
 }
 
 #[derive(Clone, Debug)]
