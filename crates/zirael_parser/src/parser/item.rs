@@ -10,7 +10,10 @@ use crate::{
 use colored::Colorize as _;
 use convert_case::{Case, Casing as _};
 use ordinal::ToOrdinal as _;
-use std::{collections::HashSet, path::PathBuf};
+use std::{
+    collections::HashSet,
+    path::{Path, PathBuf},
+};
 use zirael_utils::prelude::*;
 
 impl<'a> Parser<'a> {
@@ -27,10 +30,13 @@ impl<'a> Parser<'a> {
             self.parse_import()
         } else if self.match_keyword(Keyword::Extension) {
             self.parse_extension(id)
+        } else if self.match_keyword(Keyword::Mod) {
+            self.parse_mod();
+            return None;
         } else {
             if let Some(token) = self.peek() {
                 self.error_at_peek(format!(
-                    "expected item declaration (fn, struct, extension, or import), found {:?}",
+                    "expected item declaration (fn, struct, extension, or import), found {}",
                     token.kind
                 ));
             } else {
@@ -57,6 +63,131 @@ impl<'a> Parser<'a> {
             span: span.to(self.prev_span()),
             symbol_id: None,
         })
+    }
+
+    pub fn parse_mod(&mut self) {
+        let string = self.expect_string().unwrap_or_default();
+        let span = self.prev_span();
+        let current_file = self.source.path();
+        let base_path = current_file.parent().unwrap_or(Path::new(""));
+
+        if string.contains('*') {
+            self.handle_mod_glob(string, base_path, span);
+        } else {
+            self.handle_mod_single(string, base_path, span);
+        }
+    }
+
+    fn handle_mod_glob(&mut self, pattern: String, base_path: &Path, span: Span) {
+        use glob::glob;
+
+        let full_pattern = base_path.join(&pattern);
+        let pattern_str = full_pattern.to_string_lossy();
+
+        match glob(&pattern_str) {
+            Ok(paths) => {
+                let mut found_any = false;
+
+                for entry in paths {
+                    match entry {
+                        Ok(path) => {
+                            found_any = true;
+
+                            if path.is_file() && path.extension().is_some_and(|ext| ext == "zr") {
+                                self.discover_queue.push((path, span.clone()));
+                            } else if path.is_dir() {
+                                let index_file = path.join("index.zr");
+
+                                if index_file.exists() {
+                                    self.discover_queue.push((index_file, span.clone()));
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            self.error_at(format!("error reading glob entry: {}", e), span.clone());
+                        }
+                    }
+                }
+
+                if !found_any {
+                    self.error_at(format!("no files found matching pattern: {}", pattern), span);
+                }
+            }
+            Err(e) => {
+                self.error_at(format!("invalid glob pattern '{}': {}", pattern, e), span);
+            }
+        }
+    }
+
+    fn handle_mod_single(&mut self, string: String, base_path: &Path, span: Span) {
+        let path = base_path.join(&string);
+
+        if path.is_file() && path.extension().is_some_and(|ext| ext == "zr") {
+            self.discover_queue.push((path, span));
+        } else if path.is_dir() {
+            let index_file = path.join("index.zr");
+
+            if index_file.exists() {
+                self.discover_queue.push((index_file, span));
+            } else {
+                self.error_at(
+                    format!("couldn't find index.zr in directory: {}", path.display()),
+                    span,
+                );
+            }
+        } else {
+            let path_with_ext = path.with_extension("zr");
+            if path_with_ext.is_file() {
+                self.discover_queue.push((path_with_ext, span));
+            } else {
+                self.error_at(
+                    format!(
+                        "couldn't find module: {} (tried {}, {}, and {})",
+                        string,
+                        path.display(),
+                        path_with_ext.display(),
+                        path.join("index.zr").display()
+                    ),
+                    span,
+                );
+            }
+        }
+    }
+
+    pub fn parse_import(&mut self) -> (ItemKind, Identifier) {
+        let string = self.expect_string().unwrap_or_default();
+        let span = self.prev_span();
+        let current_file = self.source.path();
+        let path = current_file.parent().unwrap_or(&PathBuf::new()).join(string.clone());
+
+        let is_path_import =
+            string.starts_with("./") || string.starts_with("/") || string.starts_with("\\");
+
+        let kind = if is_path_import {
+            if path.is_file() && path.extension().is_some_and(|ext| ext == "zr") {
+                self.discover_queue.push((path.clone(), span.clone()));
+                ImportKind::Path(path)
+            } else {
+                let error_msg = if !path.exists() {
+                    format!("couldn't find file: {}", path.display())
+                } else if path.extension().map_or(true, |ext| ext != "zr") {
+                    format!("import file must have .zr extension: {}", path.display())
+                } else {
+                    format!("import path is not a file: {}", path.display())
+                };
+
+                self.error_at(error_msg, span.clone());
+
+                ImportKind::Path(path)
+            }
+        } else {
+            let parts = string.split('/').map(get_or_intern).collect::<Vec<_>>();
+            ImportKind::ExternalModule(parts)
+        };
+
+        let span = span.to(self.prev_span());
+
+        (ItemKind::Import(kind, span), default_ident())
     }
 
     pub fn parse_single_method(&mut self, attrs: Vec<Attribute>) -> Option<Item> {
@@ -204,42 +335,6 @@ impl<'a> Parser<'a> {
             }),
             default_ident(),
         )
-    }
-
-    pub fn parse_import(&mut self) -> (ItemKind, Identifier) {
-        let string = self.expect_string().unwrap_or_default();
-        let span = self.prev_span();
-        let current_file = self.source.path();
-        let path = current_file.parent().unwrap_or(&PathBuf::new()).join(string.clone());
-
-        let is_path_import =
-            string.starts_with("./") || string.starts_with("/") || string.starts_with("\\");
-
-        let kind = if is_path_import {
-            if path.is_file() && path.extension().is_some_and(|ext| ext == "zr") {
-                self.discover_queue.push((path.clone(), span.clone()));
-                ImportKind::Path(path)
-            } else {
-                let error_msg = if !path.exists() {
-                    format!("couldn't find file: {}", path.display())
-                } else if path.extension().map_or(true, |ext| ext != "zr") {
-                    format!("import file must have .zr extension: {}", path.display())
-                } else {
-                    format!("import path is not a file: {}", path.display())
-                };
-
-                self.error_at(error_msg, span.clone());
-
-                ImportKind::Path(path)
-            }
-        } else {
-            let parts = string.split('/').map(get_or_intern).collect::<Vec<_>>();
-            ImportKind::ExternalModule(parts)
-        };
-
-        let span = span.to(self.prev_span());
-
-        (ItemKind::Import(kind, span), default_ident())
     }
 
     pub fn parse_fn(&mut self, id: AstId) -> (ItemKind, Identifier) {

@@ -1,0 +1,5 @@
+extension int {
+    fn abs(self): int {
+        x < 0 ? -x : x
+    }
+}

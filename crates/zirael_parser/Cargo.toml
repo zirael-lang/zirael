@@ -18,6 +18,7 @@ strsim = { workspace = true }
 strum = { workspace = true }
 zirael_utils = { workspace = true }
 log = "0.4.27"
+glob = "0.3.3"
 
 [lints]
 workspace = true

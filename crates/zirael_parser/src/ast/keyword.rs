@@ -15,6 +15,8 @@ pub enum Keyword {
     #[strum(props(category = "declaration"))]
     Import,
     #[strum(props(category = "declaration"))]
+    Mod,
+    #[strum(props(category = "declaration"))]
     Var,
     #[strum(props(category = "control"))]
     Box,
@@ -63,6 +65,7 @@ impl Keyword {
             Self::Extension => "extension",
             Self::Enum => "enum",
             Self::Import => "import",
+            Self::Mod => "mod",
             Self::Var => "var",
             Self::Box => "box",
             Self::Return => "return",
