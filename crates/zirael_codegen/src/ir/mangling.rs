@@ -1,6 +1,8 @@
 use crate::ir::HirLowering;
 use std::hash::{DefaultHasher, Hash as _, Hasher as _};
-use zirael_parser::{MonomorphizationId, Symbol, SymbolId, Type, Type::MonomorphizedSymbol};
+use zirael_parser::{
+    MonomorphizationId, Symbol, SymbolId, SymbolKind, Type, Type::MonomorphizedSymbol,
+};
 use zirael_utils::{
     ident_table::resolve,
     prelude::{Mode, strip_same_root, warn},
@@ -20,6 +22,11 @@ impl<'reports> HirLowering<'reports> {
 
         if let Some(parent_struct) = self.symbol_table.is_a_method(sym.id) {
             let parent_struct = self.symbol_table.get_symbol_unchecked(&parent_struct);
+
+            if let SymbolKind::TypeExtension { ty, .. } = parent_struct.kind {
+                return format!("ext_{}_{}", self.mangle_type_for_name(&ty), base);
+            }
+
             let parent_struct_name = resolve(&parent_struct.name);
             format!("{}_{}", parent_struct_name, base)
         } else {
@@ -49,7 +56,7 @@ impl<'reports> HirLowering<'reports> {
         let symbol = self.symbol_table.get_symbol_unchecked(&sym_id);
         let canonical_symbol = self.symbol_table.get_symbol_unchecked(&symbol.canonical_symbol);
 
-        let base_name = format!("__zirael_{}", self.get_sym_name(&canonical_symbol, mono_id));
+        let base_name = format!("zirael_{}", self.get_sym_name(&canonical_symbol, mono_id));
 
         if type_arguments.is_empty() {
             base_name

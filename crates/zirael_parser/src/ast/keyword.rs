@@ -9,6 +9,8 @@ pub enum Keyword {
     #[strum(props(category = "declaration"))]
     Struct,
     #[strum(props(category = "declaration"))]
+    Extension,
+    #[strum(props(category = "declaration"))]
     Enum,
     #[strum(props(category = "declaration"))]
     Import,
@@ -58,6 +60,7 @@ impl Keyword {
         match self {
             Self::Fn => "fn",
             Self::Struct => "struct",
+            Self::Extension => "extension",
             Self::Enum => "enum",
             Self::Import => "import",
             Self::Var => "var",

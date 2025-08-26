@@ -26,6 +26,7 @@ pub enum ItemKind {
     Struct(StructDeclaration),
     Enum(EnumDeclaration),
     Import(ImportKind, Span),
+    TypeExtension(TypeExtension),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -93,6 +94,14 @@ pub enum ParameterKind {
 pub struct Attribute {
     pub name: Identifier,
     pub args: Option<Vec<Expr>>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TypeExtension {
+    pub id: AstId,
+    pub ty: Type,
+    pub items: Vec<Item>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -1,5 +1,5 @@
 use crate::{
-    AstId, CallInfo, LexedModule, ModuleId, Return, ScopeType, SymbolTable,
+    AstId, CallInfo, LexedModule, ModuleId, Return, Scope, ScopeType, SymbolTable, TypeExtension,
     ast::{
         Abi, Ast, Attribute, BinaryOp, EnumDeclaration, EnumVariant, EnumVariantData, Expr,
         ExprKind, Function, FunctionModifiers, FunctionSignature, GenericArg, GenericParameter,
@@ -56,6 +56,7 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
             ItemKind::Struct(_struct) => self.walk_struct_declaration(_struct),
             ItemKind::Enum(enum_decl) => self.walk_enum_declaration(enum_decl),
             ItemKind::Import(import, _) => self.walk_import_kind(import),
+            ItemKind::TypeExtension(ty_ext) => self.walk_type_extension(ty_ext),
         }
     }
 
@@ -128,6 +129,18 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
                 self.walk_expr(arg);
             }
         }
+    }
+
+    fn walk_type_extension(&mut self, _ty_ext: &mut TypeExtension) {
+        self.visit_type_extension(_ty_ext);
+
+        self.push_scope(ScopeType::TypeExtension(_ty_ext.id));
+
+        for item in &mut _ty_ext.items {
+            self.walk_item(item);
+        }
+
+        self.pop_scope();
     }
 
     fn walk_struct_declaration(&mut self, _struct: &mut StructDeclaration) {
@@ -416,6 +429,7 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
     fn visit_parameter_kind(&mut self, _kind: &mut ParameterKind) {}
     fn visit_attribute(&mut self, _attr: &mut Attribute) {}
     fn visit_struct_declaration(&mut self, _struct: &mut StructDeclaration) {}
+    fn visit_type_extension(&mut self, _ty_ext: &mut TypeExtension) {}
     fn visit_struct_field(&mut self, _field: &mut StructField) {}
     fn visit_enum_declaration(&mut self, _enum_decl: &mut EnumDeclaration) {}
     fn visit_enum_variant(&mut self, _variant: &mut EnumVariant) {}

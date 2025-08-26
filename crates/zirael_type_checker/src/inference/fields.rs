@@ -12,7 +12,7 @@ impl<'reports> TypeInference<'reports> {
             return Type::Error;
         }
 
-        let base_type = match self.get_base_type(&chain[0]) {
+        let base_type = match self.get_base_type(&mut chain[0]) {
             Ok(ty) => ty,
             Err(_) => return Type::Error,
         };
@@ -53,18 +53,15 @@ impl<'reports> TypeInference<'reports> {
         current_type
     }
 
-    fn get_base_type(&mut self, expr: &Expr) -> Result<Type, ()> {
-        let base = expr.as_identifier();
-        let first_span = expr.span.clone();
-
-        if let Some((_, Some(sym_id))) = base {
+    fn get_base_type(&mut self, expr: &mut Expr) -> Result<Type, ()> {
+        self.infer_expr(expr);
+        if let Some((_, Some(sym_id))) = expr.as_identifier() {
             match self.ctx.get_variable(*sym_id) {
                 Some(var) => Ok(var.clone()),
                 None => Err(()),
             }
         } else {
-            self.non_struct_type(first_span, file!(), line!());
-            Err(())
+            Ok(expr.ty.clone())
         }
     }
 
@@ -87,7 +84,7 @@ impl<'reports> TypeInference<'reports> {
         let (method_expr, receiver_chain) = chain.split_last_mut().unwrap();
 
         let receiver_type = if receiver_chain.len() == 1 {
-            match self.get_base_type(&receiver_chain[0]) {
+            match self.get_base_type(&mut receiver_chain[0]) {
                 Ok(ty) => ty,
                 Err(_) => return Type::Error,
             }
@@ -232,6 +229,11 @@ impl<'reports> TypeInference<'reports> {
                     Vec::new()
                 }
             }
+            ty if ty.is_primitive() => {
+                let exts = self.symbol_table.get_type_extensions();
+
+                if let Some(ext) = exts.get(ty) { ext.clone() } else { Vec::new() }
+            }
             _ => Vec::new(),
         }
     }
@@ -293,7 +295,7 @@ impl<'reports> TypeInference<'reports> {
             self.error(
                 &format!(
                     "no method named {} found on type {}",
-                    method_name,
+                    method_name.dimmed().bold(),
                     self.format_type(receiver_type)
                 ),
                 vec![("in this field access".to_string(), span)],

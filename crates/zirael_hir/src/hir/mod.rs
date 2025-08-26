@@ -1,6 +1,6 @@
 use crate::hir::expr::HirExpr;
 use std::collections::HashMap;
-use zirael_parser::{AstId, StructDeclaration, StructField, SymbolId, Type};
+use zirael_parser::{AstId, StructDeclaration, StructField, SymbolId, Type, TypeExtension};
 use zirael_utils::prelude::{SourceFileId, Span};
 
 pub mod expr;
@@ -24,6 +24,14 @@ pub enum HirItemKind {
     Function(HirFunction),
     Struct(HirStruct),
     Enum(HirEnum),
+    TypeExtension(HirTypeExtension),
+}
+
+#[derive(Debug, Clone)]
+pub struct HirTypeExtension {
+    pub id: AstId,
+    pub symbol_id: SymbolId,
+    pub methods: Vec<HirItem>,
 }
 
 #[derive(Debug, Clone)]
@@ -62,7 +70,7 @@ pub struct HirStruct {
     pub id: AstId,
     pub symbol_id: SymbolId,
     pub fields: Vec<StructField>,
-    pub methods: Vec<HirItem>
+    pub methods: Vec<HirItem>,
 }
 
 #[derive(Debug, Clone)]

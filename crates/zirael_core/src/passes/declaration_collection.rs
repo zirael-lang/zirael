@@ -6,7 +6,9 @@ use zirael_parser::{
     SymbolTableError, VarDecl, impl_ast_walker, item::Item,
 };
 use zirael_utils::{
-    prelude::{Colorize as _, Identifier, ReportBuilder, Reports, Sources, Span, resolve},
+    prelude::{
+        Colorize as _, Identifier, ReportBuilder, Reports, Sources, Span, default_ident, resolve,
+    },
     sources::SourceFileId,
 };
 
@@ -264,17 +266,16 @@ impl<'reports> AstWalker<'reports> for DeclarationCollection<'reports> {
                 }
 
                 self.symbol_table.exit_scope().unwrap();
-                
-                self.symbol_table.update_symbol_kind(sym.unwrap(), |mut kind| {
-                    if let SymbolKind::Function {
-                        signature,
-                        ..
-                    } = kind {
-                        *signature = func.signature.clone();
-                    }
-                    
-                    kind.clone()
-                }).unwrap();
+
+                self.symbol_table
+                    .update_symbol_kind(sym.unwrap(), |mut kind| {
+                        if let SymbolKind::Function { signature, .. } = kind {
+                            *signature = func.signature.clone();
+                        }
+
+                        kind.clone()
+                    })
+                    .unwrap();
 
                 sym
             }
@@ -304,6 +305,33 @@ impl<'reports> AstWalker<'reports> for DeclarationCollection<'reports> {
                     .update_symbol_kind(sym.unwrap(), |kind| SymbolKind::Struct {
                         generics: struct_def.generics.clone(),
                         fields: struct_def.fields.clone(),
+                        methods: methods.clone(),
+                    })
+                    .unwrap();
+
+                sym
+            }
+            ItemKind::TypeExtension(ty_ext) => {
+                let sym = self.register_symbol(
+                    default_ident(),
+                    &SymbolKind::TypeExtension { ty: ty_ext.ty.clone(), methods: vec![] },
+                    ty_ext.span.clone(),
+                );
+                let mut methods = vec![];
+
+                self.symbol_table.create_scope(ScopeType::TypeExtension(ty_ext.id));
+                for func in &mut ty_ext.items {
+                    self.walk_item(func);
+
+                    let func_id = func.symbol_id.unwrap();
+                    self.symbol_table.add_struct_method(sym.unwrap(), func_id);
+                    methods.push(func_id);
+                }
+                self.symbol_table.exit_scope().unwrap();
+
+                self.symbol_table
+                    .update_symbol_kind(sym.unwrap(), |kind| SymbolKind::TypeExtension {
+                        ty: ty_ext.ty.clone(),
                         methods: methods.clone(),
                     })
                     .unwrap();

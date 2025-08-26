@@ -131,19 +131,34 @@ impl<'reports> TypeInference<'reports> {
         }
     }
 
-    fn get_struct_type_for_method(&self, func: &Function) -> Option<Type> {
+    fn get_struct_type_for_method(&mut self, func: &Function) -> Option<Type> {
         if let Some(func_symbol) = self.symbol_table.lookup_symbol(&func.name) {
             if let Some(struct_symbol_id) = self.symbol_table.is_a_method(func_symbol.id) {
                 let struct_symbol = self.symbol_table.get_symbol_unchecked(&struct_symbol_id);
 
-                if let SymbolKind::Struct { generics, .. } = &struct_symbol.kind {
-                    let generic_names = generics
-                        .iter()
-                        .map(|g| Type::Named { name: g.name.clone(), generics: vec![] })
-                        .collect::<Vec<_>>();
+                return match &struct_symbol.kind {
+                    SymbolKind::Struct { generics, .. } => {
+                        let generic_names = generics
+                            .iter()
+                            .map(|g| Type::Named { name: g.name.clone(), generics: vec![] })
+                            .collect::<Vec<_>>();
 
-                    return Some(Type::Named { name: struct_symbol.name, generics: generic_names });
-                }
+                        Some(Type::Named { name: struct_symbol.name, generics: generic_names })
+                    }
+                    SymbolKind::TypeExtension { ty, .. } => {
+                        if ty.is_primitive() {
+                            Some(ty.clone())
+                        } else {
+                            self.error(
+                                "right now type extensions can only be used on primitve types",
+                                vec![("type extension here".to_string(), func.span.clone())],
+                                vec![],
+                            );
+                            None
+                        }
+                    }
+                    _ => None,
+                };
             }
         }
         None
@@ -293,6 +308,16 @@ impl<'reports> AstWalker<'reports> for TypeInference<'reports> {
         }
 
         self.current_struct_generics.clear();
+        self.pop_scope();
+    }
+
+    fn walk_type_extension(&mut self, _ty_ext: &mut TypeExtension) {
+        self.push_scope(ScopeType::TypeExtension(_ty_ext.id));
+
+        for item in &mut _ty_ext.items {
+            self.walk_item(item);
+        }
+
         self.pop_scope();
     }
 

@@ -1,21 +1,22 @@
 use crate::ir::{
     IrBlock, IrExpr, IrExprKind, IrField, IrFunction, IrItem, IrItemKind, IrModule, IrParam,
-    IrStmt, IrStruct,
+    IrStmt, IrStruct, IrTypeExtension,
 };
 use itertools::Itertools;
 use std::{collections::HashMap, path::PathBuf, vec};
 use zirael_hir::hir::{
-    HirBody, HirFunction, HirItem, HirItemKind, HirModule, HirStruct,
+    HirBody, HirFunction, HirItem, HirItemKind, HirModule, HirStruct, HirTypeExtension,
     expr::{HirExpr, HirExprKind, HirStmt},
 };
 use zirael_parser::{
-    AstId, DropStackEntry, MonomorphizationId, Scope, ScopeType, StructField, SymbolId, SymbolKind,
-    SymbolRelationNode, SymbolTable, Type, UnaryOp, monomorphized_symbol::MonomorphizedSymbol,
+    AstId, DropStackEntry, MonomorphizationId, Scope, ScopeType, StructField, Symbol, SymbolId,
+    SymbolKind, SymbolRelationNode, SymbolTable, Type, UnaryOp,
+    monomorphized_symbol::MonomorphizedSymbol,
 };
 use zirael_type_checker::MonomorphizationTable;
 use zirael_utils::prelude::{
     Colorize as _, Mode, ReportBuilder, ReportKind, Reports, SourceFileId, Sources, debug,
-    get_or_intern, resolve, warn,
+    default_ident, get_or_intern, resolve, warn,
 };
 
 pub fn lower_hir_to_ir<'reports>(
@@ -155,8 +156,38 @@ impl<'reports> HirLowering<'reports> {
                     mono_id: None,
                 })
             }
+            HirItemKind::TypeExtension(ext) => Some(IrItem {
+                name: "".to_string(),
+                kind: IrItemKind::TypeExtension(self.lower_type_extension(ext)),
+                sym_id: item.symbol_id,
+                mono_id: None,
+            }),
             _ => todo!(),
         }
+    }
+
+    fn lower_type_extension(&mut self, ext: &mut HirTypeExtension) -> IrTypeExtension {
+        self.push_scope(ScopeType::TypeExtension(ext.id));
+
+        let functions = ext
+            .methods
+            .iter_mut()
+            .map(|func| {
+                if let Some(item) = self.lower_item(func)
+                    && let IrItemKind::Function(func) = item.kind
+                {
+                    Some(func)
+                } else {
+                    warn!("failed to lower method");
+                    None
+                }
+            })
+            .filter_map(|func| func)
+            .collect_vec();
+
+        self.pop_scope();
+
+        IrTypeExtension { methods: functions }
     }
 
     fn lower_struct(

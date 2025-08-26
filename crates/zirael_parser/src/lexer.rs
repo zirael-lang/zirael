@@ -17,6 +17,7 @@ pub enum TokenKind {
 
     #[token("fn", |_| Keyword::Fn)]
     #[token("struct", |_| Keyword::Struct)]
+    #[token("extension", |_| Keyword::Extension)]
     #[token("enum", |_| Keyword::Enum)]
     #[token("import", |_| Keyword::Import)]
     #[token("var", |_| Keyword::Var)]

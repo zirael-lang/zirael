@@ -1,6 +1,6 @@
 use crate::hir::{
     ExprContext, HirBody, HirFunction, HirFunctionSignature, HirItem, HirItemKind, HirModule,
-    HirParam, HirStruct,
+    HirParam, HirStruct, HirTypeExtension,
     expr::{AccessKind, HirExpr, HirExprKind, HirStmt},
 };
 use id_arena::Arena;
@@ -86,9 +86,35 @@ impl<'reports> AstLowering<'reports> {
                     span: item.span.clone(),
                 })
             }
+            ItemKind::TypeExtension(ty_ext) => {
+                self.push_scope(ScopeType::TypeExtension(ty_ext.id));
+                let ty_ext = self.lower_ty_ext(ty_ext, symbol_id);
+                self.pop_scope();
+
+                Some(HirItem {
+                    symbol_id,
+                    kind: HirItemKind::TypeExtension(ty_ext),
+                    span: item.span.clone(),
+                })
+            }
             ItemKind::Import(..) => None,
             _ => unimplemented!("Unimplemented item kind: {:?}", item),
         }
+    }
+
+    fn lower_ty_ext(
+        &mut self,
+        struct_def: &mut TypeExtension,
+        symbol_id: SymbolId,
+    ) -> HirTypeExtension {
+        let mut methods = vec![];
+        for method in &mut struct_def.items {
+            if let Some(item) = self.lower_item(method) {
+                methods.push(item);
+            }
+        }
+
+        HirTypeExtension { id: struct_def.id, symbol_id, methods }
     }
 
     fn lower_struct(

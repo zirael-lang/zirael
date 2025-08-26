@@ -43,7 +43,11 @@ pub enum SymbolKind {
     Struct {
         fields: Vec<StructField>,
         generics: Vec<GenericParameter>,
-        methods: Vec<SymbolId>
+        methods: Vec<SymbolId>,
+    },
+    TypeExtension {
+        ty: Type,
+        methods: Vec<SymbolId>,
     },
     Enum {
         generics: Option<Vec<GenericParameter>>,
@@ -65,6 +69,7 @@ impl SymbolKind {
             Self::Struct { .. } => "struct",
             Self::Enum { .. } => "enum",
             Self::Temporary { .. } => "temporary",
+            Self::TypeExtension { .. } => "type extension",
         }
     }
 

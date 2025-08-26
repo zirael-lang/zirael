@@ -1,5 +1,5 @@
 use crate::{
-    AstId, StructDeclaration, StructField, TokenKind, Type,
+    AstId, Attribute, StructDeclaration, StructField, TokenKind, Type, TypeExtension,
     ast::{
         Abi, Function, FunctionModifiers, FunctionSignature, ImportKind, Item, ItemKind, Keyword,
         Parameter, ParameterKind,
@@ -25,10 +25,12 @@ impl<'a> Parser<'a> {
             self.parse_struct(id)
         } else if self.match_keyword(Keyword::Import) {
             self.parse_import()
+        } else if self.match_keyword(Keyword::Extension) {
+            self.parse_extension(id)
         } else {
             if let Some(token) = self.peek() {
                 self.error_at_peek(format!(
-                    "expected item declaration (fn, struct, or import), found {:?}",
+                    "expected item declaration (fn, struct, extension, or import), found {:?}",
                     token.kind
                 ));
             } else {
@@ -38,6 +40,7 @@ impl<'a> Parser<'a> {
             self.synchronize(&[
                 TokenKind::Keyword(Keyword::Fn),
                 TokenKind::Keyword(Keyword::Struct),
+                TokenKind::Keyword(Keyword::Extension),
                 TokenKind::Keyword(Keyword::Import),
                 TokenKind::Semicolon,
                 TokenKind::BraceClose,
@@ -54,6 +57,30 @@ impl<'a> Parser<'a> {
             span: span.to(self.prev_span()),
             symbol_id: None,
         })
+    }
+
+    pub fn parse_single_method(&mut self, attrs: Vec<Attribute>) -> Option<Item> {
+        if !self.check_keyword(Keyword::Fn) {
+            return None;
+        }
+
+        self.advance();
+        let method_id = self.fresh_id();
+        let (method_kind, method_name) = self.parse_fn(method_id);
+
+        if let ItemKind::Function(func) = method_kind {
+            Some(Item {
+                attributes: attrs,
+                name: method_name,
+                kind: ItemKind::Function(func),
+                id: method_id,
+                span: self.prev_span(),
+                symbol_id: None,
+            })
+        } else {
+            self.error_at_current("expected function after 'fn' keyword");
+            None
+        }
     }
 
     pub fn parse_struct(&mut self, id: AstId) -> (ItemKind, Identifier) {
@@ -88,22 +115,8 @@ impl<'a> Parser<'a> {
             let attrs = self.parse_attrs();
 
             if self.check_keyword(Keyword::Fn) {
-                self.advance();
-                let method_id = self.fresh_id();
-                let (method_kind, method_name) = self.parse_fn(method_id);
-
-                if let ItemKind::Function(func) = method_kind {
-                    let method_item = Item {
-                        attributes: attrs,
-                        name: method_name,
-                        kind: ItemKind::Function(func),
-                        id: method_id,
-                        span: self.prev_span(),
-                        symbol_id: None,
-                    };
-                    methods.push(method_item);
-                } else {
-                    self.error_at_current("expected function after 'fn' keyword");
+                if let Some(method) = self.parse_single_method(attrs) {
+                    methods.push(method);
                 }
             } else if let Some(field_name) = self.expect_identifier() {
                 self.expect(TokenKind::Colon);
@@ -148,6 +161,48 @@ impl<'a> Parser<'a> {
                 span: span.to(self.prev_span()),
             }),
             name,
+        )
+    }
+
+    pub fn parse_extension(&mut self, id: AstId) -> (ItemKind, Identifier) {
+        let span = self.prev_span();
+
+        let extended_type = self.parse_type().unwrap_or_else(|| {
+            self.error_at_current("expected type after 'extension' keyword");
+            Type::Error
+        });
+
+        self.expect(TokenKind::BraceOpen);
+
+        let mut items = vec![];
+        while !self.check(&TokenKind::BraceClose) && !self.is_at_end() {
+            let attrs = self.parse_attrs();
+
+            if self.check_keyword(Keyword::Fn) {
+                if let Some(method) = self.parse_single_method(attrs) {
+                    items.push(method);
+                }
+            } else {
+                self.error_at("extension body can only contain methods", self.prev_span());
+                self.synchronize(&[TokenKind::Semicolon, TokenKind::Comma, TokenKind::BraceClose]);
+                if self.check(&TokenKind::BraceClose) {
+                    break;
+                }
+            }
+        }
+
+        if !self.match_token(TokenKind::BraceClose) {
+            self.error_at_current("expected '}' to close extension");
+        }
+
+        (
+            ItemKind::TypeExtension(TypeExtension {
+                id,
+                ty: extended_type,
+                items,
+                span: span.to(self.prev_span()),
+            }),
+            default_ident(),
         )
     }
 

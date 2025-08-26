@@ -134,20 +134,6 @@ impl<'reports> NameResolution<'reports> {
         }
         report
     }
-
-    fn resolve_field_chain(&mut self, fields: &mut Vec<Expr>) {
-        let base = &mut fields[0];
-        let span = base.span.clone();
-        let Some((ident, ident_sym_id)) = base.as_identifier_mut() else {
-            self.error("expected identifier in field access", vec![], vec![]);
-            return;
-        };
-
-        if let Some(id) = self.resolve_identifier(ident, span, ExpectedSymbol::Value) {
-            *ident_sym_id = Some(id);
-            self.symbol_table.mark_used(id).expect("invalid symbol id");
-        }
-    }
 }
 
 impl<'reports> AstWalker<'reports> for NameResolution<'reports> {
@@ -197,7 +183,17 @@ impl<'reports> AstWalker<'reports> for NameResolution<'reports> {
     }
 
     fn visit_field_access(&mut self, fields: &mut Vec<Expr>) {
-        self.resolve_field_chain(fields);
+        let base = &mut fields[0];
+        let span = base.span.clone();
+        let Some((ident, ident_sym_id)) = base.as_identifier_mut() else {
+            self.error("expected identifier in field access", vec![], vec![]);
+            return;
+        };
+
+        if let Some(id) = self.resolve_identifier(ident, span, ExpectedSymbol::Value) {
+            *ident_sym_id = Some(id);
+            self.symbol_table.mark_used(id).expect("invalid symbol id");
+        }
     }
 
     fn visit_type(&mut self, _ty: &mut Type) {
@@ -220,7 +216,14 @@ impl<'reports> AstWalker<'reports> for NameResolution<'reports> {
         _args: &mut Vec<Expr>,
         _info: &mut Option<CallInfo>,
     ) {
-        self.resolve_field_chain(_chain);
+        let base = &mut _chain[0];
+        let span = base.span.clone();
+        if let Some((ident, ident_sym_id)) = base.as_identifier_mut() {
+            if let Some(id) = self.resolve_identifier(ident, span, ExpectedSymbol::Value) {
+                *ident_sym_id = Some(id);
+                self.symbol_table.mark_used(id).expect("invalid symbol id");
+            }
+        }
 
         for arg in _args {
             self.visit_expr(arg);

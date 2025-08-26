@@ -44,6 +44,13 @@ impl Type {
     pub fn is_reference(&self) -> bool {
         matches!(self, Self::Reference(_))
     }
+
+    pub fn is_primitive(&self) -> bool {
+        matches!(
+            self,
+            Self::String | Self::Char | Self::Int | Self::Uint | Self::Float | Self::Bool
+        )
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

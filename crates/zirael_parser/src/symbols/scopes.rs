@@ -1,8 +1,9 @@
 use crate::{
-    AstId, Expr, ExprKind, Symbol,
+    AstId, Expr, ExprKind, Symbol, SymbolKind, SymbolTableImpl, Type,
     symbols::{SymbolId, SymbolTable, SymbolTableError},
 };
 use id_arena::Id;
+use log::debug;
 use std::collections::HashMap;
 use zirael_utils::prelude::*;
 
@@ -41,6 +42,7 @@ pub enum ScopeType {
     Enum(AstId),
     Loop(AstId),
     Conditional(AstId),
+    TypeExtension(AstId),
 }
 
 impl SymbolTable {
@@ -265,5 +267,84 @@ impl SymbolTable {
         } else {
             None
         }
+    }
+
+    // tries to get to the current module scope and get all type extensions defined
+    fn collect_ty_extensions(&self) -> Vec<SymbolId> {
+        self.read(|table| {
+            let mut current_scope_id = table.current_traversal_scope;
+
+            while let Some(scope) = table.scopes_arena.get(current_scope_id) {
+                match scope.scope_type {
+                    ScopeType::Module(_) => {
+                        let mut extensions = Vec::new();
+
+                        for &symbol_id in scope.symbols.values() {
+                            if let Some(symbol) = table.symbols.get(symbol_id) {
+                                if matches!(symbol.kind, SymbolKind::TypeExtension { .. }) {
+                                    extensions.push(symbol_id);
+                                }
+                            }
+                        }
+
+                        fn collect_extensions_recursive(
+                            table: &SymbolTableImpl,
+                            scope_id: ScopeId,
+                            extensions: &mut Vec<SymbolId>,
+                        ) {
+                            if let Some(scope) = table.scopes_arena.get(scope_id) {
+                                for &symbol_id in scope.symbols.values() {
+                                    if let Some(symbol) = table.symbols.get(symbol_id) {
+                                        if matches!(symbol.kind, SymbolKind::TypeExtension { .. }) {
+                                            extensions.push(symbol_id);
+                                        }
+                                    }
+                                }
+
+                                for &child_id in &scope.children {
+                                    collect_extensions_recursive(table, child_id, extensions);
+                                }
+                            }
+                        }
+
+                        for &child_id in &scope.children {
+                            collect_extensions_recursive(table, child_id, &mut extensions);
+                        }
+
+                        return extensions;
+                    }
+                    ScopeType::Global => {
+                        break;
+                    }
+                    _ => {
+                        if let Some(parent) = scope.parent {
+                            current_scope_id = parent;
+                        } else {
+                            break;
+                        }
+                    }
+                }
+            }
+
+            Vec::new()
+        })
+    }
+
+    pub fn get_type_extensions(&self) -> HashMap<Type, Vec<SymbolId>> {
+        let mut exts = HashMap::new();
+        let extensions = self.collect_ty_extensions();
+
+        for ext in extensions {
+            let symbol = self.get_symbol_unchecked(&ext);
+
+            if let SymbolKind::TypeExtension { ty, methods } = symbol.kind {
+                exts.entry(ty).or_insert_with(Vec::new).extend(methods);
+            } else {
+                debug!("Expected type extension, got {symbol:?}");
+                return HashMap::new();
+            }
+        }
+        
+        exts
     }
 }

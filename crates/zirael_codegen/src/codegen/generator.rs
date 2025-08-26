@@ -12,6 +12,7 @@ use zirael_parser::{
     ast::monomorphized_symbol::MonomorphizedSymbol,
 };
 use zirael_utils::prelude::{CompilationInfo, resolve};
+use crate::ir::IrTypeExtension;
 
 pub fn run_codegen(
     modules: Vec<IrModule>,
@@ -120,6 +121,7 @@ impl Gen for IrItem {
         match &self.kind {
             IrItemKind::Function(func) => func.generate_header(cg),
             IrItemKind::Struct(ir) => ir.generate_header(cg),
+            IrItemKind::TypeExtension(ty) => ty.generate_header(cg)
         }
     }
 
@@ -127,8 +129,23 @@ impl Gen for IrItem {
         match &self.kind {
             IrItemKind::Function(func) => func.generate(p),
             IrItemKind::Struct(ir) => ir.generate(p),
+            IrItemKind::TypeExtension(ty) => ty.generate(p)
         }
         p.newline();
+    }
+}
+
+impl Gen for IrTypeExtension {
+    fn generate_header(&self, cg: &mut Codegen) {
+        for func in &self.methods {
+            func.generate_header(cg);
+        }
+    }
+    
+    fn generate(&self, cg: &mut Codegen) {
+        for func in &self.methods {
+            func.generate(cg);
+        }
     }
 }
 

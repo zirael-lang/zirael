@@ -26,6 +26,12 @@ pub struct IrItem {
 pub enum IrItemKind {
     Function(IrFunction),
     Struct(IrStruct),
+    TypeExtension(IrTypeExtension),
+}
+
+#[derive(Clone, Debug)]
+pub struct IrTypeExtension {
+    pub methods: Vec<IrFunction>,
 }
 
 impl IrItemKind {

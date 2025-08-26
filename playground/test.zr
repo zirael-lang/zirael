@@ -1,15 +1,9 @@
-// Generic box that can hold any type
-struct Box<T> {
-    value: T,
-
-    fn new(val: T): Box<T> {
-        Box { value: val }
+extension int {
+    fn isEven(self): bool {
+        return (self % 2) == 0
     }
 }
+
 fn main() {
-    // Creating generic instances
-    var _int_box = Box::new(42);      // Type inferred as Box<int>
-    //var _float_box = Box { value: 3.14 };
-    //var str_box = Box::new("hello"); // Type inferred as Box<string>
-    //var bool_box = Box::new(true);   // Type inferred as Box<bool>
+    var _a = 42.isEven()
 }
