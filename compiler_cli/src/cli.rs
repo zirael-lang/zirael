@@ -101,7 +101,7 @@ pub fn try_cli() -> Result<()> {
                 name: dep.name.clone(),
                 root: dep.root.clone(),
                 write_to: write_to.clone(),
-                ty: cli.ty,
+                ty: PackageType::Library,
             },
         );
         unit.compile()?;

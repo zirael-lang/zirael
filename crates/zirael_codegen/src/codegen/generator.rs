@@ -109,7 +109,11 @@ pub fn run_codegen(
 }
 
 fn function_signature(func: &IrFunction, name: &str, p: &mut Codegen) {
-    func.return_type.generate(p);
+    if name == "main" {
+        p.write("int ");
+    } else {
+        func.return_type.generate(p);
+    }
     p.write(" ");
     p.write(name);
 

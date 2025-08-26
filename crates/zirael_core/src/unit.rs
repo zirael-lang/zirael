@@ -84,7 +84,6 @@ impl<'ctx> CompilationUnit<'ctx> {
             vec![],
         );
         decl.collect(&mut result.modules);
-
         if self.info.ty == PackageType::Binary {
             self.main_function_id = self.find_main_function(symbols, reports);
         }
