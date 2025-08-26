@@ -212,13 +212,31 @@ impl<'a> Parser<'a> {
         let current_file = self.source.path();
         let path = current_file.parent().unwrap_or(&PathBuf::new()).join(string.clone());
 
-        let kind = if path.is_file() && path.extension().is_some_and(|ext| ext == "zr") {
-            self.discover_queue.push((path.clone(), span.clone()));
-            ImportKind::Path(path)
+        let is_path_import =
+            string.starts_with("./") || string.starts_with("/") || string.starts_with("\\");
+
+        let kind = if is_path_import {
+            if path.is_file() && path.extension().is_some_and(|ext| ext == "zr") {
+                self.discover_queue.push((path.clone(), span.clone()));
+                ImportKind::Path(path)
+            } else {
+                let error_msg = if !path.exists() {
+                    format!("couldn't find file: {}", path.display())
+                } else if path.extension().map_or(true, |ext| ext != "zr") {
+                    format!("import file must have .zr extension: {}", path.display())
+                } else {
+                    format!("import path is not a file: {}", path.display())
+                };
+
+                self.error_at(error_msg, span.clone());
+
+                ImportKind::Path(path)
+            }
         } else {
             let parts = string.split('/').map(get_or_intern).collect::<Vec<_>>();
             ImportKind::ExternalModule(parts)
         };
+
         let span = span.to(self.prev_span());
 
         (ItemKind::Import(kind, span), default_ident())

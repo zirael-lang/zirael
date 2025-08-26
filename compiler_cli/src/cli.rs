@@ -4,7 +4,7 @@ use zirael_core::prelude::*;
 
 #[derive(Parser)]
 #[command(name = "zirael")]
-#[command(bin_name = "zr")]
+#[command(bin_name = "zirael")]
 #[command(styles = CLAP_STYLING)]
 pub struct Cli {
     #[arg(value_name = "entrypoint", help = "Entrypoint of the project")]
