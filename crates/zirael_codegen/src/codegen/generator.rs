@@ -8,7 +8,7 @@ use crate::{
 use itertools::Itertools as _;
 use std::path::PathBuf;
 use zirael_parser::{
-    BinaryOp, Literal, SymbolId, SymbolRelationNode, Type, UnaryOp,
+    BinaryOp, Literal, MainFunction, SymbolId, SymbolRelationNode, Type, UnaryOp,
     ast::monomorphized_symbol::MonomorphizedSymbol,
 };
 use zirael_utils::prelude::{CompilationInfo, debug, resolve};
@@ -18,6 +18,7 @@ pub fn run_codegen(
     info: &CompilationInfo,
     mut order: Vec<SymbolRelationNode>,
     used_externals: Vec<String>,
+    main_fn: &Option<MainFunction>,
 ) -> anyhow::Result<()> {
     let header = &mut Codegen::new();
     let implementation = &mut Codegen::new();
@@ -93,9 +94,14 @@ pub fn run_codegen(
         }
     }
 
-    if let Some(main_func) = c_main_function {
-        main_func.generate_header(header);
-        main_func.generate(implementation);
+    if let Some(func) = main_fn
+        && let MainFunction::Mangled(mangled) = func
+    {
+        implementation.writeln("int main() {");
+        implementation.indent();
+        implementation.writeln(&format!("return {}();", mangled));
+        implementation.dedent();
+        implementation.writeln("}");
     }
 
     fs_err::create_dir_all(&info.write_to)?;
@@ -109,11 +115,7 @@ pub fn run_codegen(
 }
 
 fn function_signature(func: &IrFunction, name: &str, p: &mut Codegen) {
-    if name == "main" {
-        p.write("int ");
-    } else {
-        func.return_type.generate(p);
-    }
+    func.return_type.generate(p);
     p.write(" ");
     p.write(name);
 

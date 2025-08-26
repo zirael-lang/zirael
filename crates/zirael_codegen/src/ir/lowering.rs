@@ -9,8 +9,8 @@ use zirael_hir::hir::{
     expr::{FieldSymbol, HirExpr, HirExprKind, HirStmt},
 };
 use zirael_parser::{
-    AstId, DropStackEntry, Literal, MonomorphizationId, Scope, ScopeType, StructField, Symbol,
-    SymbolId, SymbolKind, SymbolRelationNode, SymbolTable, Type, UnaryOp,
+    AstId, DropStackEntry, Literal, MainFunction, MonomorphizationId, Scope, ScopeType,
+    StructField, Symbol, SymbolId, SymbolKind, SymbolRelationNode, SymbolTable, Type, UnaryOp,
     monomorphized_symbol::MonomorphizedSymbol,
 };
 use zirael_type_checker::MonomorphizationTable;
@@ -27,7 +27,7 @@ pub fn lower_hir_to_ir<'reports>(
     sources: &Sources,
     mode: Mode,
     root: PathBuf,
-    main_function_id: Option<SymbolId>,
+    main_function_id: &mut Option<MainFunction>,
 ) -> Vec<IrModule> {
     let mut lowering = HirLowering::new(symbol_table, mono_table, reports, sources, mode, root);
     lowering.lower_modules(hir_modules, main_function_id)
@@ -72,7 +72,7 @@ impl<'reports> HirLowering<'reports> {
     pub fn lower_modules(
         &mut self,
         lexed_modules: &mut Vec<HirModule>,
-        main_function_id: Option<SymbolId>,
+        main_function_id: &mut Option<MainFunction>,
     ) -> Vec<IrModule> {
         lexed_modules
             .iter_mut()
@@ -115,7 +115,7 @@ impl<'reports> HirLowering<'reports> {
     fn lower_module(
         &mut self,
         lexed_module: &mut HirModule,
-        main_function_id: Option<SymbolId>,
+        main_function_id: &mut Option<MainFunction>,
     ) -> IrModule {
         let mut ir_module = IrModule { items: vec![], mono_items: vec![] };
 
@@ -129,10 +129,13 @@ impl<'reports> HirLowering<'reports> {
         }
         ir_module.items.extend(self.current_items.drain(..));
 
-        if let Some(main_symbol_id) = main_function_id {
-            if lexed_module.items.values().any(|item| item.symbol_id == main_symbol_id) {
-                let c_main_function = self.generate_c_main_function(main_symbol_id);
-                ir_module.items.push(c_main_function);
+        if let Some(main_symbol_id) = main_function_id
+            && let MainFunction::Symbol(main_symbol_id) = main_symbol_id
+        {
+            if lexed_module.items.values().any(|item| item.symbol_id == *main_symbol_id) {
+                *main_function_id = Some(MainFunction::Mangled(
+                    self.mangle_symbol(*main_symbol_id),
+                ))
             }
         }
 
@@ -506,35 +509,5 @@ impl<'reports> HirLowering<'reports> {
         }
 
         IrExpr { ty: expr_type, kind: fixed_kind }
-    }
-
-    fn generate_c_main_function(&mut self, main_symbol_id: SymbolId) -> IrItem {
-        let user_main_name = self.mangle_symbol(main_symbol_id);
-
-        let call_user_main =
-            IrStmt::Expr(IrExpr::new(Type::Void, IrExprKind::Call(user_main_name, vec![])));
-
-        let return_zero =
-            IrStmt::Return(Some(IrExpr::new(Type::Int, IrExprKind::Literal(Literal::Integer(0)))));
-
-        let main_body = IrBlock::new(vec![call_user_main, return_zero]);
-
-        let c_main_function = IrFunction {
-            name: "main".to_string(),
-            parameters: vec![],
-            return_type: Type::Int,
-            body: Some(main_body),
-            is_extern: false,
-            is_const: false,
-            is_async: false,
-            abi: None,
-        };
-
-        IrItem {
-            name: "main".to_string(),
-            kind: IrItemKind::Function(c_main_function),
-            sym_id: main_symbol_id,
-            mono_id: None,
-        }
     }
 }

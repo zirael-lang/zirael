@@ -1,13 +1,4 @@
-extension int {
-    fn isEven(self): bool {
-        return (self % 2) == 0
-    }
-}
-
-struct Point {
-    point: int
-}
 
 fn main() {
-    var _point = Point { point: 25 }.point.isEven();
+    var _x = "dwa";
 }

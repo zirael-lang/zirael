@@ -12,7 +12,7 @@ pub struct CompilationUnit<'ctx> {
     pub context: Context<'ctx>,
     pub module_graph: DependencyGraph,
     pub info: CompilationInfo,
-    pub main_function_id: Option<SymbolId>,
+    pub main_function_id: Option<MainFunction>,
 }
 
 impl<'ctx> CompilationUnit<'ctx> {
@@ -84,8 +84,10 @@ impl<'ctx> CompilationUnit<'ctx> {
             vec![],
         );
         decl.collect(&mut result.modules);
-        if self.info.ty == PackageType::Binary {
-            self.main_function_id = self.find_main_function(symbols, reports);
+        if self.info.ty == PackageType::Binary
+            && let Some(main_id) = self.find_main_function(symbols, reports)
+        {
+            self.main_function_id = Some(MainFunction::Symbol(main_id));
         }
 
         NameResolution::new(symbols, reports, sources).walk_modules(&mut result.modules);
@@ -105,12 +107,13 @@ impl<'ctx> CompilationUnit<'ctx> {
             sources,
             self.info.mode,
             self.info.root.clone(),
-            self.main_function_id,
+            &mut self.main_function_id,
         );
         reports.print(sources);
 
         let order = symbols.build_symbol_relations()?;
-        let _result = run_codegen(ir, &self.info, order, decl.used_externals.clone());
+        let _result =
+            run_codegen(ir, &self.info, order, decl.used_externals.clone(), &self.main_function_id);
 
         Ok(())
     }

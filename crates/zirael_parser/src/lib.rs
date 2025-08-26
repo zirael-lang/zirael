@@ -15,3 +15,9 @@ pub use lexer::*;
 pub use module::*;
 pub use symbols::*;
 pub use walker::*;
+
+#[derive(Debug)]
+pub enum MainFunction {
+    Symbol(SymbolId),
+    Mangled(String),
+}
