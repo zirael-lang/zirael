@@ -12,11 +12,60 @@ pub struct CompilationUnit<'ctx> {
     pub context: Context<'ctx>,
     pub module_graph: DependencyGraph,
     pub info: CompilationInfo,
+    pub main_function_id: Option<SymbolId>,
 }
 
 impl<'ctx> CompilationUnit<'ctx> {
     pub fn new(entry_point: SourceFileId, context: Context<'ctx>, info: CompilationInfo) -> Self {
-        Self { entry_point, context, module_graph: Default::default(), info }
+        Self {
+            entry_point,
+            context,
+            module_graph: Default::default(),
+            info,
+            main_function_id: None,
+        }
+    }
+
+    fn find_main_function(&self, symbols: &SymbolTable, reports: &Reports) -> Option<SymbolId> {
+        let main_ident = get_or_intern("main");
+
+        symbols.read(|table| {
+            let entry_scope = table.scopes_arena.iter()
+                .find(|(_, scope)| matches!(scope.scope_type, ScopeType::Module(id) if id == self.entry_point))
+                .map(|(id, _)| id);
+
+            if let Some(scope_id) = entry_scope {
+                if let Some(&symbol_id) = table.name_lookup.get(&(main_ident, scope_id)) {
+                    let symbol = &table.symbols[symbol_id];
+
+                    if let SymbolKind::Function { signature, .. } = &symbol.kind {
+                        if signature.parameters.is_empty() {
+                            return Some(symbol_id);
+                        } else {
+                            if let Some(span) = symbol.source_location.as_ref() {
+                                reports.add(
+                                    self.entry_point,
+                                    ReportBuilder::builder(
+                                        "main function must not take any parameters",
+                                        ReportKind::Error
+                                    ).label("invalid main function signature", span.clone())
+                                );
+                            }
+                            return None;
+                        }
+                    }
+                }
+            }
+
+            reports.add(
+                self.entry_point,
+                ReportBuilder::builder(
+                    "binary package must have a main function",
+                    ReportKind::Error
+                ).label("add a main function to this module", 0..0)
+            );
+            None
+        })
     }
 
     pub fn compile(&mut self) -> Result<()> {
@@ -35,6 +84,11 @@ impl<'ctx> CompilationUnit<'ctx> {
             vec![],
         );
         decl.collect(&mut result.modules);
+
+        if self.info.ty == PackageType::Binary {
+            self.main_function_id = self.find_main_function(symbols, reports);
+        }
+
         NameResolution::new(symbols, reports, sources).walk_modules(&mut result.modules);
         reports.print(sources);
 
@@ -52,11 +106,12 @@ impl<'ctx> CompilationUnit<'ctx> {
             sources,
             self.info.mode,
             self.info.root.clone(),
+            self.main_function_id,
         );
         reports.print(sources);
 
         let order = symbols.build_symbol_relations()?;
-        let result = run_codegen(ir, &self.info, order, decl.used_externals.clone());
+        let _result = run_codegen(ir, &self.info, order, decl.used_externals.clone());
 
         Ok(())
     }

@@ -25,4 +25,4 @@ fmt:
     dprint fmt
 
 comp-run args='':
-    cargo run -p zirael playground/test.zr {{ args }} --name playground -o playground/build
+    cargo run -p zirael playground/test.zr {{ args }} --name playground -o playground/build --type binary

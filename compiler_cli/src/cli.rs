@@ -10,7 +10,13 @@ pub struct Cli {
     #[arg(value_name = "entrypoint", help = "Entrypoint of the project")]
     entrypoint: PathBuf,
 
-    #[arg(value_name = "type", help = "Type of the project", default_value = "library")]
+    #[arg(
+        value_name = "type",
+        short = 't',
+        long = "type",
+        help = "Type of the project",
+        default_value = "library"
+    )]
     ty: PackageType,
 
     #[arg(
@@ -95,6 +101,7 @@ pub fn try_cli() -> Result<()> {
                 name: dep.name.clone(),
                 root: dep.root.clone(),
                 write_to: write_to.clone(),
+                ty: cli.ty,
             },
         );
         unit.compile()?;
@@ -131,6 +138,7 @@ pub fn try_cli() -> Result<()> {
             name: cli.name.clone(),
             root,
             write_to: write_to.clone(),
+            ty: cli.ty,
         },
     );
     unit.compile()?;

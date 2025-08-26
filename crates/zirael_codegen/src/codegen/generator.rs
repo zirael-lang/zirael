@@ -31,6 +31,8 @@ pub fn run_codegen(
     let module_items = modules.iter().flat_map(|m| &m.items).collect::<Vec<_>>();
     let mono_items = modules.iter().flat_map(|m| &m.mono_items).collect::<Vec<_>>();
 
+    let c_main_function = module_items.iter().find(|item| item.name == "main");
+
     if order.is_empty() {
         order = module_items.iter().map(|i| SymbolRelationNode::Symbol(i.sym_id)).collect_vec();
     }
@@ -89,6 +91,11 @@ pub fn run_codegen(
                 mono_item.generate(implementation);
             }
         }
+    }
+
+    if let Some(main_func) = c_main_function {
+        main_func.generate_header(header);
+        main_func.generate(implementation);
     }
 
     fs_err::create_dir_all(&info.write_to)?;
