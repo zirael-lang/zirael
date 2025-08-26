@@ -17,7 +17,7 @@ impl<'a> Parser<'a> {
 
     fn parse_assignment(&mut self) -> Expr {
         let start_span = self.peek_span();
-        let expr = self.parse_logical_or();
+        let expr = self.parse_ternary();
 
         if let Some(token) = self.peek() {
             let op = match &token.kind {
@@ -50,6 +50,34 @@ impl<'a> Parser<'a> {
         }
 
         expr
+    }
+
+    fn parse_ternary(&mut self) -> Expr {
+        let condition = self.parse_logical_or();
+
+        if self.match_token(TokenKind::Question) {
+            let start_span = condition.span.clone();
+            let true_expr = self.parse_ternary();
+
+            if !self.match_token(TokenKind::Colon) {
+                self.error_at_current("expected ':' after true expression in ternary operator");
+                return self.new_expr(ExprKind::couldnt_parse(), start_span);
+            }
+
+            let false_expr = self.parse_ternary();
+            let end_span = false_expr.span.clone();
+
+            return self.new_expr(
+                ExprKind::Ternary {
+                    condition: Box::new(condition),
+                    true_expr: Box::new(true_expr),
+                    false_expr: Box::new(false_expr),
+                },
+                start_span.to(end_span),
+            );
+        }
+
+        condition
     }
 
     pub fn parse_logical_or(&mut self) -> Expr {

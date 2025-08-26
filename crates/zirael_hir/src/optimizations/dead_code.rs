@@ -16,6 +16,7 @@ impl<'reports> AstLowering<'reports> {
     pub fn is_expr_pointless(&self, expr: &HirExprKind) -> bool {
         match &expr {
             HirExprKind::Binary { .. }
+            | HirExprKind::Ternary { .. }
             | HirExprKind::Unary { .. }
             | HirExprKind::Literal(_)
             | HirExprKind::Symbol(_)

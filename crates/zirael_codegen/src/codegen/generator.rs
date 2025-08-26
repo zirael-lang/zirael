@@ -371,6 +371,14 @@ impl Gen for IrExpr {
                     part.generate(p);
                 }
             }
+            IrExprKind::Ternary(condition, true_expr, false_expr) => {
+                p.write("(");
+                condition.generate(p);
+                p.write(") ? ");
+                true_expr.generate(p);
+                p.write(" : ");
+                false_expr.generate(p);
+            }
             _ => {}
         }
     }

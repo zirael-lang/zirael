@@ -256,6 +256,12 @@ impl<'reports> HirLowering<'reports> {
                 let mono_fields = fields.iter().map(|f| f.clone()).collect();
                 IrExprKind::FieldAccess(mono_fields)
             }
+
+            IrExprKind::Ternary(cond, tr, fl) => IrExprKind::Ternary(
+                Box::new(self.monomorphize_expr(cond, type_map)),
+                Box::new(self.monomorphize_expr(tr, type_map)),
+                Box::new(self.monomorphize_expr(fl, type_map)),
+            ),
         };
 
         IrExpr { ty, kind }

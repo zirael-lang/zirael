@@ -19,6 +19,11 @@ pub enum HirExprKind {
         op: BinaryOp,
         right: Box<HirExpr>,
     },
+    Ternary {
+        condition: Box<HirExpr>,
+        true_expr: Box<HirExpr>,
+        false_expr: Box<HirExpr>,
+    },
     Unary {
         op: UnaryOp,
         operand: Box<HirExpr>,

@@ -209,6 +209,17 @@ impl<'reports> AstLowering<'reports> {
                 HirExprKind::Binary { left: left_expr, op: op.clone(), right: right_expr }
             }
 
+            ExprKind::Ternary { condition, true_expr, false_expr } => {
+                let condition_expr = Box::new(self.lower_expr(condition));
+                let true_expr_hir = Box::new(self.lower_expr(true_expr));
+                let false_expr_hir = Box::new(self.lower_expr(false_expr));
+                HirExprKind::Ternary {
+                    condition: condition_expr,
+                    true_expr: true_expr_hir,
+                    false_expr: false_expr_hir,
+                }
+            }
+
             ExprKind::Unary(op, operand) => {
                 let operand_expr = Box::new(self.lower_expr(operand));
                 HirExprKind::Unary { op: *op.clone(), operand: operand_expr }

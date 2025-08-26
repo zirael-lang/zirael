@@ -445,7 +445,15 @@ impl<'reports> HirLowering<'reports> {
 
                 IrExprKind::FieldAccess(f)
             }
-            _ => IrExprKind::Symbol(String::new()),
+            HirExprKind::Ternary { condition, true_expr, false_expr } => IrExprKind::Ternary(
+                Box::new(self.lower_expr(*condition)),
+                Box::new(self.lower_expr(*true_expr)),
+                Box::new(self.lower_expr(*false_expr)),
+            ),
+            _ => {
+                warn!("unhandled expression: {:?}", expr);
+                IrExprKind::Symbol(String::new())
+            }
         };
 
         let mut expr_type = self.lower_type(expr.ty);

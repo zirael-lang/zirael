@@ -242,6 +242,11 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
                 self.visit_binary_op(op);
                 self.walk_expr(right);
             }
+            ExprKind::Ternary { condition, true_expr, false_expr } => {
+                self.walk_expr(condition);
+                self.walk_expr(true_expr);
+                self.walk_expr(false_expr);
+            }
             ExprKind::Block(stmts) => self.walk_block(stmts, expr.id),
             ExprKind::Assign(lhs, rhs) => {
                 self.visit_assign(lhs, rhs);

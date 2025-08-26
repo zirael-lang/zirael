@@ -89,6 +89,10 @@ impl<'reports> TypeInference<'reports> {
             ExprKind::StaticCall { callee, args, call_info } => {
                 self.infer_static_call(callee, args, call_info)
             }
+            ExprKind::Ternary { true_expr, false_expr, condition } => {
+                self.infer_ternary(condition, true_expr, false_expr)
+            }
+
             _ => {
                 warn!("unimplemented expr: {:#?}", expr);
                 Type::Error
@@ -96,6 +100,37 @@ impl<'reports> TypeInference<'reports> {
         };
         expr.ty = ty.clone();
         ty
+    }
+
+    fn infer_ternary(
+        &mut self,
+        condition: &mut Expr,
+        true_expr: &mut Expr,
+        false_expr: &mut Expr,
+    ) -> Type {
+        let condition_ty = self.infer_expr(condition);
+        let true_ty = self.infer_expr(true_expr);
+        let false_ty = self.infer_expr(false_expr);
+
+        self.expect_type(&Type::Bool, &condition_ty, &condition.span, "ternary condition");
+
+        if self.eq(&true_ty, &false_ty) {
+            true_ty
+        } else {
+            let true_expr_ty = self.format_type(&true_ty).dimmed().bold();
+            let false_expr_ty = self.format_type(&false_ty).dimmed().bold();
+            self.error(
+                &format!(
+                    "ternary operator branches have incompatible types: {true_expr_ty} and {false_expr_ty}",
+                ),
+                vec![
+                    (format!("true branch has type {true_expr_ty}"), true_expr.span.clone()),
+                    (format!("false branch has type {false_expr_ty}"), false_expr.span.clone()),
+                ],
+                vec![],
+            );
+            Type::Error
+        }
     }
 
     fn infer_assign_op(&mut self, lhs: &mut Expr, op: &BinaryOp, rhs: &mut Expr) -> Type {
