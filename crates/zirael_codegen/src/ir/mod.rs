@@ -98,6 +98,10 @@ impl IrExpr {
     pub fn new(ty: Type, kind: IrExprKind) -> Self {
         Self { ty, kind }
     }
+
+    pub fn sym(sym: String) -> Self {
+        IrExpr::new(Type::Inferred, IrExprKind::Symbol(sym))
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -111,7 +115,7 @@ pub enum IrExprKind {
     Unary(UnaryOp, Box<IrExpr>),
     Binary(Box<IrExpr>, BinaryOp, Box<IrExpr>),
     CCall(String, Vec<IrExpr>),
-    FieldAccess(Vec<String>),
+    FieldAccess(Vec<IrExpr>),
     // type provided to, for example, a sizeof call
     Type(Type),
 }

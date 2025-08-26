@@ -4,6 +4,10 @@ extension int {
     }
 }
 
+struct Point {
+    point: int
+}
+
 fn main() {
-    var _a = 42.isEven()
+    var _point = Point { point: 25 }.point.isEven();
 }

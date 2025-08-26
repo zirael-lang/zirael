@@ -1,7 +1,7 @@
 use crate::hir::{
     ExprContext, HirBody, HirFunction, HirFunctionSignature, HirItem, HirItemKind, HirModule,
     HirParam, HirStruct, HirTypeExtension,
-    expr::{AccessKind, HirExpr, HirExprKind, HirStmt},
+    expr::{AccessKind, FieldSymbol, HirExpr, HirExprKind, HirStmt},
 };
 use id_arena::Arena;
 use std::{collections::HashMap, ops::Range};
@@ -320,8 +320,13 @@ impl<'reports> AstLowering<'reports> {
             }
 
             ExprKind::FieldAccess(fields) => {
-                let base = &fields[0].clone();
-                let (_, symbol_id) = self.symbol_table.symbol_from_expr(base).unwrap();
+                let base = &mut fields[0].clone();
+                let sym_id = if let Some((_, symbol_id)) = self.symbol_table.symbol_from_expr(base)
+                {
+                    FieldSymbol::Symbol(symbol_id)
+                } else {
+                    FieldSymbol::Expr(Box::new(self.lower_expr(base)))
+                };
                 fields.remove(0);
 
                 let mut indents = vec![];
@@ -339,7 +344,7 @@ impl<'reports> AstLowering<'reports> {
                 let main_access =
                     if base.ty.is_reference() { AccessKind::Pointer } else { AccessKind::Value };
 
-                HirExprKind::FieldAccess { field_symbol: symbol_id, main_access, fields: indents }
+                HirExprKind::FieldAccess { base_field: sym_id, main_access, fields: indents }
             }
 
             ExprKind::IndexAccess(object, index) => {

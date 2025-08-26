@@ -5,7 +5,10 @@ use crate::{
     span::SpanUtils as _,
 };
 use std::collections::HashMap;
-use zirael_utils::{ident_table::Identifier, prelude::Span};
+use zirael_utils::{
+    ident_table::{Identifier, get_or_intern},
+    prelude::Span,
+};
 
 impl<'a> Parser<'a> {
     pub fn parse_expr(&mut self) -> Expr {
@@ -205,7 +208,18 @@ impl<'a> Parser<'a> {
         let start_span = base.span.clone();
         let mut field_chain = vec![base];
 
-        while self.match_token(TokenKind::Dot) {
+        while self.check(&TokenKind::Dot) {
+            if let Some(next_token) = self.peek_ahead(1) {
+                if let TokenKind::Identifier(_) = &next_token.kind {
+                    if let Some(third_token) = self.peek_ahead(2) {
+                        if third_token.kind == TokenKind::ParenOpen {
+                            break;
+                        }
+                    }
+                }
+            }
+
+            self.advance();
             let field_expr = self.parse_primary();
             field_chain.push(field_expr);
         }
@@ -313,7 +327,7 @@ impl<'a> Parser<'a> {
                     let name = name.clone();
                     self.advance();
                     let identifier_span = self.prev_span();
-                    let identifier = zirael_utils::prelude::get_or_intern(&name);
+                    let identifier = get_or_intern(&name);
 
                     if self.check(&TokenKind::BraceOpen) {
                         return self.parse_struct_initializer(identifier, identifier_span);

@@ -39,7 +39,7 @@ pub enum HirExprKind {
         call_info: Option<CallInfo>,
     },
     FieldAccess {
-        field_symbol: SymbolId,
+        base_field: FieldSymbol,
         main_access: AccessKind,
         fields: Vec<(Identifier, AccessKind)>,
     },
@@ -48,6 +48,12 @@ pub enum HirExprKind {
         index: Box<HirExpr>,
     },
     Error,
+}
+
+#[derive(Debug, Clone)]
+pub enum FieldSymbol {
+    Symbol(SymbolId),
+    Expr(Box<HirExpr>),
 }
 
 #[derive(Debug, Clone)]

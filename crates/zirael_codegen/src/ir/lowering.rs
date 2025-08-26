@@ -6,7 +6,7 @@ use itertools::Itertools;
 use std::{collections::HashMap, path::PathBuf, vec};
 use zirael_hir::hir::{
     HirBody, HirFunction, HirItem, HirItemKind, HirModule, HirStruct, HirTypeExtension,
-    expr::{HirExpr, HirExprKind, HirStmt},
+    expr::{FieldSymbol, HirExpr, HirExprKind, HirStmt},
 };
 use zirael_parser::{
     AstId, DropStackEntry, MonomorphizationId, Scope, ScopeType, StructField, Symbol, SymbolId,
@@ -156,38 +156,28 @@ impl<'reports> HirLowering<'reports> {
                     mono_id: None,
                 })
             }
-            HirItemKind::TypeExtension(ext) => Some(IrItem {
-                name: "".to_string(),
-                kind: IrItemKind::TypeExtension(self.lower_type_extension(ext)),
-                sym_id: item.symbol_id,
-                mono_id: None,
-            }),
+            HirItemKind::TypeExtension(ext) => {
+                self.lower_type_extension(ext);
+                None
+            }
             _ => todo!(),
         }
     }
 
-    fn lower_type_extension(&mut self, ext: &mut HirTypeExtension) -> IrTypeExtension {
+    fn lower_type_extension(&mut self, ext: &mut HirTypeExtension) {
         self.push_scope(ScopeType::TypeExtension(ext.id));
 
-        let functions = ext
-            .methods
-            .iter_mut()
-            .map(|func| {
-                if let Some(item) = self.lower_item(func)
-                    && let IrItemKind::Function(func) = item.kind
-                {
-                    Some(func)
-                } else {
-                    warn!("failed to lower method");
-                    None
-                }
-            })
-            .filter_map(|func| func)
-            .collect_vec();
+        let ir_items = ext.methods.iter_mut().map(|func| self.lower_item(func)).collect_vec();
+
+        for item in ir_items {
+            if let Some(item) = item {
+                self.current_items.push(item);
+            } else {
+                warn!("failed to lower method")
+            }
+        }
 
         self.pop_scope();
-
-        IrTypeExtension { methods: functions }
     }
 
     fn lower_struct(
@@ -383,9 +373,11 @@ impl<'reports> HirLowering<'reports> {
                         self.new_relation(SymbolRelationNode::Monomorphization(mono_id));
                         self.get_monomorphized_name(mono_id)
                     } else {
+                        self.new_relation(SymbolRelationNode::Symbol(call_info.original_symbol));
                         self.mangle_symbol(call_info.original_symbol)
                     }
                 } else if let HirExprKind::Symbol(id) = callee.kind {
+                    self.new_relation(SymbolRelationNode::Symbol(id));
                     self.mangle_symbol(id)
                 } else {
                     unreachable!("Invalid call expression structure")
@@ -431,14 +423,23 @@ impl<'reports> HirLowering<'reports> {
                 op,
                 Box::new(self.lower_expr(*right)),
             ),
-            HirExprKind::FieldAccess { field_symbol, main_access, fields } => {
-                let mut f = vec![self.mangle_symbol(field_symbol), main_access.to_string()];
+            HirExprKind::FieldAccess { base_field, main_access, fields } => {
+                let mut f = vec![
+                    match base_field {
+                        FieldSymbol::Symbol(sym_id) => IrExpr::new(
+                            self.lower_type(Type::Inferred),
+                            IrExprKind::Symbol(self.mangle_symbol(sym_id)),
+                        ),
+                        FieldSymbol::Expr(expr) => self.lower_expr(*expr),
+                    },
+                    IrExpr::sym(main_access.to_string()),
+                ];
 
                 for (i, (field, access)) in fields.iter().enumerate() {
-                    f.push(resolve(&field));
+                    f.push(IrExpr::sym(resolve(&field)));
 
                     if i != fields.len() - 1 {
-                        f.push(access.to_string());
+                        f.push(IrExpr::sym(access.to_string()));
                     }
                 }
 

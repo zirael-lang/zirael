@@ -2,7 +2,7 @@ use crate::{
     codegen::{Codegen, Gen},
     ir::{
         IrBlock, IrExpr, IrExprKind, IrField, IrFunction, IrItem, IrItemKind, IrModule, IrParam,
-        IrStmt, IrStruct,
+        IrStmt, IrStruct, IrTypeExtension,
     },
 };
 use itertools::Itertools as _;
@@ -11,8 +11,7 @@ use zirael_parser::{
     BinaryOp, Literal, SymbolId, SymbolRelationNode, Type, UnaryOp,
     ast::monomorphized_symbol::MonomorphizedSymbol,
 };
-use zirael_utils::prelude::{CompilationInfo, resolve};
-use crate::ir::IrTypeExtension;
+use zirael_utils::prelude::{CompilationInfo, debug, resolve};
 
 pub fn run_codegen(
     modules: Vec<IrModule>,
@@ -65,6 +64,7 @@ pub fn run_codegen(
         match node {
             SymbolRelationNode::Symbol(id) => {
                 let Some(item) = module_items.iter().find(|i| i.sym_id == *id) else {
+                    debug!("skipping symbol with id: {:?}", node);
                     continue;
                 };
 
@@ -121,7 +121,7 @@ impl Gen for IrItem {
         match &self.kind {
             IrItemKind::Function(func) => func.generate_header(cg),
             IrItemKind::Struct(ir) => ir.generate_header(cg),
-            IrItemKind::TypeExtension(ty) => ty.generate_header(cg)
+            IrItemKind::TypeExtension(ty) => ty.generate_header(cg),
         }
     }
 
@@ -129,7 +129,7 @@ impl Gen for IrItem {
         match &self.kind {
             IrItemKind::Function(func) => func.generate(p),
             IrItemKind::Struct(ir) => ir.generate(p),
-            IrItemKind::TypeExtension(ty) => ty.generate(p)
+            IrItemKind::TypeExtension(ty) => ty.generate(p),
         }
         p.newline();
     }
@@ -141,7 +141,7 @@ impl Gen for IrTypeExtension {
             func.generate_header(cg);
         }
     }
-    
+
     fn generate(&self, cg: &mut Codegen) {
         for func in &self.methods {
             func.generate(cg);
@@ -368,7 +368,7 @@ impl Gen for IrExpr {
             }
             IrExprKind::FieldAccess(fields) => {
                 for part in fields {
-                    p.write(part);
+                    part.generate(p);
                 }
             }
             _ => {}
