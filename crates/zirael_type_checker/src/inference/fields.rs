@@ -3,7 +3,7 @@ use std::{collections::HashMap, fmt::format, rc::Rc};
 use zirael_parser::{
     AstWalker, CallInfo, EnumVariantData, Expr, ExprKind, SymbolId, SymbolKind, Type,
 };
-use zirael_utils::prelude::{Colorize, Span, get_or_intern, resolve};
+use zirael_utils::prelude::{Colorize, Span, debug, get_or_intern, resolve, warn};
 
 impl<'reports> TypeInference<'reports> {
     fn traverse_chain<F>(&mut self, chain: &mut [Expr], mut validator: F) -> Type
@@ -212,21 +212,13 @@ impl<'reports> TypeInference<'reports> {
                     None => return Vec::new(),
                 };
 
-                match sym.kind.clone() {
-                    SymbolKind::Struct { methods, .. } => methods,
-                    SymbolKind::Enum { .. } => todo!(),
-                    _ => Vec::new(),
-                }
+                self.get_methods_from_symbol(&sym.kind)
             }
             Type::MonomorphizedSymbol(sym) => {
                 if let Some(entry) = self.mono_table.get_entry(sym.id) {
                     let sym = self.symbol_table.get_symbol_unchecked(&entry.original_id);
 
-                    match sym.kind.clone() {
-                        SymbolKind::Struct { methods, .. } => methods,
-                        SymbolKind::Enum { .. } => todo!(),
-                        _ => Vec::new(),
-                    }
+                    self.get_methods_from_symbol(&sym.kind)
                 } else {
                     Vec::new()
                 }
@@ -237,6 +229,26 @@ impl<'reports> TypeInference<'reports> {
                 if let Some(ext) = exts.get(ty) { ext.clone() } else { Vec::new() }
             }
             _ => Vec::new(),
+        }
+    }
+
+    fn get_methods_from_symbol(&mut self, symbol: &SymbolKind) -> Vec<SymbolId> {
+        match symbol.clone() {
+            SymbolKind::Struct { methods, .. } | SymbolKind::Enum { methods, .. } => methods,
+            SymbolKind::EnumVariant { parent_enum, .. } => {
+                let parent = self.symbol_table.get_symbol_unchecked(&parent_enum);
+
+                if let SymbolKind::Enum { methods, .. } = &parent.kind {
+                    methods.clone()
+                } else {
+                    warn!("parent of enum variant is not an enum: {:?}", symbol);
+                    Vec::new()
+                }
+            }
+            _ => {
+                debug!("symbol kind not handled {:?}", symbol);
+                Vec::new()
+            }
         }
     }
 

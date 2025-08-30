@@ -515,6 +515,15 @@ impl<'reports> TypeInference<'reports> {
             if !self.expect_type(&variable_ty, value_ty, &decl.span, "variable declaration") {
                 return Type::Error;
             }
+            
+            if self.eq(&variable_ty, &Type::Void) {
+                self.error(
+                    "cannot initialize variable with void type",
+                    vec![("here".to_string(), decl.span.clone())],
+                    vec![],
+                );
+            }
+            
             decl.ty = value_ty.clone();
             variable_ty.clone()
         } else {
