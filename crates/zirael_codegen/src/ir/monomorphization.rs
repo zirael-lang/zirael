@@ -1,15 +1,17 @@
 use crate::ir::{
-    HirLowering, IrBlock, IrExpr, IrExprKind, IrField, IrFunction, IrItem, IrItemKind, IrModule,
-    IrParam, IrStmt, IrStruct,
+    HirLowering, IrBlock, IrEnum, IrExpr, IrExprKind, IrField, IrFunction, IrItem, IrItemKind,
+    IrModule, IrParam, IrStmt, IrStruct, IrVariant, IrVariantData,
 };
 use itertools::Itertools;
 use std::{
     collections::{HashMap, HashSet},
+    env::var,
     hash::{DefaultHasher, Hash as _},
 };
 use zirael_parser::{
-    Function, FunctionSignature, GenericParameter, MonomorphizationId, Symbol, SymbolId,
-    SymbolKind, SymbolRelationNode, Type, monomorphized_symbol::MonomorphizedSymbol,
+    CallInfo, EnumVariantData, Function, FunctionSignature, GenericParameter, MonomorphizationId,
+    Symbol, SymbolId, SymbolKind, SymbolRelationNode, Type,
+    monomorphized_symbol::MonomorphizedSymbol,
 };
 use zirael_type_checker::{MonomorphizationData, MonomorphizationEntry};
 use zirael_utils::prelude::{Identifier, get_or_intern, resolve};
@@ -112,7 +114,50 @@ impl<'reports> HirLowering<'reports> {
                     mono_id: Some(id.clone()),
                 })
             }
+            (SymbolKind::EnumVariant { parent_enum, data }, IrItemKind::EnumVariant(variant)) => {
+                let parent_enum = self.symbol_table.get_symbol_unchecked(&parent_enum);
+                let SymbolKind::Enum { generics, .. } = &parent_enum.kind else { unreachable!() };
+
+                let Some(type_arguments) = self.get_type_arguments(generics, concrete_types) else {
+                    return None;
+                };
+
+                let mangled_name =
+                    self.mangle_monomorphized_symbol(original_id, *id, &type_arguments);
+                let mono_enum =
+                    self.monomorphize_enum(mangled_name.clone(), variant, concrete_types);
+
+                Some(IrItem {
+                    name: mangled_name,
+                    kind: IrItemKind::EnumVariant(mono_enum),
+                    sym_id: original_id,
+                    mono_id: Some(id.clone()),
+                })
+            }
             _ => None,
+        }
+    }
+
+    fn monomorphize_enum(
+        &mut self,
+        name: String,
+        variant: &IrVariant,
+        type_map: &HashMap<Identifier, Type>,
+    ) -> IrVariant {
+        IrVariant {
+            symbol_id: variant.symbol_id.clone(),
+            name,
+            data: match &variant.data {
+                IrVariantData::Struct(fields) => {
+                    let fields = &mut fields.clone();
+                    for field in fields.iter_mut() {
+                        field.ty = self.substitute_type(&field.ty, type_map);
+                    }
+
+                    IrVariantData::Struct(fields.clone())
+                }
+                _ => IrVariantData::Unit,
+            },
         }
     }
 
@@ -362,6 +407,11 @@ impl<'reports> HirLowering<'reports> {
                 name: get_or_intern(&if add_struct { format!("struct {name}") } else { name }),
                 generics: vec![],
             }
+        } else if let SymbolKind::EnumVariant { parent_enum, .. } = &original_symbol.kind {
+            Type::Named {
+                name: get_or_intern(&*self.mangle_symbol(*parent_enum)),
+                generics: vec![],
+            }
         } else {
             Type::Named { name: get_or_intern(&name), generics: vec![] }
         }
@@ -420,22 +470,30 @@ impl<'reports> HirLowering<'reports> {
     }
 
     pub fn get_generics_for_symbol(&self, symbol: &Symbol) -> Vec<GenericParameter> {
-        if let SymbolKind::Function { signature, .. } = &symbol.kind {
-            let mut generics = vec![];
+        match &symbol.kind {
+            SymbolKind::Function { signature, .. } => {
+                let mut generics = vec![];
 
-            if let Some(parent_struct) = self.symbol_table.is_a_method(symbol.canonical_symbol) {
-                let parent_struct = self.symbol_table.get_symbol_unchecked(&parent_struct);
-                if let SymbolKind::Struct { generics: gens, .. } = &parent_struct.kind {
-                    generics.extend(gens.clone());
+                if let Some(parent_struct) =
+                    self.symbol_table.is_a_child_of_symbol(symbol.canonical_symbol)
+                {
+                    let parent_struct = self.symbol_table.get_symbol_unchecked(&parent_struct);
+                    if let SymbolKind::Struct { generics: gens, .. } = &parent_struct.kind {
+                        generics.extend(gens.clone());
+                    }
                 }
-            }
-            generics.extend(signature.generics.clone());
+                generics.extend(signature.generics.clone());
 
-            generics
-        } else if let SymbolKind::Struct { generics, .. } = &symbol.kind {
-            generics.clone()
-        } else {
-            unreachable!()
+                generics
+            }
+            SymbolKind::Struct { generics, .. } | SymbolKind::Enum { generics, .. } => {
+                generics.clone()
+            }
+            SymbolKind::EnumVariant { parent_enum, .. } => {
+                let sym = self.symbol_table.get_symbol_unchecked(&parent_enum);
+                self.get_generics_for_symbol(&sym)
+            }
+            _ => unreachable!(),
         }
     }
 
@@ -451,6 +509,30 @@ impl<'reports> HirLowering<'reports> {
                 .collect();
 
             return self.mangle_monomorphized_symbol(entry.original_id, mono_id, &type_arguments);
+        }
+
+        panic!("Monomorphization ID {mono_id:?} not found")
+    }
+
+    pub fn get_monomorphized_name_for_call(
+        &mut self,
+        mono_id: MonomorphizationId,
+        call_info: Option<&CallInfo>,
+    ) -> String {
+        if let Some(entry) = self.mono_table.entries.get(&mono_id) {
+            let original_symbol = self.symbol_table.get_symbol_unchecked(&entry.original_id);
+            let generics = self.get_generics_for_symbol(&original_symbol);
+
+            let type_arguments: Vec<Type> = generics
+                .iter()
+                .filter_map(|param| entry.concrete_types.get(&param.name))
+                .cloned()
+                .collect();
+
+            let base_name =
+                self.mangle_monomorphized_symbol(entry.original_id, mono_id, &type_arguments);
+
+            return format!("{base_name}_constructor");
         }
 
         panic!("Monomorphization ID {mono_id:?} not found")

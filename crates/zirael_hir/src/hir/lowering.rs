@@ -1,6 +1,6 @@
 use crate::hir::{
-    ExprContext, HirBody, HirFunction, HirFunctionSignature, HirItem, HirItemKind, HirModule,
-    HirParam, HirStruct, HirTypeExtension,
+    ExprContext, HirBody, HirEnum, HirFunction, HirFunctionSignature, HirItem, HirItemKind,
+    HirModule, HirParam, HirStruct, HirTypeExtension, HirVariant,
     expr::{AccessKind, FieldSymbol, HirExpr, HirExprKind, HirStmt},
 };
 use id_arena::Arena;
@@ -97,6 +97,17 @@ impl<'reports> AstLowering<'reports> {
                     span: item.span.clone(),
                 })
             }
+            ItemKind::Enum(enum_def) => {
+                self.push_scope(ScopeType::Enum(enum_def.id));
+                let hir_enum = self.lower_enum(enum_def, symbol_id);
+                self.pop_scope();
+
+                Some(HirItem {
+                    symbol_id,
+                    kind: HirItemKind::Enum(hir_enum),
+                    span: item.span.clone(),
+                })
+            }
             ItemKind::Import(..) => None,
             _ => unimplemented!("Unimplemented item kind: {:?}", item),
         }
@@ -107,14 +118,28 @@ impl<'reports> AstLowering<'reports> {
         struct_def: &mut TypeExtension,
         symbol_id: SymbolId,
     ) -> HirTypeExtension {
-        let mut methods = vec![];
-        for method in &mut struct_def.items {
-            if let Some(item) = self.lower_item(method) {
-                methods.push(item);
-            }
+        HirTypeExtension {
+            id: struct_def.id,
+            symbol_id,
+            methods: self.lower_methods(&mut struct_def.items),
         }
+    }
 
-        HirTypeExtension { id: struct_def.id, symbol_id, methods }
+    fn lower_methods(&mut self, methods: &mut Vec<Item>) -> Vec<HirItem> {
+        methods.iter_mut().map(|i| self.lower_item(i)).filter_map(|i| i).collect()
+    }
+
+    fn lower_enum(&mut self, enum_def: &mut EnumDeclaration, symbol_id: SymbolId) -> HirEnum {
+        HirEnum {
+            id: enum_def.id,
+            symbol_id,
+            methods: self.lower_methods(&mut enum_def.methods),
+            variants: enum_def
+                .variants
+                .iter_mut()
+                .map(|v| HirVariant { symbol_id: v.symbol_id.unwrap(), data: v.data.clone() })
+                .collect::<Vec<_>>(),
+        }
     }
 
     fn lower_struct(
@@ -122,14 +147,12 @@ impl<'reports> AstLowering<'reports> {
         struct_def: &mut StructDeclaration,
         symbol_id: SymbolId,
     ) -> HirStruct {
-        let mut methods = vec![];
-        for method in &mut struct_def.methods {
-            if let Some(item) = self.lower_item(method) {
-                methods.push(item);
-            }
+        HirStruct {
+            id: struct_def.id,
+            symbol_id,
+            fields: struct_def.fields.clone(),
+            methods: self.lower_methods(&mut struct_def.methods),
         }
-
-        HirStruct { id: struct_def.id, symbol_id, fields: struct_def.fields.clone(), methods }
     }
 
     fn lower_function(&mut self, func: &mut Function, symbol_id: SymbolId) -> HirFunction {

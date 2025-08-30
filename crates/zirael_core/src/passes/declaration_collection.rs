@@ -296,7 +296,7 @@ impl<'reports> AstWalker<'reports> for DeclarationCollection<'reports> {
                     self.walk_item(func);
 
                     let func_id = func.symbol_id.unwrap();
-                    self.symbol_table.add_struct_method(sym.unwrap(), func_id);
+                    self.symbol_table.add_symbol_child(sym.unwrap(), func_id);
                     methods.push(func_id);
                 }
                 self.symbol_table.exit_scope().unwrap();
@@ -305,6 +305,54 @@ impl<'reports> AstWalker<'reports> for DeclarationCollection<'reports> {
                     .update_symbol_kind(sym.unwrap(), |kind| SymbolKind::Struct {
                         generics: struct_def.generics.clone(),
                         fields: struct_def.fields.clone(),
+                        methods: methods.clone(),
+                    })
+                    .unwrap();
+
+                sym
+            }
+            ItemKind::Enum(enum_def) => {
+                let sym = self.register_symbol(
+                    enum_def.name,
+                    &SymbolKind::Enum {
+                        generics: enum_def.generics.clone(),
+                        variants: vec![],
+                        methods: vec![],
+                    },
+                    enum_def.span.clone(),
+                );
+
+                let mut variants = vec![];
+                for variant in &mut enum_def.variants {
+                    let variant_sym = self.register_symbol(
+                        variant.name,
+                        &SymbolKind::EnumVariant {
+                            parent_enum: sym.unwrap(),
+                            data: variant.data.clone(),
+                        },
+                        variant.span.clone(),
+                    );
+                    variant.symbol_id = variant_sym;
+                    variants.push(variant_sym.unwrap());
+                    self.symbol_table.add_symbol_child(sym.unwrap(), variant_sym.unwrap());
+                }
+
+                let mut methods = vec![];
+
+                self.symbol_table.create_scope(ScopeType::Enum(enum_def.id));
+                for func in &mut enum_def.methods {
+                    self.walk_item(func);
+
+                    let func_id = func.symbol_id.unwrap();
+                    self.symbol_table.add_symbol_child(sym.unwrap(), func_id);
+                    methods.push(func_id);
+                }
+                self.symbol_table.exit_scope().unwrap();
+
+                self.symbol_table
+                    .update_symbol_kind(sym.unwrap(), |kind| SymbolKind::Enum {
+                        generics: enum_def.generics.clone(),
+                        variants,
                         methods: methods.clone(),
                     })
                     .unwrap();
@@ -324,7 +372,7 @@ impl<'reports> AstWalker<'reports> for DeclarationCollection<'reports> {
                     self.walk_item(func);
 
                     let func_id = func.symbol_id.unwrap();
-                    self.symbol_table.add_struct_method(sym.unwrap(), func_id);
+                    self.symbol_table.add_symbol_child(sym.unwrap(), func_id);
                     methods.push(func_id);
                 }
                 self.symbol_table.exit_scope().unwrap();

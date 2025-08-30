@@ -20,14 +20,14 @@ impl<'reports> HirLowering<'reports> {
     pub fn get_sym_name(&mut self, sym: &Symbol, mono_id: Option<MonomorphizationId>) -> String {
         let base = resolve(&sym.name);
 
-        if let Some(parent_struct) = self.symbol_table.is_a_method(sym.id) {
+        if let Some(parent_struct) = self.symbol_table.is_a_child_of_symbol(sym.id) {
             let parent_struct = self.symbol_table.get_symbol_unchecked(&parent_struct);
+            let parent_struct_name = resolve(&parent_struct.name);
 
             if let SymbolKind::TypeExtension { ty, .. } = parent_struct.kind {
                 return format!("ext_{}_{}", self.mangle_type_for_name(&ty), base);
             }
 
-            let parent_struct_name = resolve(&parent_struct.name);
             format!("{}_{}", parent_struct_name, base)
         } else {
             base

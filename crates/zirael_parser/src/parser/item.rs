@@ -1,8 +1,8 @@
 use crate::{
     AstId, Attribute, StructDeclaration, StructField, TokenKind, Type, TypeExtension,
     ast::{
-        Abi, Function, FunctionModifiers, FunctionSignature, ImportKind, Item, ItemKind, Keyword,
-        Parameter, ParameterKind,
+        Abi, EnumDeclaration, EnumVariant, EnumVariantData, Function, FunctionModifiers,
+        FunctionSignature, ImportKind, Item, ItemKind, Keyword, Parameter, ParameterKind,
     },
     parser::Parser,
     span::SpanUtils as _,
@@ -26,6 +26,8 @@ impl<'a> Parser<'a> {
             self.parse_fn(id)
         } else if self.match_keyword(Keyword::Struct) {
             self.parse_struct(id)
+        } else if self.match_keyword(Keyword::Enum) {
+            self.parse_enum(id)
         } else if self.match_keyword(Keyword::Import) {
             self.parse_import()
         } else if self.match_keyword(Keyword::Extension) {
@@ -36,7 +38,7 @@ impl<'a> Parser<'a> {
         } else {
             if let Some(token) = self.peek() {
                 self.error_at_peek(format!(
-                    "expected item declaration (fn, struct, extension, or import), found {}",
+                    "expected item declaration (fn, struct, enum, extension, or import), found {}",
                     token.kind
                 ));
             } else {
@@ -46,6 +48,7 @@ impl<'a> Parser<'a> {
             self.synchronize(&[
                 TokenKind::Keyword(Keyword::Fn),
                 TokenKind::Keyword(Keyword::Struct),
+                TokenKind::Keyword(Keyword::Enum),
                 TokenKind::Keyword(Keyword::Extension),
                 TokenKind::Keyword(Keyword::Import),
                 TokenKind::Semicolon,
@@ -295,6 +298,80 @@ impl<'a> Parser<'a> {
         )
     }
 
+    pub fn parse_enum(&mut self, id: AstId) -> (ItemKind, Identifier) {
+        let span = self.prev_span();
+        let name = self.expect_identifier().unwrap_or_else(|| {
+            self.error_at_current("enum name is required");
+            default_ident()
+        });
+        self.validate_enum_name(&name);
+        let generics = self.parse_generics();
+
+        self.expect(TokenKind::BraceOpen);
+
+        let mut variants = vec![];
+        let mut methods = vec![];
+
+        while !self.check(&TokenKind::BraceClose) && !self.is_at_end() {
+            let attrs = self.parse_attrs();
+
+            if self.check_keyword(Keyword::Fn) {
+                if let Some(method) = self.parse_single_method(attrs) {
+                    methods.push(method);
+                }
+            } else if let Some(variant_name) = self.expect_identifier() {
+                let variant_id = self.fresh_id();
+                let variant_span = self.prev_span();
+
+                let data = if self.match_token(TokenKind::BraceOpen) {
+                    let fields = self.parse_struct_fields();
+                    self.expect(TokenKind::BraceClose);
+                    EnumVariantData::Struct(fields)
+                } else {
+                    EnumVariantData::Unit
+                };
+
+                variants.push(EnumVariant {
+                    id: variant_id,
+                    name: variant_name,
+                    data,
+                    attributes: attrs,
+                    span: variant_span.to(self.prev_span()),
+                    symbol_id: None,
+                });
+
+                if !self.check(&TokenKind::BraceClose)
+                    && !self.match_token(TokenKind::Comma)
+                    && !self.match_token(TokenKind::Semicolon)
+                {
+                    self.error_at_current("expected ',' or ';' after variant");
+                }
+            } else {
+                self.error_at("enum body expected a method or variant", self.prev_span());
+                self.synchronize(&[TokenKind::Semicolon, TokenKind::Comma, TokenKind::BraceClose]);
+                if self.check(&TokenKind::BraceClose) {
+                    break;
+                }
+            }
+        }
+
+        if !self.match_token(TokenKind::BraceClose) {
+            self.error_at_current("expected '}' to close enum");
+        }
+
+        (
+            ItemKind::Enum(EnumDeclaration {
+                id,
+                name,
+                generics,
+                variants,
+                methods,
+                span: span.to(self.prev_span()),
+            }),
+            name,
+        )
+    }
+
     pub fn parse_extension(&mut self, id: AstId) -> (ItemKind, Identifier) {
         let span = self.prev_span();
 
@@ -425,6 +502,23 @@ impl<'a> Parser<'a> {
         }
     }
 
+    pub fn validate_enum_name(&mut self, name: &Identifier) {
+        let name = resolve(name);
+        if name.is_empty() {
+            return;
+        }
+
+        let pascal = name.to_case(Case::Pascal);
+
+        if name != pascal {
+            self.add_report(
+                ReportBuilder::builder("enum names must be pascal case", ReportKind::Warning)
+                    .label("here", self.prev_span())
+                    .note(&format!("Suggested name {}", pascal.dimmed().bold())),
+            );
+        }
+    }
+
     pub fn parse_parameters(&mut self) -> Vec<Parameter> {
         let span_start = self.peek_span();
         self.expect(TokenKind::ParenOpen);
@@ -485,7 +579,7 @@ impl<'a> Parser<'a> {
         self.validate_self(params, span);
     }
 
-    pub fn validate_self(&mut self, params: &[Parameter], span: Span) {
+    pub fn validate_self(&mut self, params: &[Parameter], _span: Span) {
         let mut seen_self = false;
         for param in params {
             if param.name == get_or_intern("self") {
@@ -547,5 +641,43 @@ impl<'a> Parser<'a> {
             span: span.to(self.prev_span()),
             symbol_id: None,
         })
+    }
+
+    pub fn parse_struct_fields(&mut self) -> Vec<StructField> {
+        let mut fields = vec![];
+
+        while !self.check(&TokenKind::BraceClose) && !self.is_at_end() {
+            let attrs = self.parse_attrs();
+
+            if let Some(field_name) = self.expect_identifier() {
+                self.expect(TokenKind::Colon);
+                let field_type = self.parse_type().unwrap_or_else(|| {
+                    self.error_at_current("expected type after ':'");
+                    Type::Error
+                });
+
+                fields.push(StructField {
+                    name: field_name,
+                    ty: field_type,
+                    is_public: true,
+                    attributes: attrs,
+                });
+
+                if !self.check(&TokenKind::BraceClose)
+                    && !self.match_token(TokenKind::Comma)
+                    && !self.match_token(TokenKind::Semicolon)
+                {
+                    self.error_at_current("expected ',' or ';' after field");
+                }
+            } else {
+                self.error_at("expected field name", self.prev_span());
+                self.synchronize(&[TokenKind::Semicolon, TokenKind::Comma, TokenKind::BraceClose]);
+                if self.check(&TokenKind::BraceClose) {
+                    break;
+                }
+            }
+        }
+
+        fields
     }
 }

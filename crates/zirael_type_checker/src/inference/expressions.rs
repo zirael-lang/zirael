@@ -1,8 +1,8 @@
 use crate::{MonomorphizationData, inference::TypeInference};
 use std::collections::HashMap;
 use zirael_parser::{
-    AstId, AstWalker, BinaryOp, CallInfo, Expr, ExprKind, Literal, ScopeType, Stmt, StmtKind,
-    SymbolId, SymbolKind, Type, UnaryOp, VarDecl, WalkerContext,
+    AstId, AstWalker, BinaryOp, CallInfo, EnumVariantData, Expr, ExprKind, Literal, ScopeType,
+    Stmt, StmtKind, SymbolId, SymbolKind, Type, UnaryOp, VarDecl, WalkerContext,
 };
 use zirael_utils::prelude::{Colorize, Identifier, Span, resolve, warn};
 

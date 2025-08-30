@@ -1,4 +1,14 @@
+enum Option<T> {
+    Some { value: T },
+    None,
+}
+
+struct Person {
+    age: int
+}
 
 fn main() {
-    var _x = "dwa";
+    var _some = Option::Some(10);
+    var _sd = Option::Some(Person { age: 25 });
+    var _none = Option::None;
 }

@@ -41,7 +41,7 @@ pub struct SymbolTableImpl {
     pub name_lookup: HashMap<(Identifier, ScopeId), SymbolId>,
     pub symbol_relations: SymbolRelations,
     pub mangled_names: HashMap<SymbolId, String>,
-    pub struct_methods_lookup: HashMap<SymbolId, Vec<SymbolId>>,
+    pub parent_symbols_lookup: HashMap<SymbolId, Vec<SymbolId>>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -74,7 +74,7 @@ impl Default for SymbolTableImpl {
             symbol_relations: SymbolRelations::new(),
             current_traversal_scope: global_scope_id,
             mangled_names: HashMap::new(),
-            struct_methods_lookup: HashMap::new(),
+            parent_symbols_lookup: HashMap::new(),
         }
     }
 }
@@ -474,12 +474,12 @@ impl SymbolTable {
     }
 
     pub fn get_struct_methods(&self, struct_id: SymbolId) -> Option<Vec<SymbolId>> {
-        self.read(|table| table.struct_methods_lookup.get(&struct_id).cloned())
+        self.read(|table| table.parent_symbols_lookup.get(&struct_id).cloned())
     }
 
-    pub fn is_a_method(&self, symbol_id: SymbolId) -> Option<SymbolId> {
+    pub fn is_a_child_of_symbol(&self, symbol_id: SymbolId) -> Option<SymbolId> {
         self.read(|table| {
-            for (&struct_id, methods) in &table.struct_methods_lookup {
+            for (&struct_id, methods) in &table.parent_symbols_lookup {
                 if methods.contains(&symbol_id) {
                     return Some(struct_id);
                 }
@@ -488,14 +488,14 @@ impl SymbolTable {
         })
     }
 
-    pub fn add_struct_method(&self, struct_id: SymbolId, method_id: SymbolId) {
+    pub fn add_symbol_child(&self, parent_id: SymbolId, child_id: SymbolId) {
         self.write(|table| {
-            table.struct_methods_lookup.entry(struct_id).or_insert_with(Vec::new).push(method_id);
+            table.parent_symbols_lookup.entry(parent_id).or_insert_with(Vec::new).push(child_id);
 
-            if let Some(symbol) = table.symbols.get_mut(struct_id) {
+            if let Some(symbol) = table.symbols.get_mut(parent_id) {
                 if let SymbolKind::Struct { methods, .. } = &mut symbol.kind {
-                    if !methods.contains(&method_id) {
-                        methods.push(method_id);
+                    if !methods.contains(&child_id) {
+                        methods.push(child_id);
                     }
                 }
             }

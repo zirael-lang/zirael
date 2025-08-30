@@ -1,6 +1,6 @@
 use crate::TypeInference;
 use std::collections::HashMap;
-use zirael_parser::{FunctionSignature, MonomorphizationId, StructField, SymbolId, Type};
+use zirael_parser::{AstId, FunctionSignature, MonomorphizationId, StructField, SymbolId, Type};
 use zirael_utils::prelude::Identifier;
 
 #[derive(Debug, Clone)]
@@ -29,6 +29,7 @@ impl MonomorphizationTable {
 pub enum MonomorphizationData {
     Fields(Vec<StructField>),
     Signature(FunctionSignature),
+    EnumVariant { variant_id: SymbolId, fields: Vec<StructField> },
 }
 
 impl<'reports> TypeInference<'reports> {
@@ -39,6 +40,7 @@ impl<'reports> TypeInference<'reports> {
         id: MonomorphizationId,
         monomorphized_data: Option<MonomorphizationData>,
     ) {
+        println!("{:?} {:?}", original_id, concrete_types);
         if concrete_types.is_empty() {
             return;
         }

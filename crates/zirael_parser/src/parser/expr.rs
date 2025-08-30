@@ -505,28 +505,29 @@ impl<'a> Parser<'a> {
             self.new_expr(ExprKind::FieldAccess(vec![type_expr, method_name]), combined_span)
         };
 
-        if !self.match_token(TokenKind::ParenOpen) {
-            self.error_at_current("expected '(' after static method name");
-            return callee;
-        }
+        let args = if self.match_token(TokenKind::ParenOpen) {
+            let mut args = Vec::new();
 
-        let mut args = Vec::new();
+            if !self.check(&TokenKind::ParenClose) {
+                loop {
+                    args.push(self.parse_expr());
 
-        if !self.check(&TokenKind::ParenClose) {
-            loop {
-                args.push(self.parse_expr());
+                    if self.match_token(TokenKind::Comma) {
+                        continue;
+                    }
 
-                if self.match_token(TokenKind::Comma) {
-                    continue;
+                    break;
                 }
-
-                break;
             }
-        }
 
-        if !self.match_token(TokenKind::ParenClose) {
-            self.error_at_current("expected ')' after static method arguments");
-        }
+            if !self.match_token(TokenKind::ParenClose) {
+                self.error_at_current("expected ')' after static method arguments");
+            }
+
+            args
+        } else {
+            vec![]
+        };
 
         let end_span = self.prev_span();
         self.new_expr(

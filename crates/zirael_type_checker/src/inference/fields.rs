@@ -1,6 +1,8 @@
 use crate::{MonomorphizationData, TypeInference, inference::ctx::TypeInferenceContext};
-use std::{fmt::format, rc::Rc};
-use zirael_parser::{AstWalker, CallInfo, Expr, ExprKind, SymbolId, SymbolKind, Type};
+use std::{collections::HashMap, fmt::format, rc::Rc};
+use zirael_parser::{
+    AstWalker, CallInfo, EnumVariantData, Expr, ExprKind, SymbolId, SymbolKind, Type,
+};
 use zirael_utils::prelude::{Colorize, Span, get_or_intern, resolve};
 
 impl<'reports> TypeInference<'reports> {
@@ -339,36 +341,122 @@ impl<'reports> TypeInference<'reports> {
         };
 
         let sym = self.symbol_table.get_symbol_unchecked(&sym_id);
-        if let SymbolKind::Struct { methods, .. } = &sym.kind {
-            let mut found = None;
+        match &sym.kind {
+            SymbolKind::Struct { methods, .. } => {
+                let mut found = None;
 
-            for method in methods {
-                let sym = self.symbol_table.get_symbol_unchecked(method);
+                for method in methods {
+                    let method_sym = self.symbol_table.get_symbol_unchecked(method);
+                    if method_sym.name == *ident {
+                        found = Some(method_sym.id);
+                        break;
+                    }
+                }
 
-                if sym.name == *ident {
-                    found = Some(sym.id);
-                    break;
+                if let Some(method_id) = found {
+                    *call_id = Some(method_id);
+                    self.infer_call(&mut fields[1], args, call_info)
+                } else {
+                    self.error(
+                        &format!(
+                            "no static method named {} on struct {}",
+                            resolve(ident).dimmed().bold(),
+                            resolve(&sym.name).dimmed().bold()
+                        ),
+                        vec![("in this field access".to_string(), fields[1].span.clone())],
+                        vec![],
+                    );
+                    Type::Error
                 }
             }
+            SymbolKind::Enum { methods, variants, .. } => {
+                let mut variant_sym_id = None;
+                for variant in variants {
+                    let variant_symbol = self.symbol_table.get_symbol_unchecked(&variant);
+                    if variant_symbol.name == *ident {
+                        variant_sym_id = Some(variant);
+                        break;
+                    }
+                }
 
-            if let Some(method_id) = found {
-                *call_id = Some(method_id);
-                self.infer_call(&mut fields[1], args, call_info)
-            } else {
-                self.error(
-                    &format!(
-                        "no static method named {}, on struct {}",
-                        resolve(ident).dimmed().bold(),
-                        resolve(&sym.name).dimmed().bold()
-                    ),
-                    vec![("in this field access".to_string(), fields[1].span.clone())],
-                    vec![],
-                );
+                if let Some(variant_id) = variant_sym_id {
+                    *call_id = Some(*variant_id);
+
+                    let variant_sym = self.symbol_table.get_symbol_unchecked(&variant_id);
+
+                    if let SymbolKind::EnumVariant { data, .. } = &variant_sym.kind {
+                        match data {
+                            EnumVariantData::Unit => {
+                                if !args.is_empty() {
+                                    self.error(
+                                        "unit variant cannot have arguments",
+                                        vec![("unit variant".to_string(), fields[1].span.clone())],
+                                        vec![],
+                                    );
+                                }
+                                Type::Named { name: sym.name, generics: vec![] }
+                            }
+                            EnumVariantData::Struct(variant_fields) => {
+                                if args.len() != variant_fields.len() {
+                                    self.error(
+                                        &format!(
+                                            "expected {} arguments, found {}",
+                                            variant_fields.len(),
+                                            args.len()
+                                        ),
+                                        vec![("in this call".to_string(), fields[1].span.clone())],
+                                        vec![],
+                                    );
+                                    return Type::Error;
+                                }
+
+                                let mut field_map = HashMap::new();
+                                for (field, arg) in variant_fields.iter().zip(args.iter()) {
+                                    field_map.insert(field.name, arg.clone());
+                                }
+
+                                self.infer_enum_variant_init(
+                                    variant_id,
+                                    &fields[1].span.clone(),
+                                    &mut field_map,
+                                    call_info,
+                                )
+                            }
+                        }
+                    } else {
+                        Type::Error
+                    }
+                } else {
+                    let mut method_found = None;
+                    for method_id in methods {
+                        let method_sym = self.symbol_table.get_symbol_unchecked(method_id);
+                        if method_sym.name == *ident {
+                            method_found = Some(*method_id);
+                            break;
+                        }
+                    }
+
+                    if let Some(method_id) = method_found {
+                        *call_id = Some(method_id);
+                        self.infer_call(&mut fields[1], args, call_info)
+                    } else {
+                        self.error(
+                            &format!(
+                                "no static method or variant named {} on enum {}",
+                                resolve(ident).dimmed().bold(),
+                                resolve(&sym.name).dimmed().bold()
+                            ),
+                            vec![("in this field access".to_string(), fields[1].span.clone())],
+                            vec![],
+                        );
+                        Type::Error
+                    }
+                }
+            }
+            _ => {
+                self.non_struct_type(fields[0].span.clone(), file!(), line!());
                 Type::Error
             }
-        } else {
-            self.non_struct_type(fields[0].span.clone(), file!(), line!());
-            Type::Error
         }
     }
 

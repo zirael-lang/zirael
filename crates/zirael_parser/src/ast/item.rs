@@ -124,21 +124,26 @@ pub struct StructField {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct EnumDeclaration {
+    pub id: AstId,
     pub name: Identifier,
-    pub generics: Option<Vec<GenericParameter>>,
+    pub generics: Vec<GenericParameter>,
     pub variants: Vec<EnumVariant>,
+    pub methods: Vec<Item>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct EnumVariant {
+    pub id: AstId,
     pub name: Identifier,
     pub data: EnumVariantData,
     pub attributes: Vec<Attribute>,
+    pub span: Span,
+    pub symbol_id: Option<SymbolId>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum EnumVariantData {
     Unit,
-    Tuple(Vec<Type>),
     Struct(Vec<StructField>),
 }

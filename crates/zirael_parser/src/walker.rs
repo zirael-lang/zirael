@@ -172,24 +172,24 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
         }
     }
 
-    fn walk_enum_declaration(&mut self, _: &mut EnumDeclaration) {
-        todo!("Implement enum declaration");
-        //
-        // self.visit_enum_declaration(enum_decl);
-        //
-        // self.push_scope(ScopeType::Enum(enum_decl.name.clone()));
-        //
-        // if let Some(generics) = &mut enum_decl.generics {
-        //     for generic in generics {
-        //         self.walk_generic_parameter(generic);
-        //     }
-        // }
-        //
-        // for variant in &mut enum_decl.variants {
-        //     self.walk_enum_variant(variant);
-        // }
-        //
-        // self.pop_scope();
+    fn walk_enum_declaration(&mut self, en: &mut EnumDeclaration) {
+        self.visit_enum_declaration(en);
+
+        self.push_scope(ScopeType::Enum(en.id));
+
+        for generic in &mut en.generics {
+            self.walk_generic_parameter(generic);
+        }
+
+        for variant in &mut en.variants {
+            self.walk_enum_variant(variant);
+        }
+
+        for item in &mut en.methods {
+            self.walk_item(item);
+        }
+
+        self.pop_scope();
     }
 
     fn walk_enum_variant(&mut self, variant: &mut EnumVariant) {
@@ -205,11 +205,6 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
         self.visit_enum_variant_data(data);
         match data {
             EnumVariantData::Unit => {}
-            EnumVariantData::Tuple(types) => {
-                for ty in types {
-                    self.walk_type(ty);
-                }
-            }
             EnumVariantData::Struct(fields) => {
                 for field in fields {
                     self.walk_struct_field(field);

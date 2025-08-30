@@ -1,20 +1,20 @@
 use crate::{
     codegen::{Codegen, Gen},
     ir::{
-        IrBlock, IrExpr, IrExprKind, IrField, IrFunction, IrItem, IrItemKind, IrModule, IrParam,
-        IrStmt, IrStruct, IrTypeExtension,
+        IrBlock, IrEnum, IrExpr, IrExprKind, IrField, IrFunction, IrItem, IrItemKind, IrModule,
+        IrParam, IrStmt, IrStruct, IrTypeExtension, IrVariantData,
     },
 };
 use itertools::Itertools as _;
-use std::path::PathBuf;
+use std::{any::Any, env::var, fmt::format, path::PathBuf};
 use zirael_parser::{
-    BinaryOp, Literal, MainFunction, SymbolId, SymbolRelationNode, Type, UnaryOp,
+    BinaryOp, Literal, MainFunction, SymbolId, SymbolKind, SymbolRelationNode, Type, UnaryOp,
     ast::monomorphized_symbol::MonomorphizedSymbol,
 };
 use zirael_utils::prelude::{CompilationInfo, debug, resolve};
 
 pub fn run_codegen(
-    modules: Vec<IrModule>,
+    modules: &mut Vec<IrModule>,
     info: &CompilationInfo,
     mut order: Vec<SymbolRelationNode>,
     used_externals: Vec<String>,
@@ -29,13 +29,49 @@ pub fn run_codegen(
     header.writeln("#include <stdint.h>");
     header.writeln("#include <stdbool.h>");
 
-    let module_items = modules.iter().flat_map(|m| &m.items).collect::<Vec<_>>();
-    let mono_items = modules.iter().flat_map(|m| &m.mono_items).collect::<Vec<_>>();
+    let mut module_items = modules.iter().flat_map(|m| &m.items).cloned().collect::<Vec<_>>();
+    let mono_items = modules.iter().flat_map(|m| &m.mono_items).cloned().collect::<Vec<_>>();
 
     let c_main_function = module_items.iter().find(|item| item.name == "main");
 
     if order.is_empty() {
         order = module_items.iter().map(|i| SymbolRelationNode::Symbol(i.sym_id)).collect_vec();
+    }
+
+    for module_item in &mut module_items {
+        if let IrItemKind::Enum(ref mut enum_data) = module_item.kind {
+            let mut mono_variants = vec![];
+            let mut remove = vec![];
+
+            for (i, variant) in enum_data.variants.iter().enumerate() {
+                let variant_mono_items: Vec<_> = mono_items
+                    .iter()
+                    .filter_map(|m| {
+                        if let IrItemKind::EnumVariant(ref ir_variant) = m.kind {
+                            if variant.symbol_id == ir_variant.symbol_id {
+                                Some(ir_variant.clone())
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+
+                if !variant_mono_items.is_empty() {
+                    mono_variants.extend(variant_mono_items);
+                    remove.push(i);
+                }
+            }
+
+            if !mono_variants.is_empty() && !remove.is_empty() {
+                for i in remove {
+                    enum_data.variants.remove(i);
+                }
+                enum_data.variants.extend(mono_variants)
+            }
+        }
     }
 
     for node in &order {
@@ -99,7 +135,8 @@ pub fn run_codegen(
     {
         implementation.writeln("int main() {");
         implementation.indent();
-        implementation.writeln(&format!("return {}();", mangled));
+        implementation.writeln(&format!("{}();", mangled));
+        implementation.writeln("return 0;");
         implementation.dedent();
         implementation.writeln("}");
     }
@@ -135,6 +172,8 @@ impl Gen for IrItem {
             IrItemKind::Function(func) => func.generate_header(cg),
             IrItemKind::Struct(ir) => ir.generate_header(cg),
             IrItemKind::TypeExtension(ty) => ty.generate_header(cg),
+            IrItemKind::Enum(en) => en.generate_header(cg),
+            IrItemKind::EnumVariant(_) => {}
         }
     }
 
@@ -143,9 +182,57 @@ impl Gen for IrItem {
             IrItemKind::Function(func) => func.generate(p),
             IrItemKind::Struct(ir) => ir.generate(p),
             IrItemKind::TypeExtension(ty) => ty.generate(p),
+            IrItemKind::Enum(en) => en.generate(p),
+            IrItemKind::EnumVariant(i) => p.writeln(""),
         }
         p.newline();
     }
+}
+
+impl Gen for IrEnum {
+    fn generate_header(&self, cg: &mut Codegen) {
+        let base_name = self.name.as_str();
+
+        cg.writeln("typedef enum {");
+        cg.indent();
+        for variant in &self.variants {
+            cg.writeln(&format!("{base_name}_{},", variant.name.as_str()));
+        }
+        cg.dedent();
+        cg.writeln(&format!("}} {}_tags;", base_name));
+        cg.newline();
+
+        cg.writeln("typedef struct {");
+        cg.indent();
+        cg.writeln(&format!("enum {}_tags tag;", base_name));
+        cg.writeln("union {");
+        cg.indent();
+
+        for variant in &self.variants {
+            let variant_name = format!("{}_{}", base_name, variant.name.as_str());
+            match &variant.data {
+                IrVariantData::Struct(fields) => {
+                    cg.writeln("struct {");
+                    cg.indent();
+                    for field in fields {
+                        field.generate(cg);
+                    }
+                    cg.dedent();
+                    cg.writeln(&format!("}} {variant_name};"));
+                }
+                IrVariantData::Unit => {
+                    cg.writeln(&format!("struct {{}} {variant_name};"));
+                }
+            }
+        }
+        cg.dedent();
+        cg.writeln("} data;");
+        cg.dedent();
+        cg.writeln(&format!("}} {};", base_name));
+        cg.newline();
+    }
+
+    fn generate(&self, cg: &mut Codegen) {}
 }
 
 impl Gen for IrTypeExtension {

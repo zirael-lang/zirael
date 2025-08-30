@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use zirael_parser::{BinaryOp, Literal, MonomorphizationId, SymbolId, Type, UnaryOp};
 
 pub use lowering::*;
+use zirael_hir::hir::HirVariant;
 
 #[derive(Clone, Debug)]
 pub struct IrModule {
@@ -27,6 +28,8 @@ pub enum IrItemKind {
     Function(IrFunction),
     Struct(IrStruct),
     TypeExtension(IrTypeExtension),
+    Enum(IrEnum),
+    EnumVariant(IrVariant),
 }
 
 #[derive(Clone, Debug)]
@@ -56,6 +59,25 @@ pub struct IrFunction {
 pub struct IrStruct {
     pub name: String,
     pub fields: Vec<IrField>,
+}
+
+#[derive(Clone, Debug)]
+pub struct IrEnum {
+    pub variants: Vec<IrVariant>,
+    pub name: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct IrVariant {
+    pub symbol_id: SymbolId,
+    pub name: String,
+    pub data: IrVariantData,
+}
+
+#[derive(Clone, Debug)]
+pub enum IrVariantData {
+    Struct(Vec<IrField>),
+    Unit,
 }
 
 #[derive(Clone, Debug)]

@@ -99,7 +99,7 @@ impl<'ctx> CompilationUnit<'ctx> {
         reports.print(sources);
 
         let mut hir = lower_ast_to_hir(&mut result.modules, symbols, reports);
-        let ir = lower_hir_to_ir(
+        let ir = &mut lower_hir_to_ir(
             &mut hir,
             symbols,
             inference.mono_table.clone(),

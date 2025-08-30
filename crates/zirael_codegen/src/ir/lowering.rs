@@ -1,19 +1,19 @@
 use crate::ir::{
-    IrBlock, IrExpr, IrExprKind, IrField, IrFunction, IrItem, IrItemKind, IrModule, IrParam,
-    IrStmt, IrStruct, IrTypeExtension,
+    IrBlock, IrEnum, IrExpr, IrExprKind, IrField, IrFunction, IrItem, IrItemKind, IrModule,
+    IrParam, IrStmt, IrStruct, IrTypeExtension, IrVariant, IrVariantData,
 };
 use itertools::Itertools;
 use std::{collections::HashMap, path::PathBuf, vec};
 use zirael_hir::hir::{
-    HirBody, HirFunction, HirItem, HirItemKind, HirModule, HirStruct, HirTypeExtension,
+    HirBody, HirEnum, HirFunction, HirItem, HirItemKind, HirModule, HirStruct, HirTypeExtension,
     expr::{FieldSymbol, HirExpr, HirExprKind, HirStmt},
 };
 use zirael_parser::{
-    AstId, DropStackEntry, Literal, MainFunction, MonomorphizationId, Scope, ScopeType,
-    StructField, Symbol, SymbolId, SymbolKind, SymbolRelationNode, SymbolTable, Type, UnaryOp,
-    monomorphized_symbol::MonomorphizedSymbol,
+    AstId, DropStackEntry, EnumVariantData, Literal, MainFunction, MonomorphizationId, Scope,
+    ScopeType, StructField, Symbol, SymbolId, SymbolKind, SymbolRelationNode, SymbolTable, Type,
+    UnaryOp, monomorphized_symbol::MonomorphizedSymbol,
 };
-use zirael_type_checker::MonomorphizationTable;
+use zirael_type_checker::{MonomorphizationData, MonomorphizationTable};
 use zirael_utils::prelude::{
     Colorize as _, Mode, ReportBuilder, ReportKind, Reports, SourceFileId, Sources, debug,
     default_ident, get_or_intern, resolve, warn,
@@ -100,6 +100,9 @@ impl<'reports> HirLowering<'reports> {
                     let mangled = self.mangle_symbol(symbol.id);
                     let string = if let SymbolKind::Struct { .. } = symbol.kind {
                         format!("struct {}", mangled)
+                    } else if let SymbolKind::EnumVariant { parent_enum, .. } = symbol.kind {
+                        let en = self.symbol_table.get_symbol_unchecked(&parent_enum);
+                        self.mangle_symbol(en.id)
                     } else {
                         mangled
                     };
@@ -133,9 +136,7 @@ impl<'reports> HirLowering<'reports> {
             && let MainFunction::Symbol(main_symbol_id) = main_symbol_id
         {
             if lexed_module.items.values().any(|item| item.symbol_id == *main_symbol_id) {
-                *main_function_id = Some(MainFunction::Mangled(
-                    self.mangle_symbol(*main_symbol_id),
-                ))
+                *main_function_id = Some(MainFunction::Mangled(self.mangle_symbol(*main_symbol_id)))
             }
         }
 
@@ -179,6 +180,12 @@ impl<'reports> HirLowering<'reports> {
                     mono_id: None,
                 })
             }
+            HirItemKind::Enum(hir_enum) => Some(IrItem {
+                name: name.clone(),
+                kind: IrItemKind::Enum(self.lower_enum(name, hir_enum)),
+                sym_id: item.symbol_id,
+                mono_id: None,
+            }),
             HirItemKind::TypeExtension(ext) => {
                 self.lower_type_extension(ext);
                 None
@@ -189,18 +196,63 @@ impl<'reports> HirLowering<'reports> {
 
     fn lower_type_extension(&mut self, ext: &mut HirTypeExtension) {
         self.push_scope(ScopeType::TypeExtension(ext.id));
+        self.lower_methods(&mut ext.methods);
+        self.pop_scope();
+    }
 
-        let ir_items = ext.methods.iter_mut().map(|func| self.lower_item(func)).collect_vec();
-
-        for item in ir_items {
-            if let Some(item) = item {
+    fn lower_methods(&mut self, methods: &mut Vec<HirItem>) {
+        for item in methods.iter_mut() {
+            if let Some(item) = self.lower_item(item) {
                 self.current_items.push(item);
             } else {
                 warn!("failed to lower method")
             }
         }
+    }
 
+    fn lower_enum(&mut self, name: String, hir_enum: &mut HirEnum) -> IrEnum {
+        self.push_scope(ScopeType::Enum(hir_enum.id));
+        self.lower_methods(&mut hir_enum.methods);
         self.pop_scope();
+        
+        let variants = hir_enum
+            .variants
+            .iter()
+            .map(|v| IrVariant {
+                name: self.mangle_symbol(v.symbol_id),
+                symbol_id: v.symbol_id,
+                data: match &v.data {
+                    EnumVariantData::Unit => IrVariantData::Unit,
+                    EnumVariantData::Struct(fields) => {
+                        IrVariantData::Struct(self.lower_fields(fields.clone()))
+                    }
+                },
+            })
+            .collect_vec();
+
+        for variant in &variants {
+            self.current_items.push(IrItem {
+                name: variant.name.clone(),
+                kind: IrItemKind::EnumVariant(variant.clone()),
+                sym_id: variant.symbol_id,
+                mono_id: None,
+            });
+        }
+        
+        IrEnum {
+            variants,
+            name,
+        }
+    }
+
+    fn lower_fields(&mut self, fields: Vec<StructField>) -> Vec<IrField> {
+        fields
+            .iter()
+            .map(|field| IrField {
+                name: resolve(&field.name),
+                ty: self.lower_type(field.ty.clone()),
+            })
+            .collect_vec()
     }
 
     fn lower_struct(
@@ -210,26 +262,9 @@ impl<'reports> HirLowering<'reports> {
         fields: Vec<StructField>,
     ) -> IrStruct {
         self.push_scope(ScopeType::Struct(hir_struct.id));
-
-        for item in hir_struct.methods.iter_mut() {
-            if let Some(item) = self.lower_item(item) {
-                self.current_items.push(item);
-            } else {
-                warn!("failed to lower method")
-            }
-        }
-
+        self.lower_methods(&mut hir_struct.methods);
         self.pop_scope();
-        IrStruct {
-            fields: fields
-                .iter()
-                .map(|field| IrField {
-                    name: resolve(&field.name),
-                    ty: self.lower_type(field.ty.clone()),
-                })
-                .collect_vec(),
-            name,
-        }
+        IrStruct { fields: self.lower_fields(fields), name }
     }
 
     fn lower_function(&mut self, name: String, func: &mut HirFunction) -> IrFunction {
@@ -394,7 +429,7 @@ impl<'reports> HirLowering<'reports> {
                 let identifier = if let Some(call_info) = call_info {
                     if let Some(mono_id) = call_info.monomorphized_id {
                         self.new_relation(SymbolRelationNode::Monomorphization(mono_id));
-                        self.get_monomorphized_name(mono_id)
+                        self.get_monomorphized_name_for_call(mono_id, Some(&call_info))
                     } else {
                         self.new_relation(SymbolRelationNode::Symbol(call_info.original_symbol));
                         self.mangle_symbol(call_info.original_symbol)
@@ -405,7 +440,6 @@ impl<'reports> HirLowering<'reports> {
                 } else {
                     unreachable!("Invalid call expression structure")
                 };
-
                 let args = args.iter().map(|arg| self.lower_expr(arg.clone())).collect::<Vec<_>>();
 
                 IrExprKind::Call(identifier, args)
@@ -413,7 +447,7 @@ impl<'reports> HirLowering<'reports> {
             HirExprKind::StructInit { name, fields, call_info } => {
                 let constructor_identifier = if let Some(call_info) = &call_info {
                     if let Some(mono_id) = call_info.monomorphized_id {
-                        self.get_monomorphized_name(mono_id)
+                        self.get_monomorphized_name_for_call(mono_id, Some(call_info))
                     } else {
                         self.mangle_symbol(call_info.original_symbol)
                     }

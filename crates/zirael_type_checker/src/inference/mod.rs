@@ -1,4 +1,5 @@
 mod ctx;
+mod enums;
 mod errors;
 mod expressions;
 mod fields;
@@ -133,7 +134,7 @@ impl<'reports> TypeInference<'reports> {
 
     fn get_struct_type_for_method(&mut self, func: &Function) -> Option<Type> {
         if let Some(func_symbol) = self.symbol_table.lookup_symbol(&func.name) {
-            if let Some(struct_symbol_id) = self.symbol_table.is_a_method(func_symbol.id) {
+            if let Some(struct_symbol_id) = self.symbol_table.is_a_child_of_symbol(func_symbol.id) {
                 let struct_symbol = self.symbol_table.get_symbol_unchecked(&struct_symbol_id);
 
                 return match &struct_symbol.kind {
@@ -183,7 +184,7 @@ impl<'reports> TypeInference<'reports> {
         func: &Function,
     ) -> Option<HashMap<Identifier, Type>> {
         if let Some(func_symbol) = self.symbol_table.lookup_symbol(&func.name) {
-            if let Some(struct_symbol_id) = self.symbol_table.is_a_method(func_symbol.id) {
+            if let Some(struct_symbol_id) = self.symbol_table.is_a_child_of_symbol(func_symbol.id) {
                 let struct_symbol = self.symbol_table.get_symbol_unchecked(&struct_symbol_id);
 
                 if let SymbolKind::Struct { generics, .. } = &struct_symbol.kind {
@@ -304,6 +305,30 @@ impl<'reports> AstWalker<'reports> for TypeInference<'reports> {
         }
 
         for item in &mut _struct.methods {
+            self.walk_item(item);
+        }
+
+        self.current_struct_generics.clear();
+        self.pop_scope();
+    }
+
+    fn walk_enum_declaration(&mut self, _enum: &mut EnumDeclaration) {
+        self.push_scope(ScopeType::Enum(_enum.id));
+        let enum_generic_type_vars = self.get_generic_type_vars(&_enum.generics);
+        self.current_struct_generics = enum_generic_type_vars.clone();
+
+        for variant in &mut _enum.variants {
+            if let EnumVariantData::Struct(ref mut fields) = variant.data {
+                for field in fields {
+                    if !enum_generic_type_vars.is_empty() {
+                        self.substitute_type_with_map(&mut field.ty, &enum_generic_type_vars);
+                    }
+                    self.walk_struct_field(field);
+                }
+            }
+        }
+
+        for item in &mut _enum.methods {
             self.walk_item(item);
         }
 
