@@ -8,7 +8,7 @@ use zirael_utils::prelude::*;
 
 impl<'a> Parser<'a> {
     pub fn parse_stmt(&mut self) -> Stmt {
-        let start_position = self.position;
+        let _start_position = self.position;
 
         if self.match_keyword(Keyword::Var) {
             let span_start = self.prev_span();

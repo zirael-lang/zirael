@@ -188,7 +188,6 @@ impl<'reports> HirLowering<'reports> {
                 self.lower_type_extension(ext);
                 None
             }
-            _ => todo!(),
         }
     }
 
@@ -522,10 +521,10 @@ impl<'reports> HirLowering<'reports> {
         let mut expr_type = self.lower_type(expr.ty);
 
         let mut fixed_kind = kind;
-        if let IrExprKind::StructInit(constructor_name, fields) = &fixed_kind {
+        if let IrExprKind::StructInit(_constructor_name, fields) = &fixed_kind {
             if let Type::Named { name: struct_name, generics } = &expr_type {
                 if !generics.is_empty()
-                    && generics.iter().any(|g| matches!(g, Type::TypeVariable { .. }))
+                    && generics.iter().any(|g| matches!(g, Type::Variable { .. }))
                 {
                     for (mono_id, entry) in &self.mono_table.entries {
                         let original_symbol =

@@ -84,6 +84,6 @@ impl Codegen {
 }
 
 pub trait Gen {
-    fn generate_header(&self, cg: &mut Codegen) {}
+    fn generate_header(&self, _cg: &mut Codegen) {}
     fn generate(&self, cg: &mut Codegen);
 }

@@ -124,9 +124,6 @@ impl ExprKind {
     }
 
     pub fn can_be_borrowed(&self) -> bool {
-        match self {
-            Self::Identifier(_, _) | Self::FieldAccess(_) | Self::IndexAccess(_, _) => true,
-            _ => false,
-        }
+        matches!(self, Self::Identifier(_, _) | Self::FieldAccess(_) | Self::IndexAccess(_, _))
     }
 }

@@ -29,7 +29,7 @@ pub fn run_codegen(
     let mut module_items = modules.iter().flat_map(|m| &m.items).cloned().collect::<Vec<_>>();
     let mono_items = modules.iter().flat_map(|m| &m.mono_items).cloned().collect::<Vec<_>>();
 
-    let c_main_function = module_items.iter().find(|item| item.name == "main");
+    let _c_main_function = module_items.iter().find(|item| item.name == "main");
 
     if order.is_empty() {
         order = module_items.iter().map(|i| SymbolRelationNode::Symbol(i.sym_id)).collect_vec();
@@ -181,7 +181,7 @@ impl Gen for IrItem {
             IrItemKind::Struct(ir) => ir.generate(p),
             IrItemKind::TypeExtension(ty) => ty.generate(p),
             IrItemKind::Enum(en) => en.generate(p),
-            IrItemKind::EnumVariant(i) => {}
+            IrItemKind::EnumVariant(_i) => {}
         }
         p.newline();
     }
@@ -306,7 +306,7 @@ impl Gen for IrStruct {
         cg.newline();
     }
 
-    fn generate(&self, cg: &mut Codegen) {}
+    fn generate(&self, _cg: &mut Codegen) {}
 }
 
 impl Gen for IrField {
@@ -519,7 +519,6 @@ impl Gen for IrExpr {
                 p.write(" : ");
                 false_expr.generate(p);
             }
-            _ => {}
         }
     }
 }

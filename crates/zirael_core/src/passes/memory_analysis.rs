@@ -201,7 +201,7 @@ impl<'reports> AstWalker<'reports> for MemoryAnalysis<'reports> {
         self.visit_unary_impl(op, expr, ExprContext::Expr, &mut false);
     }
 
-    fn visit_identifier(&mut self, id: &mut Identifier, sym_id: &mut Option<SymbolId>, span: Span) {
+    fn visit_identifier(&mut self, _id: &mut Identifier, sym_id: &mut Option<SymbolId>, span: Span) {
         let sym_id = sym_id.unwrap();
         let symbol = self.symbol_table.get_symbol_unchecked(&sym_id);
 

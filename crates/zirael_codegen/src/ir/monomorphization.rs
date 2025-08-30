@@ -121,7 +121,7 @@ impl<'reports> HirLowering<'reports> {
                     mono_id: Some(*id),
                 })
             }
-            (SymbolKind::EnumVariant { parent_enum, data }, IrItemKind::EnumVariant(variant)) => {
+            (SymbolKind::EnumVariant { parent_enum, data: _ }, IrItemKind::EnumVariant(variant)) => {
                 let parent_enum = self.symbol_table.get_symbol_unchecked(parent_enum);
                 let SymbolKind::Enum { generics, id, .. } = &parent_enum.kind else {
                     unreachable!()
@@ -340,7 +340,7 @@ impl<'reports> HirLowering<'reports> {
         visited: &mut HashSet<Identifier>,
     ) -> Type {
         let new_ty = match ty {
-            Type::TypeVariable { id: _, name } => {
+            Type::Variable { id: _, name } => {
                 if let Some(concrete_type) = type_map.get(name) {
                     concrete_type.clone()
                 } else {
@@ -479,7 +479,7 @@ impl<'reports> HirLowering<'reports> {
                 self.hash_type(return_type, hasher);
             }
 
-            Type::TypeVariable { id, name } => {
+            Type::Variable { id, name } => {
                 id.hash(hasher);
                 resolve(name).hash(hasher);
             }

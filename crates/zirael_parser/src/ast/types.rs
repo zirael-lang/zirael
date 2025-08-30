@@ -21,8 +21,8 @@ pub enum Type {
 
     MonomorphizedSymbol(MonomorphizedSymbol),
 
-    TypeVariable { id: usize, name: Identifier },
-    BoundedTypeVariable { id: usize, name: Identifier, bounds: Vec<TraitBound> },
+    Variable { id: usize, name: Identifier },
+    BoundedVariable { id: usize, name: Identifier, bounds: Vec<TraitBound> },
 
     Inferred,
     Error,

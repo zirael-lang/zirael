@@ -2,7 +2,7 @@ use anyhow::Result;
 use std::path::{Path, PathBuf};
 
 /// strips the same root from a path using `reference_path` as the common base
-pub fn strip_same_root(path: PathBuf, reference_path: PathBuf) -> PathBuf {
+pub fn strip_same_root(path: &Path, reference_path: &Path) -> PathBuf {
     let path_components: Vec<_> = path.components().collect();
     let reference_components: Vec<_> = reference_path.components().collect();
 
@@ -21,6 +21,11 @@ pub fn strip_same_root(path: PathBuf, reference_path: PathBuf) -> PathBuf {
     stripped_path
 }
 
+/// Canonicalizes a path and strips the common prefix
+/// 
+/// # Errors
+/// 
+/// Returns an error if the path cannot be canonicalized
 pub fn canonicalize_with_strip<P: AsRef<Path>>(path: P) -> Result<PathBuf> {
     let canonical = fs_err::canonicalize(path)?;
     Ok(strip_windows_long_path_prefix(canonical))

@@ -1,5 +1,5 @@
 use crate::ast::Ast;
-use petgraph::{Directed, Graph, prelude::EdgeRef as _};
+use petgraph::{Directed, Graph};
 use zirael_utils::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

@@ -1,6 +1,6 @@
 use crate::TypeInference;
 use std::collections::HashMap;
-use zirael_parser::{AstId, FunctionSignature, MonomorphizationId, StructField, SymbolId, Type};
+use zirael_parser::{FunctionSignature, MonomorphizationId, StructField, SymbolId, Type};
 use zirael_utils::prelude::Identifier;
 
 #[derive(Debug, Clone)]
@@ -45,7 +45,7 @@ impl<'reports> TypeInference<'reports> {
         }
 
         let has_only_concrete_types =
-            concrete_types.iter().all(|(_, ty)| !matches!(ty, Type::TypeVariable { .. }));
+            concrete_types.iter().all(|(_, ty)| !matches!(ty, Type::Variable { .. }));
 
         if !has_only_concrete_types {
             return;

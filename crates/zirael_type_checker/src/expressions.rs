@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use zirael_parser::{
-    AstId, AstWalker, BinaryOp, CallInfo, EnumVariantData, Expr, ExprKind, Literal, ScopeType,
+    AstId, AstWalker, BinaryOp, CallInfo, Expr, ExprKind, Literal, ScopeType,
     Stmt, StmtKind, SymbolId, SymbolKind, Type, UnaryOp, VarDecl, WalkerContext,
 };
 use zirael_utils::prelude::{Colorize, Identifier, Span, resolve, warn};
@@ -49,7 +49,7 @@ impl<'reports> TypeInference<'reports> {
         }
         let mut valid = true;
         for (i, (arg, param_type)) in args.iter_mut().zip(params.iter()).enumerate() {
-            let arg_type = self.infer_expr(arg);
+            let _arg_type = self.infer_expr(arg);
             self.try_monomorphize_named_type(&mut arg.ty);
             if !self.expect_type(param_type, &mut arg.ty, &arg.span, &format!("argument {}", i + 1))
             {
@@ -616,7 +616,7 @@ impl<'reports> TypeInference<'reports> {
                 }
             }
 
-            (Type::TypeVariable { name, .. }, concrete_type) => {
+            (Type::Variable { name, .. }, concrete_type) => {
                 mapping.insert(*name, concrete_type.clone());
             }
 

@@ -29,7 +29,7 @@ impl TypeInferenceContext {
 
         self.generic_params.insert(name, id);
 
-        Type::TypeVariable { id, name }
+        Type::Variable { id, name }
     }
 
     pub fn is_generic_parameter(&self, name: Identifier) -> bool {

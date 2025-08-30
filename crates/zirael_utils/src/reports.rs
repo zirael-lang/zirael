@@ -36,7 +36,7 @@ impl<'a> Reports<'a> {
         self.read(|reports| {
             let mut collected_sources = vec![];
 
-            for (_, source) in srcs.iter() {
+            for (_, source) in srcs.all() {
                 collected_sources
                     .push((source.path().display().to_string(), source.content().to_owned()));
             }
@@ -139,7 +139,7 @@ impl<'a> ReportBuilder<'a> {
             ReportKind::Error => ReportKind::Custom("error", Color::BrightRed),
             ReportKind::Warning => ReportKind::Custom("warning", Color::BrightYellow),
             ReportKind::Advice => ReportKind::Custom("advice", Color::BrightCyan),
-            _ => self.kind,
+            ReportKind::Custom(..) => self.kind,
         }
     }
 

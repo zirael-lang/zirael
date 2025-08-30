@@ -30,7 +30,7 @@ impl<'reports> TypeInference<'reports> {
                     {
                         let all_concrete = generics
                             .iter()
-                            .all(|g| !matches!(g, Type::TypeVariable { .. } | Type::Inferred));
+                            .all(|g| !matches!(g, Type::Variable { .. } | Type::Inferred));
                         if all_concrete && !generic_params.is_empty() {
                             let mut generic_map = HashMap::new();
                             for (g, ty) in generic_params.iter().zip(generics.iter()) {
@@ -93,7 +93,7 @@ impl<'reports> TypeInference<'reports> {
                     && a_generics.iter().zip(b_generics).all(|(a, b)| self.structural_eq(a, b))
             }
 
-            (Type::TypeVariable { name: a_name, .. }, Type::TypeVariable { name: b_name, .. }) => {
+            (Type::Variable { name: a_name, .. }, Type::Variable { name: b_name, .. }) => {
                 a_name == b_name
             }
 
@@ -232,7 +232,7 @@ impl<'reports> TypeInference<'reports> {
                 self.substitute_type_with_map(struct_ty, struct_generics);
 
                 match &param.ty {
-                    Type::Reference(inner) => Type::Reference(Box::new(struct_ty.clone())),
+                    Type::Reference(_inner) => Type::Reference(Box::new(struct_ty.clone())),
                     _ => struct_ty.clone(),
                 }
             }

@@ -109,7 +109,6 @@ impl<'reports> AstLowering<'reports> {
                 })
             }
             ItemKind::Import(..) => None,
-            _ => unimplemented!("Unimplemented item kind: {:?}", item),
         }
     }
 

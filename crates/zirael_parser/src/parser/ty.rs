@@ -127,7 +127,6 @@ impl<'a> Parser<'a> {
                                 if self.check(&TokenKind::GreaterThan) {
                                     break;
                                 }
-                                continue;
                             } else if self.match_token(TokenKind::GreaterThan) {
                                 break;
                             } else {
@@ -172,7 +171,6 @@ impl<'a> Parser<'a> {
                     if self.check(&TokenKind::ParenClose) {
                         break;
                     }
-                    continue;
                 } else {
                     break;
                 }

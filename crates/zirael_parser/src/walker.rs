@@ -332,7 +332,7 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
             | Type::Bool
             | Type::Void
             | Type::Inferred
-            | Type::TypeVariable { .. } => {}
+            | Type::Variable { .. } => {}
             Type::MonomorphizedSymbol(_) => {}
             Type::Pointer(inner) | Type::Reference(inner) => {
                 self.walk_type(inner);

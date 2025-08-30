@@ -76,7 +76,7 @@ impl<'reports> TypeInference<'reports> {
             (Type::Inferred, concrete) => Some(concrete.clone()),
             (concrete, Type::Inferred) => Some(concrete.clone()),
             (a, b) if self.eq(a, b) => Some(a.clone()),
-            (Type::TypeVariable { id: _, name: var_name }, concrete) => {
+            (Type::Variable { id: _, name: var_name }, concrete) => {
                 if let Some(existing) = substitutions.get(var_name) {
                     if self.eq(existing, concrete) { Some(concrete.clone()) } else { None }
                 } else {
@@ -84,7 +84,7 @@ impl<'reports> TypeInference<'reports> {
                     Some(concrete.clone())
                 }
             }
-            (concrete, Type::TypeVariable { id: _, name: var_name }) => {
+            (concrete, Type::Variable { id: _, name: var_name }) => {
                 if let Some(existing) = substitutions.get(var_name) {
                     if self.eq(existing, concrete) { Some(concrete.clone()) } else { None }
                 } else {
@@ -104,7 +104,7 @@ impl<'reports> TypeInference<'reports> {
 
     fn apply_substitutions(&self, ty: &mut Type, substitutions: &HashMap<Identifier, Type>) {
         match ty {
-            Type::TypeVariable { id: _, name } => {
+            Type::Variable { id: _, name } => {
                 if let Some(substitution) = substitutions.get(name) {
                     *ty = substitution.clone();
                 }

@@ -1,7 +1,7 @@
 use crate::{TypeInference, monomorphization::MonomorphizationData};
 use std::collections::HashMap;
 use zirael_parser::{
-    AstWalker, CallInfo, EnumVariantData, Expr, ExprKind, SymbolId, SymbolKind, Type,
+    AstWalker, CallInfo, EnumVariantData, Expr, SymbolId, SymbolKind, Type,
     monomorphized_symbol::MonomorphizedSymbol,
 };
 use zirael_utils::{
@@ -17,7 +17,7 @@ impl<'reports> TypeInference<'reports> {
         fields: &mut HashMap<Identifier, Expr>,
         call_info: &mut Option<CallInfo>,
     ) -> Type {
-        let (variant_fields, enum_generics, enum_name, enum_sym_id) = {
+        let (variant_fields, enum_generics, enum_name, _enum_sym_id) = {
             let variant_symbol = self.symbol_table.get_symbol_unchecked(variant_id);
             if let SymbolKind::EnumVariant { parent_enum, data, .. } = &variant_symbol.kind {
                 let enum_symbol = self.symbol_table.get_symbol_unchecked(parent_enum);
@@ -102,7 +102,7 @@ impl<'reports> TypeInference<'reports> {
                 .collect();
 
             let all_generics_mapped =
-                concrete_generics.iter().all(|ty| !matches!(ty, Type::TypeVariable { .. }));
+                concrete_generics.iter().all(|ty| !matches!(ty, Type::Variable { .. }));
 
             if all_generics_mapped {
                 let mut monomorphized_fields = variant_fields.clone();

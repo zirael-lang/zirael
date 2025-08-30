@@ -1,6 +1,6 @@
 use crate::TypeInference;
 use std::collections::HashMap;
-use zirael_parser::{GenericParameter, SymbolKind, Type};
+use zirael_parser::{GenericParameter, Type};
 use zirael_utils::prelude::Identifier;
 
 impl<'reports> TypeInference<'reports> {
@@ -33,7 +33,7 @@ impl<'reports> TypeInference<'reports> {
                     *ty = concrete.clone();
                 }
             }
-            Type::Named { name, generics } => {
+            Type::Named { name: _, generics } => {
                 for generic in generics.iter_mut() {
                     self.substitute_type_with_map(generic, param_map);
                 }

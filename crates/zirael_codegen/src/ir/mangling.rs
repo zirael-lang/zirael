@@ -15,7 +15,7 @@ impl<'reports> HirLowering<'reports> {
         }
     }
 
-    pub fn get_sym_name(&mut self, sym: &Symbol, mono_id: Option<MonomorphizationId>) -> String {
+    pub fn get_sym_name(&mut self, sym: &Symbol, _mono_id: Option<MonomorphizationId>) -> String {
         let base = resolve(&sym.name);
 
         if let Some(parent_struct) = self.symbol_table.is_a_child_of_symbol(sym.id) {
@@ -98,7 +98,7 @@ impl<'reports> HirLowering<'reports> {
         let symbol_name = self.get_sym_name(symbol, mono_id);
         let symbol_file = self.symbol_table.get_symbol_module(symbol.scope).unwrap();
         let file_path = self.sources.get_unchecked(symbol_file).path();
-        let base_path = strip_same_root(file_path, self.root.clone()).with_extension("");
+        let base_path = strip_same_root(&file_path, self.root.as_path()).with_extension("");
 
         let mut result = String::from("_ZN");
 
@@ -203,9 +203,9 @@ impl<'reports> HirLowering<'reports> {
                 );
                 "inferred".to_owned()
             }
-            Type::TypeVariable { name, .. } => {
+            Type::Variable { name, .. } => {
                 warn!(
-                    "encountered Type::TypeVariable during mangling - this should have been resolved earlier"
+                    "encountered Type::Variable during mangling - this should have been resolved earlier"
                 );
                 format!("var_{}", resolve(name))
             }

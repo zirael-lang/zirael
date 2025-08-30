@@ -79,7 +79,7 @@ impl Sources {
         self.read(|sources| sources.path_to_id.get(path).copied())
     }
 
-    pub fn iter(&self) -> Vec<(SourceFileId, SourceFile)> {
+    pub fn all(&self) -> Vec<(SourceFileId, SourceFile)> {
         self.read(|sources| sources.arena.iter().map(|(id, source)| (id, source.clone())).collect())
     }
 

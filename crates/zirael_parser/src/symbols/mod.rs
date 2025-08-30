@@ -82,10 +82,7 @@ impl SymbolKind {
     }
 
     pub fn is_value(&self) -> bool {
-        match self {
-            Self::Variable { .. } | Self::Parameter { .. } => true,
-            _ => false,
-        }
+        matches!(self, Self::Variable { .. } | Self::Parameter { .. })
     }
 }
 

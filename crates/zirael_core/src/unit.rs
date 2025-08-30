@@ -26,7 +26,7 @@ impl<'ctx> CompilationUnit<'ctx> {
         }
     }
 
-    fn find_main_function(&self, symbols: &SymbolTable, reports: &Reports) -> Option<SymbolId> {
+    fn find_main_function(&self, symbols: &SymbolTable, reports: &Reports<'_>) -> Option<SymbolId> {
         let main_ident = get_or_intern("main");
 
         symbols.read(|table| {

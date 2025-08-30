@@ -90,7 +90,7 @@ impl<'reports> TypeInference<'reports> {
                 .collect();
 
             let all_generics_mapped =
-                concrete_generics.iter().all(|ty| !matches!(ty, Type::TypeVariable { .. }));
+                concrete_generics.iter().all(|ty| !matches!(ty, Type::Variable { .. }));
 
             if all_generics_mapped {
                 let mut monomorphized_fields = struct_fields.clone();

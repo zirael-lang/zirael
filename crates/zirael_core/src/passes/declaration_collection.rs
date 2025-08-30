@@ -302,7 +302,7 @@ impl<'reports> AstWalker<'reports> for DeclarationCollection<'reports> {
                 self.symbol_table.exit_scope().unwrap();
 
                 self.symbol_table
-                    .update_symbol_kind(sym.unwrap(), |kind| SymbolKind::Struct {
+                    .update_symbol_kind(sym.unwrap(), |_kind| SymbolKind::Struct {
                         generics: struct_def.generics.clone(),
                         fields: struct_def.fields.clone(),
                         methods: methods.clone(),
@@ -351,7 +351,7 @@ impl<'reports> AstWalker<'reports> for DeclarationCollection<'reports> {
                 self.symbol_table.exit_scope().unwrap();
 
                 self.symbol_table
-                    .update_symbol_kind(sym.unwrap(), |kind| SymbolKind::Enum {
+                    .update_symbol_kind(sym.unwrap(), |_kind| SymbolKind::Enum {
                         generics: enum_def.generics.clone(),
                         variants,
                         methods: methods.clone(),
@@ -380,7 +380,7 @@ impl<'reports> AstWalker<'reports> for DeclarationCollection<'reports> {
                 self.symbol_table.exit_scope().unwrap();
 
                 self.symbol_table
-                    .update_symbol_kind(sym.unwrap(), |kind| SymbolKind::TypeExtension {
+                    .update_symbol_kind(sym.unwrap(), |_kind| SymbolKind::TypeExtension {
                         ty: ty_ext.ty.clone(),
                         methods: methods.clone(),
                     })
@@ -389,7 +389,6 @@ impl<'reports> AstWalker<'reports> for DeclarationCollection<'reports> {
                 sym
             }
             ItemKind::Import(..) => None,
-            _ => todo!(),
         };
 
         item.symbol_id = id;

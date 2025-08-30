@@ -177,7 +177,7 @@ impl<'a> Parser<'a> {
 
     pub fn try_parse<T, F>(&mut self, parse_fn: F) -> Option<T>
     where
-        F: FnOnce(&mut Self) -> ParseResult<T>,
+        F: FnOnce(&mut Self) -> ParseResult<'_, T>,
     {
         let state = self.save_state();
         if let Ok(result) = parse_fn(self) {

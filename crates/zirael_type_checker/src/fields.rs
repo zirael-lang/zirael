@@ -1,12 +1,12 @@
 use crate::{TypeInference, monomorphization::MonomorphizationData};
-use std::{collections::HashMap, fmt::format, rc::Rc};
+use std::collections::HashMap;
 use zirael_parser::{
     AstWalker, CallInfo, EnumVariantData, Expr, ExprKind, SymbolId, SymbolKind, Type,
 };
 use zirael_utils::prelude::{Colorize, Span, debug, get_or_intern, resolve, warn};
 
 impl<'reports> TypeInference<'reports> {
-    fn traverse_chain<F>(&mut self, chain: &mut [Expr], mut validator: F) -> Type
+    fn traverse_chain<F>(&mut self, chain: &mut [Expr], validator: F) -> Type
     where
         F: FnMut(&mut Self, &Type, &str, Span) -> Type,
     {
@@ -321,9 +321,9 @@ impl<'reports> TypeInference<'reports> {
 
     fn resolve_index_access(
         &mut self,
-        container_type: &Type,
-        index_type: &Type,
-        span: Span,
+        _container_type: &Type,
+        _index_type: &Type,
+        _span: Span,
     ) -> Type {
         todo!("Implement index access type resolution")
     }
