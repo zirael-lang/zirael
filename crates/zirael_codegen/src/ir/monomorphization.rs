@@ -14,7 +14,7 @@ use zirael_parser::{
     monomorphized_symbol::MonomorphizedSymbol,
 };
 use zirael_type_checker::{MonomorphizationData, MonomorphizationEntry};
-use zirael_utils::prelude::{Identifier, get_or_intern, resolve};
+use zirael_utils::prelude::{Identifier, debug, get_or_intern, resolve};
 
 impl<'reports> HirLowering<'reports> {
     pub fn process_monomorphization_entries(&mut self, module: &mut IrModule) {
@@ -24,7 +24,12 @@ impl<'reports> HirLowering<'reports> {
         let (struct_entries, func_entries): (Vec<_>, Vec<_>) =
             entries.into_iter().partition(|(_, entry)| {
                 let symbol = self.symbol_table.get_symbol_unchecked(&entry.original_id);
-                matches!(symbol.kind, SymbolKind::Struct { .. })
+                matches!(
+                    symbol.kind,
+                    SymbolKind::Struct { .. }
+                        | SymbolKind::Enum { .. }
+                        | SymbolKind::EnumVariant { .. }
+                )
             });
 
         self.push_scope(ScopeType::Module(module.id));
@@ -144,7 +149,13 @@ impl<'reports> HirLowering<'reports> {
                     mono_id: Some(id.clone()),
                 })
             }
-            _ => None,
+            _ => {
+                debug!(
+                    "missing implementation for monomorphization of {:?} {:?}",
+                    original_symbol, original_item
+                );
+                None
+            }
         }
     }
 
@@ -423,6 +434,11 @@ impl<'reports> HirLowering<'reports> {
                 name: get_or_intern(&*self.mangle_symbol(*parent_enum)),
                 generics: vec![],
             }
+        } else if let SymbolKind::Enum { .. } = &original_symbol.kind {
+            Type::Named {
+                name: get_or_intern(&*self.mangle_symbol(original_symbol.canonical_symbol)),
+                generics: vec![],
+            }
         } else {
             Type::Named { name: get_or_intern(&name), generics: vec![] }
         }
@@ -489,7 +505,9 @@ impl<'reports> HirLowering<'reports> {
                     self.symbol_table.is_a_child_of_symbol(symbol.canonical_symbol)
                 {
                     let parent_struct = self.symbol_table.get_symbol_unchecked(&parent_struct);
-                    if let SymbolKind::Struct { generics: gens, .. } = &parent_struct.kind {
+                    if let SymbolKind::Struct { generics: gens, .. }
+                    | SymbolKind::Enum { generics: gens, .. } = &parent_struct.kind
+                    {
                         generics.extend(gens.clone());
                     }
                 }

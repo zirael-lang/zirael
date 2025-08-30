@@ -134,13 +134,13 @@ impl<'reports> TypeInference<'reports> {
         }
     }
 
-    fn get_struct_type_for_method(&mut self, func: &Function) -> Option<Type> {
+    fn get_self_type_for_method(&mut self, func: &Function) -> Option<Type> {
         if let Some(func_symbol) = self.symbol_table.lookup_symbol(&func.name) {
             if let Some(struct_symbol_id) = self.symbol_table.is_a_child_of_symbol(func_symbol.id) {
                 let struct_symbol = self.symbol_table.get_symbol_unchecked(&struct_symbol_id);
 
                 return match &struct_symbol.kind {
-                    SymbolKind::Struct { generics, .. } => {
+                    SymbolKind::Struct { generics, .. } | SymbolKind::Enum { generics, .. } => {
                         let generic_names = generics
                             .iter()
                             .map(|g| Type::Named { name: g.name.clone(), generics: vec![] })
@@ -153,14 +153,17 @@ impl<'reports> TypeInference<'reports> {
                             Some(ty.clone())
                         } else {
                             self.error(
-                                "right now type extensions can only be used on primitve types",
+                                "right now type extensions can only be used on primitive types",
                                 vec![("type extension here".to_string(), func.span.clone())],
                                 vec![],
                             );
                             None
                         }
                     }
-                    _ => None,
+                    _ => {
+                        warn!("expected struct symbol, got {:?}", struct_symbol.kind);
+                        None
+                    }
                 };
             }
         }
@@ -181,15 +184,14 @@ impl<'reports> TypeInference<'reports> {
         }
     }
 
-    fn get_struct_generics_for_method(
-        &mut self,
-        func: &Function,
-    ) -> Option<HashMap<Identifier, Type>> {
+    fn get_generics_for_method(&mut self, func: &Function) -> Option<HashMap<Identifier, Type>> {
         if let Some(func_symbol) = self.symbol_table.lookup_symbol(&func.name) {
             if let Some(struct_symbol_id) = self.symbol_table.is_a_child_of_symbol(func_symbol.id) {
                 let struct_symbol = self.symbol_table.get_symbol_unchecked(&struct_symbol_id);
 
-                if let SymbolKind::Struct { generics, .. } = &struct_symbol.kind {
+                if let SymbolKind::Struct { generics, .. } | SymbolKind::Enum { generics, .. } =
+                    &struct_symbol.kind
+                {
                     if !generics.is_empty() {
                         return Some(
                             generics
@@ -200,6 +202,8 @@ impl<'reports> TypeInference<'reports> {
                                 .collect(),
                         );
                     }
+                } else {
+                    warn!("expected struct symbol, got {:?}", struct_symbol.kind);
                 }
             }
         }
@@ -255,12 +259,12 @@ impl<'reports> AstWalker<'reports> for TypeInference<'reports> {
         let method_generic_type_vars = self.get_generic_type_vars(&func.signature.generics);
 
         let struct_generic_type_vars =
-            self.get_struct_generics_for_method(func).unwrap_or_else(HashMap::new);
+            self.get_generics_for_method(func).unwrap_or_else(HashMap::new);
 
         let all_generic_type_vars =
             self.merge_generic_maps(&struct_generic_type_vars, &method_generic_type_vars);
 
-        let struct_type = &mut self.get_struct_type_for_method(func);
+        let struct_type = &mut self.get_self_type_for_method(func);
 
         if !func.signature.is_static()
             && let Some(param) = func.signature.parameters.get_mut(0)

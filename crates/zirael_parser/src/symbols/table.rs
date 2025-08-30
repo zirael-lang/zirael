@@ -478,9 +478,13 @@ impl SymbolTable {
     }
 
     pub fn is_a_child_of_symbol(&self, symbol_id: SymbolId) -> Option<SymbolId> {
-        self.read(|table| {
+        self.write(|table| {
             for (&struct_id, methods) in &table.parent_symbols_lookup {
                 if methods.contains(&symbol_id) {
+                    table.symbol_relations.entry(
+                        SymbolRelationNode::Symbol(symbol_id),
+                        SymbolRelationNode::Symbol(struct_id),
+                    );
                     return Some(struct_id);
                 }
             }

@@ -93,7 +93,7 @@ impl<'reports> HirLowering<'reports> {
         match ty {
             Type::Reference(ty) => Type::Reference(Box::new(self.lower_type(*ty))),
             Type::MonomorphizedSymbol(sym) => self.handle_monomorphized_symbol(&sym, true),
-            Type::Named { name, generics } if generics.is_empty() => {
+            Type::Named { name, generics } => {
                 let symbol = self.symbol_table.lookup_symbol(&name);
 
                 if let Some(symbol) = symbol {
@@ -533,7 +533,9 @@ impl<'reports> HirLowering<'reports> {
                     for (mono_id, entry) in &self.mono_table.entries {
                         let original_symbol =
                             self.symbol_table.get_symbol_unchecked(&entry.original_id);
-                        if let SymbolKind::Struct { .. } = original_symbol.kind {
+                        if let SymbolKind::Struct { .. } | SymbolKind::Enum { .. } =
+                            original_symbol.kind
+                        {
                             if original_symbol.name == *struct_name {
                                 let mono_name = self.get_monomorphized_name(*mono_id);
                                 let new_type = Type::Named {

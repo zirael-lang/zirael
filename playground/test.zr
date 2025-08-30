@@ -6,13 +6,19 @@ enum Option<T> {
 }
 
 struct Person {
-    age: int
+    age: int,
+
+    fn birthday(self) {
+        self.age += 1;
+    }
 }
 
 fn main() {
     var _some = Option::Some(10);
     var _sd = Option::Some(Person { age: 25 });
-    var _sw = Option::Some("test").unwrap();
+    Option::Some("test").unwrap();
     var _none = Option::None;
-    var _person = Person { age: 45 };
+    var bob = Person { age: 45 };
+
+    bob.birthday();
 }
