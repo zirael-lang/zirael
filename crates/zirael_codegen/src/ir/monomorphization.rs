@@ -1,17 +1,15 @@
 use crate::ir::{
-    HirLowering, IrBlock, IrEnum, IrExpr, IrExprKind, IrField, IrFunction, IrItem, IrItemKind,
-    IrModule, IrParam, IrStmt, IrStruct, IrVariant, IrVariantData,
+    HirLowering, IrBlock, IrExpr, IrExprKind, IrField, IrFunction, IrItem, IrItemKind, IrModule,
+    IrParam, IrStmt, IrStruct, IrVariant, IrVariantData,
 };
-use itertools::Itertools;
+use itertools::Itertools as _;
 use std::{
     collections::{HashMap, HashSet},
-    env::var,
     hash::{DefaultHasher, Hash as _},
 };
 use zirael_parser::{
-    CallInfo, EnumVariantData, Function, FunctionSignature, GenericParameter, MonomorphizationId,
-    ScopeType, Symbol, SymbolId, SymbolKind, SymbolRelationNode, Type,
-    monomorphized_symbol::MonomorphizedSymbol,
+    FunctionSignature, GenericParameter, MonomorphizationId, ScopeType, Symbol, SymbolKind,
+    SymbolRelationNode, Type, monomorphized_symbol::MonomorphizedSymbol,
 };
 use zirael_type_checker::monomorphization::{MonomorphizationData, MonomorphizationEntry};
 use zirael_utils::prelude::{Identifier, debug, get_or_intern, resolve};
@@ -58,12 +56,10 @@ impl<'reports> HirLowering<'reports> {
             return None;
         }
 
-        Some(
-            generics
-                .iter()
-                .map(|param| concrete_types.get(&param.name).cloned())
-                .collect::<Option<Vec<_>>>()?,
-        )
+        generics
+            .iter()
+            .map(|param| concrete_types.get(&param.name).cloned())
+            .collect::<Option<Vec<_>>>()
     }
 
     fn create_monomorphized_item(
@@ -78,7 +74,7 @@ impl<'reports> HirLowering<'reports> {
         let original_item = module.items.iter().find(|item| item.sym_id == original_id)?;
         let original_symbol = self.symbol_table.get_symbol_unchecked(&original_id);
 
-        self.current_mono_id = Some(id.clone());
+        self.current_mono_id = Some(*id);
         match (&original_symbol.kind, &original_item.kind) {
             (SymbolKind::Function { signature: sig, .. }, IrItemKind::Function(func)) => {
                 self.push_scope(ScopeType::Function(func.id));
@@ -103,7 +99,7 @@ impl<'reports> HirLowering<'reports> {
                     name: mangled_name,
                     kind: IrItemKind::Function(monomorphized_function),
                     sym_id: original_id,
-                    mono_id: Some(id.clone()),
+                    mono_id: Some(*id),
                 })
             }
             (SymbolKind::Struct { generics, .. }, IrItemKind::Struct(struct_def)) => {
@@ -122,11 +118,11 @@ impl<'reports> HirLowering<'reports> {
                     name: mangled_name,
                     kind: IrItemKind::Struct(monomorphized_struct),
                     sym_id: original_id,
-                    mono_id: Some(id.clone()),
+                    mono_id: Some(*id),
                 })
             }
             (SymbolKind::EnumVariant { parent_enum, data }, IrItemKind::EnumVariant(variant)) => {
-                let parent_enum = self.symbol_table.get_symbol_unchecked(&parent_enum);
+                let parent_enum = self.symbol_table.get_symbol_unchecked(parent_enum);
                 let SymbolKind::Enum { generics, id, .. } = &parent_enum.kind else {
                     unreachable!()
                 };
@@ -146,13 +142,12 @@ impl<'reports> HirLowering<'reports> {
                     name: mangled_name,
                     kind: IrItemKind::EnumVariant(mono_enum),
                     sym_id: original_id,
-                    mono_id: Some(id.clone()),
+                    mono_id: Some(*id),
                 })
             }
             _ => {
                 debug!(
-                    "missing implementation for monomorphization of {:?} {:?}",
-                    original_symbol, original_item
+                    "missing implementation for monomorphization of {original_symbol:?} {original_item:?}"
                 );
                 None
             }
@@ -166,7 +161,7 @@ impl<'reports> HirLowering<'reports> {
         type_map: &HashMap<Identifier, Type>,
     ) -> IrVariant {
         IrVariant {
-            symbol_id: variant.symbol_id.clone(),
+            symbol_id: variant.symbol_id,
             name,
             data: match &variant.data {
                 IrVariantData::Struct(fields) => {
@@ -196,7 +191,7 @@ impl<'reports> HirLowering<'reports> {
                 IrField { name: field.name.clone(), ty: substituted_ty }
             })
             .collect_vec();
-        IrStruct { name, fields, id: struct_def.id.clone() }
+        IrStruct { name, fields, id: struct_def.id }
     }
 
     fn monomorphize_function(
@@ -229,7 +224,7 @@ impl<'reports> HirLowering<'reports> {
             is_const: original.is_const,
             is_extern: original.is_extern,
             abi: original.abi.clone(),
-            id: original.id.clone(),
+            id: original.id,
         }
     }
 
@@ -320,7 +315,7 @@ impl<'reports> HirLowering<'reports> {
             IrExprKind::Type(ty) => IrExprKind::Type(self.substitute_type(ty, type_map)),
 
             IrExprKind::FieldAccess(fields) => {
-                let mono_fields = fields.iter().map(|f| f.clone()).collect();
+                let mono_fields = fields.clone();
                 IrExprKind::FieldAccess(mono_fields)
             }
 
@@ -422,7 +417,7 @@ impl<'reports> HirLowering<'reports> {
         let name = self.get_monomorphized_name(sym.id);
         let sym_id = self.mono_table.entries[&sym.id].original_id;
         let original_symbol = self.symbol_table.get_symbol_unchecked(&sym_id);
-        self.new_relation(SymbolRelationNode::Monomorphization(sym.id.clone()));
+        self.new_relation(SymbolRelationNode::Monomorphization(sym.id));
 
         if let SymbolKind::Struct { .. } = &original_symbol.kind {
             Type::Named {
@@ -430,13 +425,10 @@ impl<'reports> HirLowering<'reports> {
                 generics: vec![],
             }
         } else if let SymbolKind::EnumVariant { parent_enum, .. } = &original_symbol.kind {
-            Type::Named {
-                name: get_or_intern(&*self.mangle_symbol(*parent_enum)),
-                generics: vec![],
-            }
+            Type::Named { name: get_or_intern(&self.mangle_symbol(*parent_enum)), generics: vec![] }
         } else if let SymbolKind::Enum { .. } = &original_symbol.kind {
             Type::Named {
-                name: get_or_intern(&*self.mangle_symbol(original_symbol.canonical_symbol)),
+                name: get_or_intern(&self.mangle_symbol(original_symbol.canonical_symbol)),
                 generics: vec![],
             }
         } else {
@@ -519,7 +511,7 @@ impl<'reports> HirLowering<'reports> {
                 generics.clone()
             }
             SymbolKind::EnumVariant { parent_enum, .. } => {
-                let sym = self.symbol_table.get_symbol_unchecked(&parent_enum);
+                let sym = self.symbol_table.get_symbol_unchecked(parent_enum);
                 self.get_generics_for_symbol(&sym)
             }
             _ => unreachable!(),

@@ -107,17 +107,17 @@ impl<'a> Parser<'a> {
                             }
                         }
                         Err(e) => {
-                            self.error_at(format!("error reading glob entry: {}", e), span.clone());
+                            self.error_at(format!("error reading glob entry: {e}"), span.clone());
                         }
                     }
                 }
 
                 if !found_any {
-                    self.error_at(format!("no files found matching pattern: {}", pattern), span);
+                    self.error_at(format!("no files found matching pattern: {pattern}"), span);
                 }
             }
             Err(e) => {
-                self.error_at(format!("invalid glob pattern '{}': {}", pattern, e), span);
+                self.error_at(format!("invalid glob pattern '{pattern}': {e}"), span);
             }
         }
     }
@@ -164,7 +164,7 @@ impl<'a> Parser<'a> {
         let path = current_file.parent().unwrap_or(&PathBuf::new()).join(string.clone());
 
         let is_path_import =
-            string.starts_with("./") || string.starts_with("/") || string.starts_with("\\");
+            string.starts_with("./") || string.starts_with('/') || string.starts_with('\\');
 
         let kind = if is_path_import {
             if path.is_file() && path.extension().is_some_and(|ext| ext == "zr") {
@@ -173,7 +173,7 @@ impl<'a> Parser<'a> {
             } else {
                 let error_msg = if !path.exists() {
                     format!("couldn't find file: {}", path.display())
-                } else if path.extension().map_or(true, |ext| ext != "zr") {
+                } else if path.extension().is_none_or(|ext| ext != "zr") {
                     format!("import file must have .zr extension: {}", path.display())
                 } else {
                     format!("import path is not a file: {}", path.display())

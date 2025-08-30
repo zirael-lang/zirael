@@ -52,7 +52,6 @@ impl<'reports> MemoryAnalysis<'reports> {
                     "you can only borrow: variables, fields, array elements, and function parameters".to_owned()
                 ],
             );
-            return;
         }
         //
         // let sym_id = match expr.kind {

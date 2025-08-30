@@ -1,5 +1,5 @@
 use crate::ast::Keyword;
-use colored::Colorize;
+use colored::Colorize as _;
 use logos::Logos;
 use std::{
     fmt,
@@ -237,7 +237,15 @@ pub enum TokenKind {
 
 impl Display for TokenKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        use TokenKind::*;
+        use TokenKind::{
+            Arrow, At, BitwiseAnd, BitwiseNot, BitwiseOr, BitwiseXor, Bool, BraceClose, BraceOpen,
+            BracketClose, BracketOpen, Char, Colon, Comma, Decrement, Divide, DivideEquals, Dollar,
+            Dot, DoubleColon, Equals, EqualsEquals, FatArrow, Float, GreaterThan,
+            GreaterThanOrEqual, Hash, Identifier, Increment, Integer, Keyword, LeftShift, LessThan,
+            LessThanOrEqual, LogicalAnd, LogicalNot, LogicalOr, Minus, MinusEquals, Modulo,
+            ModuloEquals, Multiply, MultiplyEquals, NotEquals, ParenClose, ParenOpen, Plus,
+            PlusEquals, Power, Question, RightShift, Semicolon, String, Underscore,
+        };
 
         match self {
             Bool(true) => write!(f, "true"),

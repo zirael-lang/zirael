@@ -6,11 +6,8 @@ use crate::{
     },
 };
 use itertools::Itertools as _;
-use std::{any::Any, env::var, fmt::format, path::PathBuf};
-use zirael_parser::{
-    BinaryOp, Literal, MainFunction, SymbolId, SymbolKind, SymbolRelationNode, Type, UnaryOp,
-    ast::monomorphized_symbol::MonomorphizedSymbol,
-};
+use std::path::PathBuf;
+use zirael_parser::{BinaryOp, Literal, MainFunction, SymbolRelationNode, Type, UnaryOp};
 use zirael_utils::prelude::{CompilationInfo, debug, resolve};
 
 pub fn run_codegen(
@@ -70,7 +67,7 @@ pub fn run_codegen(
                 for i in remove {
                     enum_data.variants.remove(i);
                 }
-                enum_data.variants.extend(mono_variants)
+                enum_data.variants.extend(mono_variants);
             }
         }
     }
@@ -104,7 +101,7 @@ pub fn run_codegen(
         match node {
             SymbolRelationNode::Symbol(id) => {
                 let Some(item) = module_items.iter().find(|i| i.sym_id == *id) else {
-                    debug!("skipping symbol with id: {:?}", node);
+                    debug!("skipping symbol with id: {node:?}");
                     continue;
                 };
 
@@ -136,7 +133,7 @@ pub fn run_codegen(
     {
         implementation.writeln("int main() {");
         implementation.indent();
-        implementation.writeln(&format!("{}();", mangled));
+        implementation.writeln(&format!("{mangled}();"));
         implementation.writeln("return 0;");
         implementation.dedent();
         implementation.writeln("}");
@@ -200,12 +197,12 @@ impl Gen for IrEnum {
             cg.writeln(&format!("{base_name}_{},", variant.name.as_str()));
         }
         cg.dedent();
-        cg.writeln(&format!("}} {}_tags;", base_name));
+        cg.writeln(&format!("}} {base_name}_tags;"));
         cg.newline();
 
         cg.writeln("typedef struct {");
         cg.indent();
-        cg.writeln(&format!("enum {}_tags tag;", base_name));
+        cg.writeln(&format!("enum {base_name}_tags tag;"));
         cg.writeln("union {");
         cg.indent();
 
@@ -229,7 +226,7 @@ impl Gen for IrEnum {
         cg.dedent();
         cg.writeln("} data;");
         cg.dedent();
-        cg.writeln(&format!("}} {};", base_name));
+        cg.writeln(&format!("}} {base_name};"));
         cg.newline();
     }
 
@@ -258,8 +255,8 @@ impl Gen for IrEnum {
             cg.indent();
 
             let variant_name = format!("{}_{}", base_name, variant.name.as_str());
-            cg.writeln(&format!("{} result;", base_name));
-            cg.writeln(&format!("result.tag = {};", variant_name));
+            cg.writeln(&format!("{base_name} result;"));
+            cg.writeln(&format!("result.tag = {variant_name};"));
 
             match &variant.data {
                 IrVariantData::Unit => {}
@@ -401,7 +398,7 @@ impl Gen for IrExpr {
                     Literal::Integer(int) => int.to_string(),
                     Literal::Float(float) => {
                         let s = float.to_string();
-                        if s.contains('.') { format!("{}f", s) } else { format!("{}.0f", s) }
+                        if s.contains('.') { format!("{s}f") } else { format!("{s}.0f") }
                     }
                     Literal::Char(char) => format!("'{char}'"),
                     Literal::String(string) => format!("\"{string}\""),
@@ -436,7 +433,7 @@ impl Gen for IrExpr {
                     p.write(name);
                     p.write(" = ");
                     expr.generate(p);
-                    p.write(", ")
+                    p.write(", ");
                 }
                 p.write(" }");
             }

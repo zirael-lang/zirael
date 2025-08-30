@@ -1,5 +1,5 @@
 use crate::{
-    AstId, CallInfo, LexedModule, ModuleId, Return, Scope, ScopeType, SymbolTable, TypeExtension,
+    AstId, CallInfo, LexedModule, ModuleId, Return, ScopeType, SymbolTable, TypeExtension,
     ast::{
         Abi, Ast, Attribute, BinaryOp, EnumDeclaration, EnumVariant, EnumVariantData, Expr,
         ExprKind, Function, FunctionModifiers, FunctionSignature, GenericArg, GenericParameter,
@@ -268,10 +268,10 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
             }
             ExprKind::FieldAccess(exprs) => self.visit_field_access(exprs),
             ExprKind::MethodCall { chain, args, call_info } => {
-                self.visit_method_call(chain, args, call_info)
+                self.visit_method_call(chain, args, call_info);
             }
             ExprKind::StaticCall { callee, args, call_info } => {
-                self.visit_static_call(callee, args, call_info)
+                self.visit_static_call(callee, args, call_info);
             }
             ExprKind::IndexAccess(expr, index) => {
                 self.walk_expr(expr);

@@ -6,8 +6,8 @@ pub mod scopes;
 mod table;
 
 use crate::{
-    AstId, EnumVariant, EnumVariantData, Expr, FunctionModifiers, FunctionSignature,
-    GenericParameter, StructField, Type,
+    AstId, EnumVariantData, Expr, FunctionModifiers, FunctionSignature, GenericParameter,
+    StructField, Type,
 };
 pub use relations::*;
 pub use scopes::*;

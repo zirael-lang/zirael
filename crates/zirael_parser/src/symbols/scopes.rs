@@ -344,7 +344,7 @@ impl SymbolTable {
                 return HashMap::new();
             }
         }
-        
+
         exts
     }
 }

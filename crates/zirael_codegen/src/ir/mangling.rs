@@ -1,8 +1,6 @@
 use crate::ir::HirLowering;
 use std::hash::{DefaultHasher, Hash as _, Hasher as _};
-use zirael_parser::{
-    MonomorphizationId, Symbol, SymbolId, SymbolKind, Type, Type::MonomorphizedSymbol,
-};
+use zirael_parser::{MonomorphizationId, Symbol, SymbolId, SymbolKind, Type};
 use zirael_utils::{
     ident_table::resolve,
     prelude::{Mode, strip_same_root, warn},
@@ -28,7 +26,7 @@ impl<'reports> HirLowering<'reports> {
                 return format!("ext_{}_{}", self.mangle_type_for_name(&ty), base);
             }
 
-            format!("{}_{}", parent_struct_name, base)
+            format!("{parent_struct_name}_{base}")
         } else {
             base
         }
@@ -66,7 +64,7 @@ impl<'reports> HirLowering<'reports> {
                 .map(|ty| self.mangle_type_for_name(ty))
                 .collect::<Vec<_>>()
                 .join("_");
-            format!("{}__{}", base_name, type_suffix)
+            format!("{base_name}__{type_suffix}")
         }
     }
 
@@ -200,15 +198,19 @@ impl<'reports> HirLowering<'reports> {
                 self.mangle_type_for_name(&mono)
             }
             Type::Inferred => {
-                warn!("encountered Type::Inferred during mangling - this should have been resolved earlier");
+                warn!(
+                    "encountered Type::Inferred during mangling - this should have been resolved earlier"
+                );
                 "inferred".to_owned()
             }
             Type::TypeVariable { name, .. } => {
-                warn!("encountered Type::TypeVariable during mangling - this should have been resolved earlier");
+                warn!(
+                    "encountered Type::TypeVariable during mangling - this should have been resolved earlier"
+                );
                 format!("var_{}", resolve(name))
             }
             _ => {
-                warn!("unknown type for mangling: {:?}", ty);
+                warn!("unknown type for mangling: {ty:?}");
                 "unknown".to_owned()
             }
         }

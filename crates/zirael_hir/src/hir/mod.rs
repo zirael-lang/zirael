@@ -1,8 +1,6 @@
 use crate::hir::expr::HirExpr;
 use std::collections::HashMap;
-use zirael_parser::{
-    AstId, EnumVariantData, StructDeclaration, StructField, SymbolId, Type, TypeExtension,
-};
+use zirael_parser::{AstId, EnumVariantData, StructField, SymbolId, Type};
 use zirael_utils::prelude::{SourceFileId, Span};
 
 pub mod expr;

@@ -20,15 +20,14 @@ impl<'a> Parser<'a> {
         loop {
             let start_position = self.position;
 
-            match self.parse_generic_parameter() {
-                Some(param) => generics.push(param),
-                None => {
-                    self.error_at_current("failed to parse generic parameter");
-                    self.synchronize(&[TokenKind::Comma, TokenKind::GreaterThan]);
+            if let Some(param) = self.parse_generic_parameter() {
+                generics.push(param);
+            } else {
+                self.error_at_current("failed to parse generic parameter");
+                self.synchronize(&[TokenKind::Comma, TokenKind::GreaterThan]);
 
-                    if self.position == start_position && !self.is_at_end() {
-                        self.advance();
-                    }
+                if self.position == start_position && !self.is_at_end() {
+                    self.advance();
                 }
             }
 

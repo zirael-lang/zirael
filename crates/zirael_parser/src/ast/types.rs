@@ -1,6 +1,6 @@
 use zirael_utils::prelude::*;
 
-use crate::{MonomorphizationId, ast::monomorphized_symbol::MonomorphizedSymbol};
+use crate::ast::monomorphized_symbol::MonomorphizedSymbol;
 
 pub type TypeVarId = u32;
 

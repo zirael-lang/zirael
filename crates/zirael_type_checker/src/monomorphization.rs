@@ -44,9 +44,8 @@ impl<'reports> TypeInference<'reports> {
             return;
         }
 
-        let has_only_concrete_types = concrete_types
-            .iter()
-            .all(|(_, ty)| !matches!(ty, Type::TypeVariable { .. }));
+        let has_only_concrete_types =
+            concrete_types.iter().all(|(_, ty)| !matches!(ty, Type::TypeVariable { .. }));
 
         if !has_only_concrete_types {
             return;

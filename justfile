@@ -4,7 +4,7 @@ set windows-shell := ["powershell"]
 set shell := ["bash", "-cu"]
 
 _default:
-    @just --list -u
+    @just --list -u 
 
 fix:
     cargo clippy --workspace --fix --allow-staged --no-deps --allow-dirty
@@ -14,7 +14,7 @@ fix:
     git status
 
 check:
-    cargo check --workspace --all-features --all-targets --allow-dirty
+    cargo check --workspace --all-features --all-targets
 
 lint:
     cargo clippy --workspace --all-targets --all-features --fix --allow-dirty -- --deny warnings

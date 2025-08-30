@@ -184,7 +184,7 @@ impl<'reports> AstWalker<'reports> for NameResolution<'reports> {
 
     fn visit_field_access(&mut self, fields: &mut Vec<Expr>) {
         let base = &mut fields[0];
-        self.walk_expr(base)
+        self.walk_expr(base);
     }
 
     fn visit_type(&mut self, _ty: &mut Type) {

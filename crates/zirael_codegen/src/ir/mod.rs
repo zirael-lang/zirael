@@ -7,7 +7,6 @@ use std::collections::HashMap;
 use zirael_parser::{AstId, BinaryOp, Literal, MonomorphizationId, SymbolId, Type, UnaryOp};
 
 pub use lowering::*;
-use zirael_hir::hir::HirVariant;
 use zirael_utils::prelude::SourceFileId;
 
 #[derive(Clone, Debug)]
@@ -41,7 +40,7 @@ pub struct IrTypeExtension {
 
 impl IrItemKind {
     pub fn is_type_def(&self) -> bool {
-        matches!(self, IrItemKind::Struct(_))
+        matches!(self, Self::Struct(_))
     }
 }
 
@@ -126,7 +125,7 @@ impl IrExpr {
     }
 
     pub fn sym(sym: String) -> Self {
-        IrExpr::new(Type::Inferred, IrExprKind::Symbol(sym))
+        Self::new(Type::Inferred, IrExprKind::Symbol(sym))
     }
 }
 

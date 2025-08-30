@@ -494,7 +494,7 @@ impl SymbolTable {
 
     pub fn add_symbol_child(&self, parent_id: SymbolId, child_id: SymbolId) {
         self.write(|table| {
-            table.parent_symbols_lookup.entry(parent_id).or_insert_with(Vec::new).push(child_id);
+            table.parent_symbols_lookup.entry(parent_id).or_default().push(child_id);
 
             if let Some(symbol) = table.symbols.get_mut(parent_id) {
                 if let SymbolKind::Struct { methods, .. } = &mut symbol.kind {
@@ -503,7 +503,7 @@ impl SymbolTable {
                     }
                 }
             }
-        })
+        });
     }
 }
 

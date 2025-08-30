@@ -1,22 +1,21 @@
 use crate::ir::{
     IrBlock, IrEnum, IrExpr, IrExprKind, IrField, IrFunction, IrItem, IrItemKind, IrModule,
-    IrParam, IrStmt, IrStruct, IrTypeExtension, IrVariant, IrVariantData,
+    IrParam, IrStmt, IrStruct, IrVariant, IrVariantData,
 };
-use itertools::Itertools;
+use itertools::Itertools as _;
 use std::{collections::HashMap, path::PathBuf, vec};
 use zirael_hir::hir::{
     HirBody, HirEnum, HirFunction, HirItem, HirItemKind, HirModule, HirStruct, HirTypeExtension,
     expr::{FieldSymbol, HirExpr, HirExprKind, HirStmt},
 };
 use zirael_parser::{
-    AstId, DropStackEntry, EnumVariantData, Literal, MainFunction, MonomorphizationId, Scope,
-    ScopeType, StructField, Symbol, SymbolId, SymbolKind, SymbolRelationNode, SymbolTable, Type,
-    UnaryOp, monomorphized_symbol::MonomorphizedSymbol,
+    AstId, DropStackEntry, EnumVariantData, MainFunction, MonomorphizationId, ScopeType,
+    StructField, SymbolId, SymbolKind, SymbolRelationNode, SymbolTable, Type, UnaryOp,
 };
-use zirael_type_checker::{monomorphization::{MonomorphizationData, MonomorphizationTable}};
+use zirael_type_checker::monomorphization::MonomorphizationTable;
 use zirael_utils::prelude::{
     Colorize as _, Mode, ReportBuilder, ReportKind, Reports, SourceFileId, Sources, debug,
-    default_ident, get_or_intern, resolve, warn,
+    get_or_intern, resolve, warn,
 };
 
 pub fn lower_hir_to_ir<'reports>(
@@ -99,7 +98,7 @@ impl<'reports> HirLowering<'reports> {
                 if let Some(symbol) = symbol {
                     let mangled = self.mangle_symbol(symbol.id);
                     let string = if let SymbolKind::Struct { .. } = symbol.kind {
-                        format!("struct {}", mangled)
+                        format!("struct {mangled}")
                     } else if let SymbolKind::EnumVariant { parent_enum, .. } = symbol.kind {
                         let en = self.symbol_table.get_symbol_unchecked(&parent_enum);
                         self.mangle_symbol(en.id)
@@ -130,14 +129,13 @@ impl<'reports> HirLowering<'reports> {
                 ir_module.items.push(ir_item);
             }
         }
-        ir_module.items.extend(self.current_items.drain(..));
+        ir_module.items.append(&mut self.current_items);
 
         if let Some(main_symbol_id) = main_function_id
             && let MainFunction::Symbol(main_symbol_id) = main_symbol_id
+            && lexed_module.items.values().any(|item| item.symbol_id == *main_symbol_id)
         {
-            if lexed_module.items.values().any(|item| item.symbol_id == *main_symbol_id) {
-                *main_function_id = Some(MainFunction::Mangled(self.mangle_symbol(*main_symbol_id)))
-            }
+            *main_function_id = Some(MainFunction::Mangled(self.mangle_symbol(*main_symbol_id)));
         }
 
         self.pop_scope();
@@ -205,7 +203,7 @@ impl<'reports> HirLowering<'reports> {
             if let Some(item) = self.lower_item(item) {
                 self.current_items.push(item);
             } else {
-                warn!("failed to lower method")
+                warn!("failed to lower method");
             }
         }
     }
@@ -446,7 +444,7 @@ impl<'reports> HirLowering<'reports> {
                     if let SymbolKind::EnumVariant { .. } =
                         self.symbol_table.get_symbol_unchecked(&symbol_id).kind
                     {
-                        format!("{}_constructor", identifier)
+                        format!("{identifier}_constructor")
                     } else {
                         identifier
                     },
@@ -461,8 +459,7 @@ impl<'reports> HirLowering<'reports> {
                         self.mangle_symbol(call_info.original_symbol)
                     }
                 } else if let HirExprKind::Symbol(id) = name.kind {
-                    let mangled = self.mangle_symbol(id);
-                    mangled
+                    self.mangle_symbol(id)
                 } else {
                     unreachable!("Invalid struct init expression structure")
                 };
@@ -502,7 +499,7 @@ impl<'reports> HirLowering<'reports> {
                 ];
 
                 for (i, (field, access)) in fields.iter().enumerate() {
-                    f.push(IrExpr::sym(resolve(&field)));
+                    f.push(IrExpr::sym(resolve(field)));
 
                     if i != fields.len() - 1 {
                         f.push(IrExpr::sym(access.to_string()));
@@ -517,7 +514,7 @@ impl<'reports> HirLowering<'reports> {
                 Box::new(self.lower_expr(*false_expr)),
             ),
             _ => {
-                warn!("unhandled expression: {:?}", expr);
+                warn!("unhandled expression: {expr:?}");
                 IrExprKind::Symbol(String::new())
             }
         };
@@ -539,7 +536,7 @@ impl<'reports> HirLowering<'reports> {
                             if original_symbol.name == *struct_name {
                                 let mono_name = self.get_monomorphized_name(*mono_id);
                                 let new_type = Type::Named {
-                                    name: get_or_intern(&format!("struct {}", mono_name)),
+                                    name: get_or_intern(&format!("struct {mono_name}")),
                                     generics: vec![],
                                 };
                                 expr_type = new_type;

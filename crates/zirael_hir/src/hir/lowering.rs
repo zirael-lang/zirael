@@ -126,7 +126,7 @@ impl<'reports> AstLowering<'reports> {
     }
 
     fn lower_methods(&mut self, methods: &mut Vec<Item>) -> Vec<HirItem> {
-        methods.iter_mut().map(|i| self.lower_item(i)).filter_map(|i| i).collect()
+        methods.iter_mut().filter_map(|i| self.lower_item(i)).collect()
     }
 
     fn lower_enum(&mut self, enum_def: &mut EnumDeclaration, symbol_id: SymbolId) -> HirEnum {
@@ -367,7 +367,7 @@ impl<'reports> AstLowering<'reports> {
                 for field in fields {
                     let (ident, _) = field.as_identifier().unwrap();
                     indents.push((
-                        ident.clone(),
+                        *ident,
                         if field.ty.is_reference() {
                             AccessKind::Pointer
                         } else {
