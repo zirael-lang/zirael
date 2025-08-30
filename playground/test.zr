@@ -8,6 +8,6 @@ fn divide(a: int, b: int): Result<int, string> {
 }
 
 fn main() {
-    var result = divide(10, 2);
-    var result2 = divide(10, 0);
+    var _result = divide(10, 2);
+    var _result2 = divide(10, 0);
 }

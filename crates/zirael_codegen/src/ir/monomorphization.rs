@@ -13,7 +13,7 @@ use zirael_parser::{
     ScopeType, Symbol, SymbolId, SymbolKind, SymbolRelationNode, Type,
     monomorphized_symbol::MonomorphizedSymbol,
 };
-use zirael_type_checker::{MonomorphizationData, MonomorphizationEntry};
+use zirael_type_checker::monomorphization::{MonomorphizationData, MonomorphizationEntry};
 use zirael_utils::prelude::{Identifier, debug, get_or_intern, resolve};
 
 impl<'reports> HirLowering<'reports> {

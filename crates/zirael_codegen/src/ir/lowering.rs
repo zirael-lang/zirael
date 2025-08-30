@@ -13,7 +13,7 @@ use zirael_parser::{
     ScopeType, StructField, Symbol, SymbolId, SymbolKind, SymbolRelationNode, SymbolTable, Type,
     UnaryOp, monomorphized_symbol::MonomorphizedSymbol,
 };
-use zirael_type_checker::{MonomorphizationData, MonomorphizationTable};
+use zirael_type_checker::{monomorphization::{MonomorphizationData, MonomorphizationTable}};
 use zirael_utils::prelude::{
     Colorize as _, Mode, ReportBuilder, ReportKind, Reports, SourceFileId, Sources, debug,
     default_ident, get_or_intern, resolve, warn,

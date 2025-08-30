@@ -199,6 +199,14 @@ impl<'reports> HirLowering<'reports> {
                 let mono = self.handle_monomorphized_symbol(mono, false);
                 self.mangle_type_for_name(&mono)
             }
+            Type::Inferred => {
+                warn!("encountered Type::Inferred during mangling - this should have been resolved earlier");
+                "inferred".to_owned()
+            }
+            Type::TypeVariable { name, .. } => {
+                warn!("encountered Type::TypeVariable during mangling - this should have been resolved earlier");
+                format!("var_{}", resolve(name))
+            }
             _ => {
                 warn!("unknown type for mangling: {:?}", ty);
                 "unknown".to_owned()

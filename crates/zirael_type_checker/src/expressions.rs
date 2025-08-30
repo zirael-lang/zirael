@@ -1,12 +1,13 @@
-use crate::{
-    TypeInference, monomorphization::MonomorphizationData, unification::UnificationResult,
-};
 use std::collections::HashMap;
 use zirael_parser::{
     AstId, AstWalker, BinaryOp, CallInfo, EnumVariantData, Expr, ExprKind, Literal, ScopeType,
     Stmt, StmtKind, SymbolId, SymbolKind, Type, UnaryOp, VarDecl, WalkerContext,
 };
 use zirael_utils::prelude::{Colorize, Identifier, Span, resolve, warn};
+
+use crate::{
+    TypeInference, monomorphization::MonomorphizationData, unification::UnificationResult,
+};
 
 impl<'reports> TypeInference<'reports> {
     pub(crate) fn expect_type(
@@ -119,8 +120,10 @@ impl<'reports> TypeInference<'reports> {
         match self.unify_types(&true_ty, &false_ty) {
             UnificationResult::Identical(ty) => ty,
             UnificationResult::Unified(ty) => {
-                self.update_monomorphization_with_resolved_types(true_expr, &ty);
-                self.update_monomorphization_with_resolved_types(false_expr, &ty);
+                true_expr.ty = ty.clone();
+                false_expr.ty = ty.clone();
+                self.update_expr_recursively(true_expr, &ty);
+                self.update_expr_recursively(false_expr, &ty);
                 ty
             }
             UnificationResult::Incompatible => {

@@ -1,6 +1,6 @@
 use crate::TypeInference;
 use std::collections::HashMap;
-use zirael_parser::{Type, Expr, ExprKind, Symbol, SymbolKind, GenericParameter};
+use zirael_parser::{Expr, ExprKind, GenericParameter, Stmt, StmtKind, Symbol, SymbolKind, Type};
 use zirael_utils::prelude::Identifier;
 
 #[derive(Debug, Clone)]
@@ -47,10 +47,7 @@ impl<'reports> TypeInference<'reports> {
             self.apply_substitutions(param, &substitutions);
         }
 
-        let unified_type = Type::Named {
-            name: left_name,
-            generics: unified_generics,
-        };
+        let unified_type = Type::Named { name: left_name, generics: unified_generics };
 
         UnificationResult::Unified(unified_type)
     }
@@ -81,11 +78,7 @@ impl<'reports> TypeInference<'reports> {
             (a, b) if self.eq(a, b) => Some(a.clone()),
             (Type::TypeVariable { id: _, name: var_name }, concrete) => {
                 if let Some(existing) = substitutions.get(var_name) {
-                    if self.eq(existing, concrete) {
-                        Some(concrete.clone())
-                    } else {
-                        None
-                    }
+                    if self.eq(existing, concrete) { Some(concrete.clone()) } else { None }
                 } else {
                     substitutions.insert(*var_name, concrete.clone());
                     Some(concrete.clone())
@@ -93,11 +86,7 @@ impl<'reports> TypeInference<'reports> {
             }
             (concrete, Type::TypeVariable { id: _, name: var_name }) => {
                 if let Some(existing) = substitutions.get(var_name) {
-                    if self.eq(existing, concrete) {
-                        Some(concrete.clone())
-                    } else {
-                        None
-                    }
+                    if self.eq(existing, concrete) { Some(concrete.clone()) } else { None }
                 } else {
                     substitutions.insert(*var_name, concrete.clone());
                     Some(concrete.clone())
@@ -136,26 +125,43 @@ impl<'reports> TypeInference<'reports> {
         }
     }
 
-    pub fn update_monomorphization_with_resolved_types(&mut self, expr: &mut Expr, resolved_ty: &Type) {
+    pub fn update_monomorphization(&mut self, expr: &mut Expr, resolved_ty: &Type) {
         if let Type::Named { generics, .. } = resolved_ty {
             if !generics.is_empty() && generics.iter().any(|g| !matches!(g, Type::Inferred)) {
                 match &mut expr.kind {
-                    ExprKind::Call { call_info: Some(call_info), .. } => {
+                    ExprKind::Call { call_info: Some(call_info), .. }
+                    | ExprKind::StaticCall { call_info: Some(call_info), .. } => {
                         if let Some(mono_id) = call_info.monomorphized_id {
-                            let generics = {
+                            let (original_id, should_update) = {
                                 let entry = match self.mono_table.entries.get(&mono_id) {
                                     Some(entry) => entry,
                                     None => return,
                                 };
-                                let symbol = self.symbol_table.get_symbol_unchecked(&entry.original_id);
-                                self.get_generics_for_symbol(&symbol)
+                                let has_inferred = entry
+                                    .concrete_types
+                                    .values()
+                                    .any(|ty| matches!(ty, Type::Inferred));
+                                (entry.original_id, has_inferred)
                             };
-                            
-                            if let (Some(generics), Some(entry)) = (generics, self.mono_table.entries.get_mut(&mono_id)) {
-                                if let Type::Named { generics: resolved_generics, .. } = resolved_ty {
-                                    for (param, resolved_type) in generics.iter().zip(resolved_generics.iter()) {
-                                        if !matches!(resolved_type, Type::Inferred) {
-                                            entry.concrete_types.insert(param.name, resolved_type.clone());
+
+                            if should_update {
+                                let symbol = self.symbol_table.get_symbol_unchecked(&original_id);
+                                let generics = self.get_generics_for_symbol(&symbol);
+
+                                if let (Some(generics), Some(entry)) =
+                                    (generics, self.mono_table.entries.get_mut(&mono_id))
+                                {
+                                    if let Type::Named { generics: resolved_generics, .. } =
+                                        resolved_ty
+                                    {
+                                        for (param, resolved_type) in
+                                            generics.iter().zip(resolved_generics.iter())
+                                        {
+                                            if !matches!(resolved_type, Type::Inferred) {
+                                                entry
+                                                    .concrete_types
+                                                    .insert(param.name, resolved_type.clone());
+                                            }
                                         }
                                     }
                                 }
@@ -168,12 +174,91 @@ impl<'reports> TypeInference<'reports> {
         }
     }
 
+    pub fn update_expr_recursively(&mut self, expr: &mut Expr, resolved_ty: &Type) {
+        self.update_monomorphization(expr, resolved_ty);
+
+        match &mut expr.kind {
+            ExprKind::Call { args, .. } | ExprKind::StaticCall { args, .. } => {
+                self.update_exprs(args);
+            }
+            ExprKind::MethodCall { chain, args, .. } => {
+                self.update_exprs(chain);
+                self.update_exprs(args);
+            }
+            ExprKind::Binary { left, right, .. }
+            | ExprKind::Assign(left, right)
+            | ExprKind::AssignOp(left, _, right)
+            | ExprKind::IndexAccess(left, right) => {
+                self.update_expr_with_own_type(left);
+                self.update_expr_with_own_type(right);
+            }
+            ExprKind::Unary(_, inner) | ExprKind::Paren(inner) => {
+                self.update_expr_with_own_type(inner);
+            }
+            ExprKind::Ternary { condition, true_expr, false_expr } => {
+                self.update_expr_with_own_type(condition);
+                self.update_expr_recursively(true_expr, resolved_ty);
+                self.update_expr_recursively(false_expr, resolved_ty);
+            }
+            ExprKind::FieldAccess(exprs) => {
+                self.update_exprs(exprs);
+            }
+            ExprKind::StructInit { name, fields, .. } => {
+                self.update_expr_with_own_type(name);
+                for field_expr in fields.values_mut() {
+                    self.update_expr_with_own_type(field_expr);
+                }
+            }
+            ExprKind::Block(stmts) => {
+                for stmt in stmts {
+                    self.update_stmt_recursively(stmt);
+                }
+            }
+            ExprKind::Literal(_) | ExprKind::Identifier(_, _) | ExprKind::CouldntParse(_) => {}
+        }
+    }
+
+    fn update_expr_with_own_type(&mut self, expr: &mut Expr) {
+        let expr_ty = expr.ty.clone();
+        if self.has_generic_types(&expr_ty) {
+            self.update_expr_recursively(expr, &expr_ty);
+        }
+    }
+
+    fn update_exprs(&mut self, exprs: &mut [Expr]) {
+        for expr in exprs {
+            self.update_expr_with_own_type(expr);
+        }
+    }
+
+    fn has_generic_types(&self, ty: &Type) -> bool {
+        matches!(ty, Type::Named { generics, .. } if !generics.is_empty())
+    }
+
+    fn update_stmt_recursively(&mut self, stmt: &mut Stmt) {
+        match &mut stmt.0 {
+            StmtKind::Expr(expr) => {
+                self.update_expr_with_own_type(expr);
+            }
+            StmtKind::Var(var_decl) => {
+                self.update_expr_with_own_type(&mut var_decl.value);
+            }
+            StmtKind::Return(return_stmt) => {
+                if let Some(value) = &mut return_stmt.value {
+                    self.update_expr_with_own_type(value);
+                }
+            }
+        }
+    }
+
     fn get_generics_for_symbol(&self, symbol: &Symbol) -> Option<Vec<GenericParameter>> {
         match &symbol.kind {
             SymbolKind::Function { signature, .. } => {
                 let mut generics = vec![];
 
-                if let Some(parent_struct) = self.symbol_table.is_a_child_of_symbol(symbol.canonical_symbol) {
+                if let Some(parent_struct) =
+                    self.symbol_table.is_a_child_of_symbol(symbol.canonical_symbol)
+                {
                     let parent_struct = self.symbol_table.get_symbol_unchecked(&parent_struct);
                     if let SymbolKind::Struct { generics: gens, .. }
                     | SymbolKind::Enum { generics: gens, .. } = &parent_struct.kind
