@@ -6,6 +6,7 @@ mod fields;
 pub mod monomorphization;
 mod structs;
 mod substitution;
+pub mod unification;
 
 use crate::{MonomorphizationTable, inference::ctx::TypeInferenceContext};
 use id_arena::Arena;

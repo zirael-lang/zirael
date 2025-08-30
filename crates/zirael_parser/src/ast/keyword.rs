@@ -22,6 +22,8 @@ pub enum Keyword {
     Box,
     #[strum(props(category = "control"))]
     Return,
+    #[strum(props(category = "control"))]
+    Match,
 
     #[strum(props(category = "modifier"))]
     Extern,
@@ -69,6 +71,7 @@ impl Keyword {
             Self::Var => "var",
             Self::Box => "box",
             Self::Return => "return",
+            Self::Match => "match",
             Self::Extern => "extern",
             Self::Const => "const",
             Self::Async => "async",

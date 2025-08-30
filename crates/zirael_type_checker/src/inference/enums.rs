@@ -98,12 +98,7 @@ impl<'reports> TypeInference<'reports> {
         } else {
             let concrete_generics: Vec<Type> = enum_generics
                 .iter()
-                .map(|g| {
-                    generic_mapping
-                        .get(&g.name)
-                        .cloned()
-                        .expect("generic mapping should contain all generics")
-                })
+                .map(|g| generic_mapping.get(&g.name).cloned().unwrap_or(Type::Inferred))
                 .collect();
 
             let all_generics_mapped =

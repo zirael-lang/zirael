@@ -1,4 +1,5 @@
 use crate::ast::Keyword;
+use colored::Colorize;
 use logos::Logos;
 use std::{
     fmt,
@@ -34,6 +35,7 @@ pub enum TokenKind {
     #[token("box", |_| Keyword::Box)]
     #[token("return", |_| Keyword::Return)]
     #[token("uint", |_| Keyword::Uint)]
+    #[token("match", |_| Keyword::Match)]
     Keyword(Keyword),
 
     // Brackets and braces
@@ -240,7 +242,7 @@ impl Display for TokenKind {
         match self {
             Bool(true) => write!(f, "true"),
             Bool(false) => write!(f, "false"),
-            Keyword(keyword) => write!(f, "{keyword}"),
+            Keyword(keyword) => write!(f, "{}", keyword.as_str().dimmed().bold()),
             BraceOpen => write!(f, "{{"),
             BraceClose => write!(f, "}}"),
             BracketOpen => write!(f, "["),

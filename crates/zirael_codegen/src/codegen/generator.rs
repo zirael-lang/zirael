@@ -66,6 +66,7 @@ pub fn run_codegen(
             }
 
             if !mono_variants.is_empty() && !remove.is_empty() {
+                remove.sort_by(|a, b| b.cmp(a));
                 for i in remove {
                     enum_data.variants.remove(i);
                 }

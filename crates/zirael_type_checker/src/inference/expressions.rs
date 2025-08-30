@@ -1,4 +1,7 @@
-use crate::{MonomorphizationData, inference::TypeInference};
+use crate::{
+    MonomorphizationData,
+    inference::{TypeInference, unification::UnificationResult},
+};
 use std::collections::HashMap;
 use zirael_parser::{
     AstId, AstWalker, BinaryOp, CallInfo, EnumVariantData, Expr, ExprKind, Literal, ScopeType,
@@ -114,23 +117,39 @@ impl<'reports> TypeInference<'reports> {
 
         self.expect_type(&Type::Bool, &condition_ty, &condition.span, "ternary condition");
 
-        if self.eq(&true_ty, &false_ty) {
-            true_ty
-        } else {
-            let true_expr_ty = self.format_type(&true_ty).dimmed().bold();
-            let false_expr_ty = self.format_type(&false_ty).dimmed().bold();
-            self.error(
-                &format!(
-                    "ternary operator branches have incompatible types: {true_expr_ty} and {false_expr_ty}",
-                ),
-                vec![
-                    (format!("true branch has type {true_expr_ty}"), true_expr.span.clone()),
-                    (format!("false branch has type {false_expr_ty}"), false_expr.span.clone()),
-                ],
-                vec![],
-            );
-            Type::Error
+        match self.unify_types(&true_ty, &false_ty) {
+            UnificationResult::Identical(ty) => ty,
+            UnificationResult::Unified(ty) => {
+                self.update_monomorphization_with_resolved_types(true_expr, &ty);
+                self.update_monomorphization_with_resolved_types(false_expr, &ty);
+                ty
+            }
+            UnificationResult::Incompatible => {
+                self.ternary_error(&true_ty, &false_ty, true_expr, false_expr)
+            }
         }
+    }
+
+    fn ternary_error(
+        &mut self,
+        true_ty: &Type,
+        false_ty: &Type,
+        true_expr: &mut Expr,
+        false_expr: &mut Expr,
+    ) -> Type {
+        let true_expr_ty = self.format_type(true_ty).dimmed().bold();
+        let false_expr_ty = self.format_type(false_ty).dimmed().bold();
+        self.error(
+            &format!(
+                "ternary operator branches have incompatible types: {true_expr_ty} and {false_expr_ty}",
+            ),
+            vec![
+                (format!("true branch has type {true_expr_ty}"), true_expr.span.clone()),
+                (format!("false branch has type {false_expr_ty}"), false_expr.span.clone()),
+            ],
+            vec![],
+        );
+        Type::Error
     }
 
     fn infer_assign_op(&mut self, lhs: &mut Expr, op: &BinaryOp, rhs: &mut Expr) -> Type {
@@ -422,7 +441,7 @@ impl<'reports> TypeInference<'reports> {
                 };
 
                 let mut valid = true;
-                for (i, (arg, param)) in args.iter().zip(params_to_check.iter()).enumerate() {
+                for (arg, param) in args.iter().zip(params_to_check.iter()) {
                     self.infer_generic_types(&param.ty, &arg.ty, &mut generic_mapping);
                 }
 
@@ -515,7 +534,7 @@ impl<'reports> TypeInference<'reports> {
             if !self.expect_type(&variable_ty, value_ty, &decl.span, "variable declaration") {
                 return Type::Error;
             }
-            
+
             if self.eq(&variable_ty, &Type::Void) {
                 self.error(
                     "cannot initialize variable with void type",
@@ -523,7 +542,7 @@ impl<'reports> TypeInference<'reports> {
                     vec![],
                 );
             }
-            
+
             decl.ty = value_ty.clone();
             variable_ty.clone()
         } else {

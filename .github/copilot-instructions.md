@@ -29,9 +29,14 @@ The `CompilationUnit::compile()` method in `crates/zirael_core/src/unit.rs` orch
 
 Each pass uses the AST walker pattern (`impl_ast_walker!` macro) for traversal.
 
+Development Workflows
+Building and Testing
+
 ## Development Workflows
 
 ### Building and Testing
+
+To work with playground, you must `cd` into it.
 
 ```bash
 # Build entire workspace
@@ -39,14 +44,27 @@ cargo check --workspace --all-features --all-targets
 
 # Run compiler on test file
 cargo run -p zirael playground/test.zr --name playground -o playground/build
-
-# Development convenience commands (requires just)
-just comp-run                    # Compile playground/test.zr
-just fix                        # Auto-fix formatting and lints
-just lint                       # Run clippy with strict settings
 ```
 
-When running multiple commends don't use statement separators.
+On Linux/macOS (bash/zsh) you can chain commands with &&:
+
+```bash
+cargo check && cargo run -p zirael playground/test.zr
+```
+
+On Windows (PowerShell) you must use ; as the separator:
+
+```bash
+cargo check; cargo run -p zirael playground/test.zr
+```
+
+### Debug Information
+
+Pass the -v flag to enable verbose compiler output (useful for debugging the pipeline):
+
+```bash
+cargo run -p zirael playground/test.zr -o playground/build -v
+```
 
 ### Language File Extension
 
