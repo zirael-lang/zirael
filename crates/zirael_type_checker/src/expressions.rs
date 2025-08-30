@@ -1,6 +1,5 @@
 use crate::{
-    MonomorphizationData,
-    inference::{TypeInference, unification::UnificationResult},
+    TypeInference, monomorphization::MonomorphizationData, unification::UnificationResult,
 };
 use std::collections::HashMap;
 use zirael_parser::{

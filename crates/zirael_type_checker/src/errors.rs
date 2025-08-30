@@ -1,4 +1,4 @@
-use crate::inference::TypeInference;
+use crate::TypeInference;
 use zirael_parser::Type;
 use zirael_utils::prelude::{
     Colorize, ReportBuilder, ReportKind, SourceFileId, Span, debug, resolve,

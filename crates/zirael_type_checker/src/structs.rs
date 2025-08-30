@@ -1,4 +1,4 @@
-use crate::{MonomorphizationData, TypeInference};
+use crate::{TypeInference, monomorphization::MonomorphizationData};
 use std::{collections::HashMap, vec};
 use zirael_parser::{
     AstWalker, CallInfo, Expr, ExprKind, SymbolKind, Type,
