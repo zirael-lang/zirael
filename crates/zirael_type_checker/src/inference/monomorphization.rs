@@ -40,7 +40,6 @@ impl<'reports> TypeInference<'reports> {
         id: MonomorphizationId,
         monomorphized_data: Option<MonomorphizationData>,
     ) {
-        println!("{:?} {:?}", original_id, concrete_types);
         if concrete_types.is_empty() {
             return;
         }

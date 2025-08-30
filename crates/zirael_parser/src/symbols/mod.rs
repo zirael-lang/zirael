@@ -6,8 +6,8 @@ pub mod scopes;
 mod table;
 
 use crate::{
-    EnumVariant, EnumVariantData, Expr, FunctionModifiers, FunctionSignature, GenericParameter,
-    StructField, Type,
+    AstId, EnumVariant, EnumVariantData, Expr, FunctionModifiers, FunctionSignature,
+    GenericParameter, StructField, Type,
 };
 pub use relations::*;
 pub use scopes::*;
@@ -54,6 +54,7 @@ pub enum SymbolKind {
         generics: Vec<GenericParameter>,
         variants: Vec<SymbolId>,
         methods: Vec<SymbolId>,
+        id: AstId,
     },
     EnumVariant {
         parent_enum: SymbolId,

@@ -183,7 +183,7 @@ impl Gen for IrItem {
             IrItemKind::Struct(ir) => ir.generate(p),
             IrItemKind::TypeExtension(ty) => ty.generate(p),
             IrItemKind::Enum(en) => en.generate(p),
-            IrItemKind::EnumVariant(i) => p.writeln(""),
+            IrItemKind::EnumVariant(i) => {}
         }
         p.newline();
     }
@@ -232,7 +232,52 @@ impl Gen for IrEnum {
         cg.newline();
     }
 
-    fn generate(&self, cg: &mut Codegen) {}
+    fn generate(&self, cg: &mut Codegen) {
+        let base_name = self.name.as_str();
+
+        for variant in &self.variants {
+            cg.write_indented(&format!("{} {}_constructor", base_name, variant.name.as_str()));
+
+            match &variant.data {
+                IrVariantData::Unit => cg.writeln("() {"),
+                IrVariantData::Struct(fields) => {
+                    cg.write("(");
+                    for (i, field) in fields.iter().enumerate() {
+                        field.ty.generate(cg);
+                        cg.write(" ");
+                        cg.write(&field.name);
+                        if i != fields.len() - 1 {
+                            cg.write(", ");
+                        }
+                    }
+                    cg.writeln(") {");
+                }
+            }
+
+            cg.indent();
+
+            let variant_name = format!("{}_{}", base_name, variant.name.as_str());
+            cg.writeln(&format!("{} result;", base_name));
+            cg.writeln(&format!("result.tag = {};", variant_name));
+
+            match &variant.data {
+                IrVariantData::Unit => {}
+                IrVariantData::Struct(fields) => {
+                    for field in fields {
+                        cg.writeln(&format!(
+                            "result.data.{}.{} = {};",
+                            variant_name, field.name, field.name
+                        ));
+                    }
+                }
+            }
+
+            cg.writeln("return result;");
+            cg.dedent();
+            cg.writeln("}");
+            cg.newline();
+        }
+    }
 }
 
 impl Gen for IrTypeExtension {
@@ -251,12 +296,7 @@ impl Gen for IrTypeExtension {
 
 impl Gen for IrStruct {
     fn generate_header(&self, cg: &mut Codegen) {
-        cg.writeln(&format!("struct {};", self.name));
-    }
-
-    fn generate(&self, cg: &mut Codegen) {
-        cg.write(&format!("struct {} {{", self.name));
-        cg.newline();
+        cg.writeln(&format!("struct {} {{", self.name));
         cg.indent();
 
         for field in &self.fields {
@@ -264,9 +304,11 @@ impl Gen for IrStruct {
         }
 
         cg.dedent();
-        cg.write("};");
+        cg.writeln("};");
         cg.newline();
     }
+
+    fn generate(&self, cg: &mut Codegen) {}
 }
 
 impl Gen for IrField {
@@ -500,7 +542,7 @@ impl Gen for Type {
             Self::Float => p.write("double"),
             Self::Void => p.write("void"),
             Self::Char => p.write("char"),
-            Self::String => p.write("char32_t*"),
+            Self::String => p.write("char*"),
             Self::Bool => p.write("bool"),
             Self::Pointer(ty) | Self::Reference(ty) => {
                 ty.generate(p);

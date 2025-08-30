@@ -24,7 +24,9 @@ impl<'reports> TypeInference<'reports> {
         match ty {
             Type::Named { name, generics } => {
                 if let Some(symbol) = self.symbol_table.lookup_symbol(name) {
-                    if let SymbolKind::Struct { generics: generic_params, .. } = &symbol.kind {
+                    if let SymbolKind::Struct { generics: generic_params, .. }
+                    | SymbolKind::Enum { generics: generic_params, .. } = &symbol.kind
+                    {
                         let all_concrete = generics
                             .iter()
                             .all(|g| !matches!(g, Type::TypeVariable { .. } | Type::Inferred));

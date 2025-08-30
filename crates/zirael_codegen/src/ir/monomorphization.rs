@@ -10,7 +10,7 @@ use std::{
 };
 use zirael_parser::{
     CallInfo, EnumVariantData, Function, FunctionSignature, GenericParameter, MonomorphizationId,
-    Symbol, SymbolId, SymbolKind, SymbolRelationNode, Type,
+    ScopeType, Symbol, SymbolId, SymbolKind, SymbolRelationNode, Type,
     monomorphized_symbol::MonomorphizedSymbol,
 };
 use zirael_type_checker::{MonomorphizationData, MonomorphizationEntry};
@@ -27,6 +27,7 @@ impl<'reports> HirLowering<'reports> {
                 matches!(symbol.kind, SymbolKind::Struct { .. })
             });
 
+        self.push_scope(ScopeType::Module(module.id));
         for (id, entry) in struct_entries {
             if let Some(monomorphized_item) = self.create_monomorphized_item(&id, &entry, module) {
                 module.mono_items.push(monomorphized_item);
@@ -38,6 +39,7 @@ impl<'reports> HirLowering<'reports> {
                 module.mono_items.push(monomorphized_item);
             }
         }
+        self.pop_scope();
     }
 
     fn get_type_arguments(
@@ -74,6 +76,7 @@ impl<'reports> HirLowering<'reports> {
         self.current_mono_id = Some(id.clone());
         match (&original_symbol.kind, &original_item.kind) {
             (SymbolKind::Function { signature: sig, .. }, IrItemKind::Function(func)) => {
+                self.push_scope(ScopeType::Function(func.id));
                 let signature = if let Some(data) = &entry.data
                     && let MonomorphizationData::Signature(signature) = data
                 {
@@ -89,6 +92,7 @@ impl<'reports> HirLowering<'reports> {
                     func,
                     concrete_types,
                 );
+                self.pop_scope();
 
                 Some(IrItem {
                     name: mangled_name,
@@ -98,6 +102,7 @@ impl<'reports> HirLowering<'reports> {
                 })
             }
             (SymbolKind::Struct { generics, .. }, IrItemKind::Struct(struct_def)) => {
+                self.push_scope(ScopeType::Struct(struct_def.id));
                 let Some(type_arguments) = self.get_type_arguments(generics, concrete_types) else {
                     return None;
                 };
@@ -107,6 +112,7 @@ impl<'reports> HirLowering<'reports> {
                 let monomorphized_struct =
                     self.monomorphize_struct(mangled_name.clone(), struct_def, concrete_types);
 
+                self.pop_scope();
                 Some(IrItem {
                     name: mangled_name,
                     kind: IrItemKind::Struct(monomorphized_struct),
@@ -116,7 +122,10 @@ impl<'reports> HirLowering<'reports> {
             }
             (SymbolKind::EnumVariant { parent_enum, data }, IrItemKind::EnumVariant(variant)) => {
                 let parent_enum = self.symbol_table.get_symbol_unchecked(&parent_enum);
-                let SymbolKind::Enum { generics, .. } = &parent_enum.kind else { unreachable!() };
+                let SymbolKind::Enum { generics, id, .. } = &parent_enum.kind else {
+                    unreachable!()
+                };
+                self.push_scope(ScopeType::Enum(*id));
 
                 let Some(type_arguments) = self.get_type_arguments(generics, concrete_types) else {
                     return None;
@@ -126,6 +135,7 @@ impl<'reports> HirLowering<'reports> {
                     self.mangle_monomorphized_symbol(original_id, *id, &type_arguments);
                 let mono_enum =
                     self.monomorphize_enum(mangled_name.clone(), variant, concrete_types);
+                self.pop_scope();
 
                 Some(IrItem {
                     name: mangled_name,
@@ -175,7 +185,7 @@ impl<'reports> HirLowering<'reports> {
                 IrField { name: field.name.clone(), ty: substituted_ty }
             })
             .collect_vec();
-        IrStruct { name, fields }
+        IrStruct { name, fields, id: struct_def.id.clone() }
     }
 
     fn monomorphize_function(
@@ -208,6 +218,7 @@ impl<'reports> HirLowering<'reports> {
             is_const: original.is_const,
             is_extern: original.is_extern,
             abi: original.abi.clone(),
+            id: original.id.clone(),
         }
     }
 
@@ -509,30 +520,6 @@ impl<'reports> HirLowering<'reports> {
                 .collect();
 
             return self.mangle_monomorphized_symbol(entry.original_id, mono_id, &type_arguments);
-        }
-
-        panic!("Monomorphization ID {mono_id:?} not found")
-    }
-
-    pub fn get_monomorphized_name_for_call(
-        &mut self,
-        mono_id: MonomorphizationId,
-        call_info: Option<&CallInfo>,
-    ) -> String {
-        if let Some(entry) = self.mono_table.entries.get(&mono_id) {
-            let original_symbol = self.symbol_table.get_symbol_unchecked(&entry.original_id);
-            let generics = self.get_generics_for_symbol(&original_symbol);
-
-            let type_arguments: Vec<Type> = generics
-                .iter()
-                .filter_map(|param| entry.concrete_types.get(&param.name))
-                .cloned()
-                .collect();
-
-            let base_name =
-                self.mangle_monomorphized_symbol(entry.original_id, mono_id, &type_arguments);
-
-            return format!("{base_name}_constructor");
         }
 
         panic!("Monomorphization ID {mono_id:?} not found")

@@ -4,13 +4,15 @@ mod mangling;
 mod monomorphization;
 
 use std::collections::HashMap;
-use zirael_parser::{BinaryOp, Literal, MonomorphizationId, SymbolId, Type, UnaryOp};
+use zirael_parser::{AstId, BinaryOp, Literal, MonomorphizationId, SymbolId, Type, UnaryOp};
 
 pub use lowering::*;
 use zirael_hir::hir::HirVariant;
+use zirael_utils::prelude::SourceFileId;
 
 #[derive(Clone, Debug)]
 pub struct IrModule {
+    pub id: SourceFileId,
     pub items: Vec<IrItem>,
     pub mono_items: Vec<IrItem>,
 }
@@ -45,6 +47,7 @@ impl IrItemKind {
 
 #[derive(Clone, Debug)]
 pub struct IrFunction {
+    pub id: AstId,
     pub name: String,
     pub parameters: Vec<IrParam>,
     pub return_type: Type,
@@ -57,6 +60,7 @@ pub struct IrFunction {
 
 #[derive(Clone, Debug)]
 pub struct IrStruct {
+    pub id: AstId,
     pub name: String,
     pub fields: Vec<IrField>,
 }

@@ -80,11 +80,11 @@ impl<'reports> HirLowering<'reports> {
             .collect::<Vec<_>>()
     }
 
-    fn push_scope(&mut self, scope_type: ScopeType) {
+    pub fn push_scope(&mut self, scope_type: ScopeType) {
         let _ = self.symbol_table.push_scope(scope_type);
     }
 
-    fn pop_scope(&mut self) -> Vec<DropStackEntry> {
+    pub fn pop_scope(&mut self) -> Vec<DropStackEntry> {
         let pop = self.symbol_table.pop_scope().unwrap();
         self.symbol_table.get_scope_unchecked(pop).drop_stack
     }
@@ -120,7 +120,7 @@ impl<'reports> HirLowering<'reports> {
         lexed_module: &mut HirModule,
         main_function_id: &mut Option<MainFunction>,
     ) -> IrModule {
-        let mut ir_module = IrModule { items: vec![], mono_items: vec![] };
+        let mut ir_module = IrModule { items: vec![], mono_items: vec![], id: lexed_module.id };
 
         self.push_scope(ScopeType::Module(lexed_module.id));
         self.processed_file = Some(lexed_module.id);
@@ -213,8 +213,7 @@ impl<'reports> HirLowering<'reports> {
     fn lower_enum(&mut self, name: String, hir_enum: &mut HirEnum) -> IrEnum {
         self.push_scope(ScopeType::Enum(hir_enum.id));
         self.lower_methods(&mut hir_enum.methods);
-        self.pop_scope();
-        
+
         let variants = hir_enum
             .variants
             .iter()
@@ -229,6 +228,7 @@ impl<'reports> HirLowering<'reports> {
                 },
             })
             .collect_vec();
+        self.pop_scope();
 
         for variant in &variants {
             self.current_items.push(IrItem {
@@ -238,11 +238,8 @@ impl<'reports> HirLowering<'reports> {
                 mono_id: None,
             });
         }
-        
-        IrEnum {
-            variants,
-            name,
-        }
+
+        IrEnum { variants, name }
     }
 
     fn lower_fields(&mut self, fields: Vec<StructField>) -> Vec<IrField> {
@@ -263,8 +260,9 @@ impl<'reports> HirLowering<'reports> {
     ) -> IrStruct {
         self.push_scope(ScopeType::Struct(hir_struct.id));
         self.lower_methods(&mut hir_struct.methods);
+        let fields = self.lower_fields(fields);
         self.pop_scope();
-        IrStruct { fields: self.lower_fields(fields), name }
+        IrStruct { fields, name, id: hir_struct.id }
     }
 
     fn lower_function(&mut self, name: String, func: &mut HirFunction) -> IrFunction {
@@ -280,6 +278,7 @@ impl<'reports> HirLowering<'reports> {
             .collect::<Vec<_>>();
 
         let mut body = self.lower_body(func.body.clone());
+        let return_type = self.lower_type(func.signature.return_type.clone());
         let entries = self.pop_scope();
         if let Some(body) = &mut body {
             self.add_drop(entries, &mut body.stmts);
@@ -288,12 +287,13 @@ impl<'reports> HirLowering<'reports> {
         IrFunction {
             name,
             parameters,
-            return_type: self.lower_type(func.signature.return_type.clone()),
+            return_type,
             body,
             is_extern: func.is_extern,
             is_const: func.is_const,
             is_async: func.is_async,
             abi: func.abi.clone(),
+            id: func.id,
         }
     }
 
@@ -426,28 +426,37 @@ impl<'reports> HirLowering<'reports> {
             HirExprKind::Block(stms) => IrExprKind::Block(self.lower_block(stms, expr.id)),
             HirExprKind::Literal(literal) => IrExprKind::Literal(literal),
             HirExprKind::Call { callee, args, call_info } => {
-                let identifier = if let Some(call_info) = call_info {
+                let (identifier, symbol_id) = if let Some(call_info) = call_info {
                     if let Some(mono_id) = call_info.monomorphized_id {
                         self.new_relation(SymbolRelationNode::Monomorphization(mono_id));
-                        self.get_monomorphized_name_for_call(mono_id, Some(&call_info))
+                        (self.get_monomorphized_name(mono_id), call_info.original_symbol)
                     } else {
                         self.new_relation(SymbolRelationNode::Symbol(call_info.original_symbol));
-                        self.mangle_symbol(call_info.original_symbol)
+                        (self.mangle_symbol(call_info.original_symbol), call_info.original_symbol)
                     }
                 } else if let HirExprKind::Symbol(id) = callee.kind {
                     self.new_relation(SymbolRelationNode::Symbol(id));
-                    self.mangle_symbol(id)
+                    (self.mangle_symbol(id), id)
                 } else {
                     unreachable!("Invalid call expression structure")
                 };
                 let args = args.iter().map(|arg| self.lower_expr(arg.clone())).collect::<Vec<_>>();
 
-                IrExprKind::Call(identifier, args)
+                IrExprKind::Call(
+                    if let SymbolKind::EnumVariant { .. } =
+                        self.symbol_table.get_symbol_unchecked(&symbol_id).kind
+                    {
+                        format!("{}_constructor", identifier)
+                    } else {
+                        identifier
+                    },
+                    args,
+                )
             }
             HirExprKind::StructInit { name, fields, call_info } => {
                 let constructor_identifier = if let Some(call_info) = &call_info {
                     if let Some(mono_id) = call_info.monomorphized_id {
-                        self.get_monomorphized_name_for_call(mono_id, Some(call_info))
+                        self.get_monomorphized_name(mono_id)
                     } else {
                         self.mangle_symbol(call_info.original_symbol)
                     }

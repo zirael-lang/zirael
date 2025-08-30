@@ -93,8 +93,6 @@ impl<'reports> TypeInference<'reports> {
             }
         }
 
-        println!("{:?}", generic_mapping);
-
         if enum_generics.is_empty() {
             Type::Named { name: enum_name, generics: vec![] }
         } else {

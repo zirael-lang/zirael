@@ -242,7 +242,7 @@ impl<'reports> AstWalker<'reports> for NameResolution<'reports> {
         }
 
         for arg in _args {
-            self.visit_expr(arg);
+            self.walk_expr(arg);
         }
     }
 }

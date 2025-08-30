@@ -318,6 +318,7 @@ impl<'reports> AstWalker<'reports> for DeclarationCollection<'reports> {
                         generics: enum_def.generics.clone(),
                         variants: vec![],
                         methods: vec![],
+                        id: enum_def.id,
                     },
                     enum_def.span.clone(),
                 );
@@ -354,6 +355,7 @@ impl<'reports> AstWalker<'reports> for DeclarationCollection<'reports> {
                         generics: enum_def.generics.clone(),
                         variants,
                         methods: methods.clone(),
+                        id: enum_def.id,
                     })
                     .unwrap();
 

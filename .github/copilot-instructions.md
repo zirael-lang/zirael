@@ -1,11 +1,13 @@
 # Zirael Compiler Development Guide
 
-Zirael is a systems programming language compiler written in Rust that compiles `.zr` source files to C code. Understanding the multi-stage compilation pipeline and crate architecture is essential for effective development.
+Zirael is a systems programming language compiler written in Rust that compiles `.zr` source files to C code.
+Understanding the multi-stage compilation pipeline and crate architecture is essential for effective development.
 
 ## Architecture Overview
 
 The compiler follows a traditional multi-pass architecture with these core crates:
-- `zirael_parser` - Lexing, parsing, and AST generation 
+
+- `zirael_parser` - Lexing, parsing, and AST generation
 - `zirael_core` - Compilation orchestration and semantic analysis passes
 - `zirael_type_checker` - Type inference and monomorphization
 - `zirael_hir` - High-level IR lowering and optimizations
@@ -30,6 +32,7 @@ Each pass uses the AST walker pattern (`impl_ast_walker!` macro) for traversal.
 ## Development Workflows
 
 ### Building and Testing
+
 ```bash
 # Build entire workspace
 cargo check --workspace --all-features --all-targets
@@ -43,7 +46,10 @@ just fix                        # Auto-fix formatting and lints
 just lint                       # Run clippy with strict settings
 ```
 
+When running multiple commends don't use statement separators.
+
 ### Language File Extension
+
 - Source files use `.zr` extension (defined as `FILE_EXTENSION` constant)
 - Standard library is in `std/src/lib.zr`
 - Example files in `playground/` directory
@@ -51,48 +57,61 @@ just lint                       # Run clippy with strict settings
 ## Critical Patterns
 
 ### Error Reporting
+
 Use the `Reports` system from `zirael_utils::reports` for all diagnostics:
+
 ```rust
 reports.add(source_id, ReportBuilder::error()
-    .with_message("Type mismatch")
-    .with_label(Label::new(span).with_message("Expected int, found string")));
+.with_message("Type mismatch")
+.with_label(Label::new(span).with_message("Expected int, found string")));
 ```
 
 ### Symbol Table Access
+
 All passes receive symbols through constructor: `PassName::new(symbols, reports, sources)`
+
 - Lookup: `self.symbol_table.lookup_symbol(name)`
 - Symbol kinds: Function, Struct, Variable, etc.
 
 ### Type System
+
 - Generic types use monomorphization table (`MonomorphizationTable`)
 - Type inference creates `MonomorphizedSymbol` for concrete generic instantiations
 - Type equality checking via `TypeInference::eq()` handles monomorphization
 
 ### AST Walker Pattern
+
 Implement semantic analysis passes using the walker macro:
+
 ```rust
 impl_ast_walker!(YourPass, {
     // your context fields
 });
 ```
+
 Override specific visit methods like `visit_function`, `visit_struct_definition`.
 
 ## Integration Points
 
 ### CLI Interface (`compiler_cli/src/cli.rs`)
+
 - Entry point accepts `.zr` file, compilation mode, output path
 - Supports dependency packages via `-d` flag: `name:write_to=entrypoint`
 - Modes: debug/release affect IR generation
 
 ### Context Sharing
+
 `Context` object (in `zirael_core`) provides shared access to:
+
 - Source files (`Sources`)
-- Symbol table (`SymbolTable`) 
+- Symbol table (`SymbolTable`)
 - Error reports (`Reports`)
 - Package registry (`Packages`)
 
 ### Code Generation
-Final stage outputs C headers/source to specified directory. Generated C code structure depends on `LibType` (static/dynamic library).
+
+Final stage outputs C headers/source to specified directory. Generated C code structure depends on `LibType` (
+static/dynamic library).
 
 ## Project Conventions
 

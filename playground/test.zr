@@ -10,5 +10,7 @@ struct Person {
 fn main() {
     var _some = Option::Some(10);
     var _sd = Option::Some(Person { age: 25 });
+    var _sw = Option::Some("test");
     var _none = Option::None;
+    var _person = Person { age: 45 };
 }
