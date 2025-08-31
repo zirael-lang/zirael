@@ -1,8 +1,5 @@
 use crate::prelude::{WalkerContext, warn};
-use zirael_parser::{
-    AstWalker, CallInfo, Expr, ExprKind, ScopeType, Symbol, SymbolId, SymbolKind,
-    SymbolRelationNode, SymbolTable, Type, impl_ast_walker, item::Item,
-};
+use zirael_parser::{AstWalker, CallInfo, Expr, ExprKind, ScopeType, Symbol, SymbolId, SymbolKind, SymbolRelationNode, SymbolTable, Type, impl_ast_walker, item::Item, MatchArm, Pattern};
 use zirael_utils::prelude::*;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -135,6 +132,29 @@ impl<'reports> NameResolution<'reports> {
         }
         report
     }
+
+    fn visit_static_call_base(&mut self, _callee: &mut Expr) {
+        let ExprKind::FieldAccess(fields) = &mut _callee.kind else {
+            self.error("expected field access in static call", vec![], vec![]);
+            return;
+        };
+
+        let base = &mut fields[0];
+        let span = base.span.clone();
+        let Some((ident, ident_sym_id)) = base.as_identifier_mut() else {
+            self.error("expected identifier in field access", vec![], vec![]);
+            return;
+        };
+
+        if let Some(id) = self.resolve_identifier(ident, span, ExpectedSymbol::Type) {
+            *ident_sym_id = Some(id);
+
+            self.symbol_table.new_relation(
+                SymbolRelationNode::Symbol(self.current_item.unwrap()),
+                SymbolRelationNode::Symbol(id),
+            );
+        }
+    }
 }
 
 impl<'reports> AstWalker<'reports> for NameResolution<'reports> {
@@ -221,29 +241,17 @@ impl<'reports> AstWalker<'reports> for NameResolution<'reports> {
         _args: &mut Vec<Expr>,
         _: &mut Option<CallInfo>,
     ) {
-        let ExprKind::FieldAccess(fields) = &mut _callee.kind else {
-            self.error("expected field access in static call", vec![], vec![]);
-            return;
-        };
-
-        let base = &mut fields[0];
-        let span = base.span.clone();
-        let Some((ident, ident_sym_id)) = base.as_identifier_mut() else {
-            self.error("expected identifier in field access", vec![], vec![]);
-            return;
-        };
-
-        if let Some(id) = self.resolve_identifier(ident, span, ExpectedSymbol::Type) {
-            *ident_sym_id = Some(id);
-
-            self.symbol_table.new_relation(
-                SymbolRelationNode::Symbol(self.current_item.unwrap()),
-                SymbolRelationNode::Symbol(id),
-            );
-        }
+        self.visit_static_call_base(_callee);
 
         for arg in _args {
             self.walk_expr(arg);
+        }
+    }
+
+    fn visit_match_arm(&mut self, _arm: &mut MatchArm) {
+        match &mut _arm.pattern {
+            Pattern::EnumVariant { path, ..} => self.visit_static_call_base(path),
+            _ => {}
         }
     }
 }

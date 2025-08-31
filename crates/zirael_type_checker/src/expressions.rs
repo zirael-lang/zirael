@@ -795,98 +795,103 @@ impl<'reports> TypeInference<'reports> {
 
   fn check_enum_variant_pattern_compatibility(
     &mut self,
-    path: &Vec<Identifier>,
+    path: &mut Box<Expr>,
     span: Span,
-    pattern_fields: &Option<Vec<PatternField>>,
+    pattern_fields: &mut Option<Vec<PatternField>>,
     scrutinee_ty: &Type,
   ) -> Option<SymbolId> {
-    let base_sym = self.symbol_table.lookup_symbol(&path[0]);
+    let ExprKind::FieldAccess(fields) = &mut path.kind else {
+      return None;
+    };
 
-    let ident = &path[1];
-    if let Some(base_sym) = base_sym {
-      match &base_sym.kind {
-        SymbolKind::Enum { methods: _, variants, generics: enum_generics, .. } => {
-          let mut variant_sym_id = None;
-          for variant in variants {
-            let variant_symbol = self.symbol_table.get_symbol_unchecked(&variant);
-            if variant_symbol.name == *ident {
-              variant_sym_id = Some(variant);
-              break;
-            }
+    let Some((_, sym_id)) = fields[0].as_identifier_unchecked() else {
+      self.non_struct_type(fields[0].span.clone(), file!(), line!());
+      return None;
+    };
+
+    let Some((ident, call_id)) = fields[1].as_identifier_mut() else {
+      self.error(
+        "right now, only one level of static calls are supported",
+        vec![("in this field access".to_string(), fields[1].span.clone())],
+        vec![],
+      );
+      return None;
+    };
+
+    let sym = self.symbol_table.get_symbol_unchecked(&sym_id);
+    match &sym.kind {
+      SymbolKind::Enum { methods: _, variants, generics: enum_generics, .. } => {
+        let mut variant_sym_id = None;
+        for variant in variants {
+          let variant_symbol = self.symbol_table.get_symbol_unchecked(&variant);
+          if variant_symbol.name == *ident {
+            variant_sym_id = Some(variant);
+            break;
           }
+        }
 
-          if let Some(variant_id) = variant_sym_id {
-            let variant_sym = self.symbol_table.get_symbol_unchecked(&variant_id);
+        if let Some(variant_id) = variant_sym_id {
+          let variant_sym = self.symbol_table.get_symbol_unchecked(&variant_id);
 
-            if let SymbolKind::EnumVariant { data, .. } = &variant_sym.kind {
-              match data {
-                EnumVariantData::Unit => Some(*variant_id),
-                EnumVariantData::Struct(variant_fields) => {
-                  if let Some(pf) = pattern_fields {
-                    for field in pf {
-                      if let Some(str_field) = variant_fields.iter().find(|f| f.name == field.name)
-                      {
-                        let mut field_ty = str_field.ty.clone();
+          if let SymbolKind::EnumVariant { data, .. } = &variant_sym.kind {
+            match data {
+              EnumVariantData::Unit => Some(*variant_id),
+              EnumVariantData::Struct(variant_fields) => {
+                if let Some(pf) = pattern_fields {
+                  for field in pf {
+                    if let Some(str_field) = variant_fields.iter().find(|f| f.name == field.name) {
+                      let mut field_ty = str_field.ty.clone();
 
-                        if let Type::Named { generics: concrete_generics, .. } = scrutinee_ty {
-                          if !enum_generics.is_empty() && !concrete_generics.is_empty() {
-                            self.substitute_generic_params(
-                              &mut field_ty,
-                              enum_generics,
-                              concrete_generics,
-                            );
-                          }
+                      if let Type::Named { generics: concrete_generics, .. } = scrutinee_ty {
+                        if !enum_generics.is_empty() && !concrete_generics.is_empty() {
+                          self.substitute_generic_params(
+                            &mut field_ty,
+                            enum_generics,
+                            concrete_generics,
+                          );
                         }
-
-                        self.ctx.add_variable(field.sym_id.unwrap(), field_ty);
-                      } else {
-                        self.error(
-                          &format!(
-                            "no field named {} found for this pattern",
-                            field.name.to_string().dimmed().bold()
-                          ),
-                          vec![("here".to_string(), span)],
-                          vec![],
-                        );
-                        return None;
                       }
+
+                      field.ty = Some(field_ty.clone());
+                      self.ctx.add_variable(field.sym_id.unwrap(), field_ty);
+                    } else {
+                      self.error(
+                        &format!(
+                          "no field named {} found for this pattern",
+                          field.name.to_string().dimmed().bold()
+                        ),
+                        vec![("here".to_string(), span)],
+                        vec![],
+                      );
+                      return None;
                     }
                   }
-
-                  Some(*variant_id)
                 }
+
+                Some(*variant_id)
               }
-            } else {
-              self.error(
-                "can only match enum variants with struct data",
-                vec![("here".to_string(), span)],
-                vec![],
-              );
-              None
             }
           } else {
             self.error(
-              &format!(
-                "no variant named {} found for this pattern",
-                path[1].to_string().dimmed().bold()
-              ),
+              "can only match enum variants with struct data",
               vec![("here".to_string(), span)],
               vec![],
             );
             None
           }
-        }
-        _ => {
-          todo!()
+        } else {
+          self.error(
+            // TODO: probably would want to add a name of this pattern
+            &format!("no variant found for this pattern",),
+            vec![("here".to_string(), span)],
+            vec![],
+          );
+          None
         }
       }
-    } else {
-      self.error(
-        &format!("no enum named {} found for this pattern", path[0].to_string().dimmed().bold()),
-        vec![("here".to_string(), span)],
-        vec![],
-      );
-      None
+      _ => {
+        todo!()
+      }
     }
   }
 }

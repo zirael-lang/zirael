@@ -18,4 +18,9 @@ fn main() {
             error
         }
     };
+
+    var _test = match 10 {
+        10 => "yay",
+        0 => "not yay"
+    };
 }

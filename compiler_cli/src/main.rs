@@ -5,8 +5,8 @@ use zirael_core::prelude::*;
 mod cli;
 
 fn main() {
-    if let Err(e) = try_cli() {
-        error!("{e:?}");
-        exit(1);
-    }
+  if let Err(e) = try_cli() {
+    error!("{e:?}");
+    exit(1);
+  }
 }
