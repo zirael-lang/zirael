@@ -512,6 +512,11 @@ impl<'reports> HirLowering<'reports> {
                 Box::new(self.lower_expr(*true_expr)),
                 Box::new(self.lower_expr(*false_expr)),
             ),
+            HirExprKind::If { condition, then_branch, else_branch } => IrExprKind::If {
+                condition: Box::new(self.lower_expr(*condition)),
+                then_branch: Box::new(self.lower_expr(*then_branch)),
+                else_branch: else_branch.map(|e| Box::new(self.lower_expr(*e))),
+            },
             _ => {
                 warn!("unhandled expression: {expr:?}");
                 IrExprKind::Symbol(String::new())

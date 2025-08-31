@@ -209,6 +209,134 @@ impl<'reports> AstLowering<'reports> {
         self.lower_expr_impl(ast_expr, ExprContext::Stmt)
     }
 
+    fn lower_expr_no_constant_fold(&mut self, ast_expr: &mut Expr) -> HirExpr {
+        let hir_kind = match &mut ast_expr.kind {
+            ExprKind::Identifier(_name, Some(symbol_id)) => HirExprKind::Symbol(*symbol_id),
+
+            ExprKind::Identifier(name, None) => {
+                if let Some(symbol) = self.symbol_table.lookup_symbol(name) {
+                    HirExprKind::Symbol(symbol.id)
+                } else {
+                    self.error("Unresolved identifier", vec![], vec![]);
+                    HirExprKind::Error
+                }
+            }
+
+            ExprKind::FieldAccess(fields) => {
+                let base = &mut fields[0].clone();
+                let sym_id = if let Some((_, symbol_id)) = self.symbol_table.symbol_from_expr(base)
+                {
+                    FieldSymbol::Symbol(symbol_id)
+                } else {
+                    FieldSymbol::Expr(Box::new(self.lower_expr_no_constant_fold(base)))
+                };
+                fields.remove(0);
+
+                let mut indents = vec![];
+                for field in fields {
+                    let (ident, _) = field.as_identifier().unwrap();
+                    indents.push((
+                        *ident,
+                        if field.ty.is_reference() {
+                            AccessKind::Pointer
+                        } else {
+                            AccessKind::Value
+                        },
+                    ));
+                }
+                let main_access =
+                    if base.ty.is_reference() { AccessKind::Pointer } else { AccessKind::Value };
+
+                HirExprKind::FieldAccess { base_field: sym_id, main_access, fields: indents }
+            }
+
+            ExprKind::IndexAccess(object, index) => {
+                let object_expr = Box::new(self.lower_expr_no_constant_fold(object));
+                let index_expr = Box::new(self.lower_expr(index));
+                HirExprKind::IndexAccess { object: object_expr, index: index_expr }
+            }
+
+            _ => {
+                return self.lower_expr_impl_no_fold(ast_expr, ExprContext::Expr);
+            }
+        };
+
+        HirExpr {
+            kind: hir_kind,
+            ty: ast_expr.ty.clone(),
+            span: ast_expr.span.clone(),
+            id: ast_expr.id,
+        }
+    }
+
+    fn lower_expr_impl_no_fold(&mut self, ast_expr: &mut Expr, context: ExprContext) -> HirExpr {
+        let hir_kind = match &mut ast_expr.kind {
+            ExprKind::Identifier(_name, Some(symbol_id)) => HirExprKind::Symbol(*symbol_id),
+
+            ExprKind::Identifier(name, None) => {
+                if let Some(symbol) = self.symbol_table.lookup_symbol(name) {
+                    HirExprKind::Symbol(symbol.id)
+                } else {
+                    self.error("Unresolved identifier", vec![], vec![]);
+                    HirExprKind::Error
+                }
+            }
+
+            ExprKind::Literal(literal) => HirExprKind::Literal(literal.clone()),
+
+            ExprKind::Binary { left, op, right } => {
+                let left_expr = Box::new(self.lower_expr(left));
+                let right_expr = Box::new(self.lower_expr(right));
+                HirExprKind::Binary { left: left_expr, op: op.clone(), right: right_expr }
+            }
+
+            ExprKind::Unary(op, operand) => {
+                let operand_expr = Box::new(self.lower_expr(operand));
+                HirExprKind::Unary { op: *op.clone(), operand: operand_expr }
+            }
+
+            ExprKind::Assign(lhs, rhs) => {
+                let lhs_expr = Box::new(self.lower_expr_no_constant_fold(lhs));
+                let rhs_expr = Box::new(self.lower_expr(rhs));
+                HirExprKind::Assign { lhs: lhs_expr, rhs: rhs_expr }
+            }
+
+            ExprKind::AssignOp(lhs, op, rhs) => {
+                let lhs_expr = Box::new(self.lower_expr_no_constant_fold(lhs));
+                let rhs_expr = Box::new(self.lower_expr(rhs));
+                HirExprKind::Assign {
+                    lhs: lhs_expr.clone(),
+                    rhs: Box::new(HirExpr {
+                        kind: HirExprKind::Binary {
+                            left: lhs_expr,
+                            op: op.clone(),
+                            right: rhs_expr,
+                        },
+                        ty: ast_expr.ty.clone(),
+                        span: ast_expr.span.clone(),
+                        id: ast_expr.id,
+                    }),
+                }
+            }
+
+            _ => {
+                return HirExpr {
+                    kind: self.lower_expr_impl(ast_expr, context).kind,
+                    ty: ast_expr.ty.clone(),
+                    span: ast_expr.span.clone(),
+                    id: ast_expr.id,
+                };
+            }
+        };
+
+        HirExpr {
+            kind: hir_kind,
+            ty: ast_expr.ty.clone(),
+            span: ast_expr.span.clone(),
+            id: ast_expr.id,
+        }
+    }
+
     fn lower_call_args(&mut self, args: &mut Vec<Expr>) -> Vec<HirExpr> {
         args.iter_mut().map(|arg| self.lower_expr(arg)).collect()
     }
@@ -251,13 +379,13 @@ impl<'reports> AstLowering<'reports> {
             }
 
             ExprKind::Assign(lhs, rhs) => {
-                let lhs_expr = Box::new(self.lower_expr(lhs));
+                let lhs_expr = Box::new(self.lower_expr_no_constant_fold(lhs));
                 let rhs_expr = Box::new(self.lower_expr(rhs));
                 HirExprKind::Assign { lhs: lhs_expr, rhs: rhs_expr }
             }
 
             ExprKind::AssignOp(lhs, op, rhs) => {
-                let lhs_expr = Box::new(self.lower_expr(lhs));
+                let lhs_expr = Box::new(self.lower_expr_no_constant_fold(lhs));
                 let rhs_expr = Box::new(self.lower_expr(rhs));
                 HirExprKind::Assign {
                     lhs: lhs_expr.clone(),
@@ -421,8 +549,9 @@ impl<'reports> AstLowering<'reports> {
 
                             hir_stmts.push(HirStmt::Var { symbol_id, init: expr });
                         }
-                        StmtKind::If(_if_stmt) => {
-                            todo!("HIR lowering for if statements not yet implemented");
+                        StmtKind::If(if_stmt) => {
+                            let hir_if = self.lower_if_stmt(if_stmt);
+                            hir_stmts.push(HirStmt::Expr(hir_if));
                         }
                     }
                 }
@@ -554,6 +683,97 @@ impl<'reports> AstLowering<'reports> {
         };
 
         HirPatternField { name: field.name, symbol_id, pattern, span: field.span.clone() }
+    }
+
+    fn lower_if_stmt(&mut self, if_stmt: &mut If) -> HirExpr {
+        let condition = Box::new(self.lower_expr(&mut if_stmt.condition));
+
+        self.push_scope(ScopeType::Block(if_stmt.then_branch_id));
+        let then_branch_stmts = if_stmt
+            .then_branch
+            .iter_mut()
+            .map(|stmt| match &mut stmt.0 {
+                StmtKind::Expr(expr) => {
+                    let lowered_expr = self.lower_expr_stmt(expr);
+                    HirStmt::Expr(lowered_expr)
+                }
+                StmtKind::Return(ret) => {
+                    HirStmt::Return(ret.value.clone().map(|mut e| self.lower_expr(&mut e)))
+                }
+                StmtKind::Var(var_stmt) => {
+                    let symbol_id = var_stmt.symbol_id.unwrap();
+                    let expr = self.lower_expr(&mut var_stmt.value);
+                    if self.can_be_folded(&expr.kind) {
+                        let folded = self.try_to_constant_fold(expr.kind.clone());
+                        self.folded_vars.insert(symbol_id, folded);
+                    }
+                    HirStmt::Var { symbol_id, init: expr }
+                }
+                StmtKind::If(nested_if) => {
+                    let nested_hir_if = self.lower_if_stmt(nested_if);
+                    HirStmt::Expr(nested_hir_if)
+                }
+            })
+            .collect::<Vec<_>>();
+        self.pop_scope();
+
+        let then_branch = Box::new(HirExpr {
+            kind: HirExprKind::Block(then_branch_stmts),
+            ty: Type::Void,
+            span: if_stmt.span.clone(),
+            id: if_stmt.then_branch_id,
+        });
+
+        let else_branch = if let Some(ref mut else_branch) = if_stmt.else_branch {
+            match else_branch {
+                ElseBranch::Block(stmts, block_id) => {
+                    self.push_scope(ScopeType::Block(*block_id));
+                    let else_stmts = stmts
+                        .iter_mut()
+                        .map(|stmt| match &mut stmt.0 {
+                            StmtKind::Expr(expr) => {
+                                let lowered_expr = self.lower_expr_stmt(expr);
+                                HirStmt::Expr(lowered_expr)
+                            }
+                            StmtKind::Return(ret) => HirStmt::Return(
+                                ret.value.clone().map(|mut e| self.lower_expr(&mut e)),
+                            ),
+                            StmtKind::Var(var_stmt) => {
+                                let symbol_id = var_stmt.symbol_id.unwrap();
+                                let expr = self.lower_expr(&mut var_stmt.value);
+                                if self.can_be_folded(&expr.kind) {
+                                    let folded = self.try_to_constant_fold(expr.kind.clone());
+                                    self.folded_vars.insert(symbol_id, folded);
+                                }
+                                HirStmt::Var { symbol_id, init: expr }
+                            }
+                            StmtKind::If(nested_if) => {
+                                let nested_hir_if = self.lower_if_stmt(nested_if);
+                                HirStmt::Expr(nested_hir_if)
+                            }
+                        })
+                        .collect::<Vec<_>>();
+                    self.pop_scope();
+
+                    Some(Box::new(HirExpr {
+                        kind: HirExprKind::Block(else_stmts),
+                        ty: Type::Void,
+                        span: if_stmt.span.clone(),
+                        id: *block_id,
+                    }))
+                }
+                ElseBranch::If(nested_if) => Some(Box::new(self.lower_if_stmt(nested_if))),
+            }
+        } else {
+            None
+        };
+
+        HirExpr {
+            kind: HirExprKind::If { condition, then_branch, else_branch },
+            ty: Type::Void,
+            span: if_stmt.span.clone(),
+            id: if_stmt.then_branch_id,
+        }
     }
 }
 

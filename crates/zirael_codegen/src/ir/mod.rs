@@ -142,6 +142,7 @@ pub enum IrExprKind {
     CCall(String, Vec<IrExpr>),
     FieldAccess(Vec<IrExpr>),
     Ternary(Box<IrExpr>, Box<IrExpr>, Box<IrExpr>),
+    If { condition: Box<IrExpr>, then_branch: Box<IrExpr>, else_branch: Option<Box<IrExpr>> },
     // type provided to, for example, a sizeof call
     Type(Type),
 }

@@ -121,7 +121,10 @@ impl<'reports> HirLowering<'reports> {
                     mono_id: Some(*id),
                 })
             }
-            (SymbolKind::EnumVariant { parent_enum, data: _ }, IrItemKind::EnumVariant(variant)) => {
+            (
+                SymbolKind::EnumVariant { parent_enum, data: _ },
+                IrItemKind::EnumVariant(variant),
+            ) => {
                 let parent_enum = self.symbol_table.get_symbol_unchecked(parent_enum);
                 let SymbolKind::Enum { generics, id, .. } = &parent_enum.kind else {
                     unreachable!()
@@ -324,6 +327,14 @@ impl<'reports> HirLowering<'reports> {
                 Box::new(self.monomorphize_expr(tr, type_map)),
                 Box::new(self.monomorphize_expr(fl, type_map)),
             ),
+
+            IrExprKind::If { condition, then_branch, else_branch } => IrExprKind::If {
+                condition: Box::new(self.monomorphize_expr(condition, type_map)),
+                then_branch: Box::new(self.monomorphize_expr(then_branch, type_map)),
+                else_branch: else_branch
+                    .as_ref()
+                    .map(|e| Box::new(self.monomorphize_expr(e, type_map))),
+            },
         };
 
         IrExpr { ty, kind }

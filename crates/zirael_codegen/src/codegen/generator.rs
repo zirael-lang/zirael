@@ -373,7 +373,15 @@ impl Gen for IrStmt {
 
                 p.write_indented("");
                 expr.generate(p);
-                p.write(";\n");
+
+                match &expr.kind {
+                    IrExprKind::If { .. } | IrExprKind::Block(_) => {
+                        p.write("\n");
+                    }
+                    _ => {
+                        p.write(";\n");
+                    }
+                }
             }
             Self::Return(expr) => {
                 if let Some(expr) = expr {
@@ -518,6 +526,59 @@ impl Gen for IrExpr {
                 true_expr.generate(p);
                 p.write(" : ");
                 false_expr.generate(p);
+            }
+            IrExprKind::If { condition, then_branch, else_branch } => {
+                p.write("if (");
+                condition.generate(p);
+                p.write(")");
+
+                match &then_branch.kind {
+                    IrExprKind::Block(block) => {
+                        p.writeln(" {");
+                        p.indent();
+                        for stmt in &block.stmts {
+                            stmt.generate(p);
+                        }
+                        p.dedent();
+                        p.write_indented("}");
+                    }
+                    _ => {
+                        p.writeln(" {");
+                        p.indent();
+                        p.write_indented("");
+                        then_branch.generate(p);
+                        p.writeln(";");
+                        p.dedent();
+                        p.write_indented("}");
+                    }
+                }
+
+                if let Some(else_branch) = else_branch {
+                    match &else_branch.kind {
+                        IrExprKind::Block(block) => {
+                            p.writeln(" else {");
+                            p.indent();
+                            for stmt in &block.stmts {
+                                stmt.generate(p);
+                            }
+                            p.dedent();
+                            p.write_indented("}");
+                        }
+                        IrExprKind::If { .. } => {
+                            p.write(" else ");
+                            else_branch.generate(p);
+                        }
+                        _ => {
+                            p.writeln(" else {");
+                            p.indent();
+                            p.write_indented("");
+                            else_branch.generate(p);
+                            p.writeln(";");
+                            p.dedent();
+                            p.write_indented("}");
+                        }
+                    }
+                }
             }
         }
     }

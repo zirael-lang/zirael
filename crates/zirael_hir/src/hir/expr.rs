@@ -14,14 +14,8 @@ pub enum HirPattern {
     Wildcard,
     Identifier(SymbolId),
     Literal(Literal),
-    EnumVariant {
-        symbol_id: SymbolId,
-        fields: Option<Vec<HirPatternField>>,
-    },
-    Struct {
-        symbol_id: SymbolId,
-        fields: Vec<HirPatternField>,
-    },
+    EnumVariant { symbol_id: SymbolId, fields: Option<Vec<HirPatternField>> },
+    Struct { symbol_id: SymbolId, fields: Vec<HirPatternField> },
 }
 
 #[derive(Debug, Clone)]
@@ -85,6 +79,11 @@ pub enum HirExprKind {
     Match {
         scrutinee: Box<HirExpr>,
         arms: Vec<HirMatchArm>,
+    },
+    If {
+        condition: Box<HirExpr>,
+        then_branch: Box<HirExpr>,
+        else_branch: Option<Box<HirExpr>>,
     },
     Error,
 }
