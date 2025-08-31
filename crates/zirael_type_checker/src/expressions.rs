@@ -1,9 +1,12 @@
 use std::collections::HashMap;
 use zirael_parser::{
-    AstId, AstWalker, BinaryOp, CallInfo, Expr, ExprKind, Literal, ScopeType,
-    Stmt, StmtKind, SymbolId, SymbolKind, Type, UnaryOp, VarDecl, WalkerContext,
+    AstId, AstWalker, BinaryOp, CallInfo, EnumVariantData, Expr, ExprKind, Literal, MatchArm,
+    Pattern, PatternField, ScopeType, Stmt, StmtKind, SymbolId, SymbolKind, Type, UnaryOp, VarDecl,
+    WalkerContext,
 };
-use zirael_utils::prelude::{Colorize, Identifier, Span, resolve, warn};
+use zirael_utils::prelude::{
+    Color, Colorize, Identifier, ReportBuilder, ReportKind, Span, resolve, warn,
+};
 
 use crate::{
     TypeInference, monomorphization::MonomorphizationData, unification::UnificationResult,
@@ -95,6 +98,7 @@ impl<'reports> TypeInference<'reports> {
             ExprKind::Ternary { true_expr, false_expr, condition } => {
                 self.infer_ternary(condition, true_expr, false_expr)
             }
+            ExprKind::Match { scrutinee, arms } => self.infer_match(scrutinee, arms),
 
             _ => {
                 warn!("unimplemented expr: {:#?}", expr);
@@ -561,13 +565,18 @@ impl<'reports> TypeInference<'reports> {
         let sym = self.symbol_table().get_symbol_unchecked(&sym_id);
 
         match &sym.kind {
-            SymbolKind::Parameter { .. } | SymbolKind::Variable { .. } => {
+            SymbolKind::Parameter { .. }
+            | SymbolKind::Variable { .. }
+            | SymbolKind::MatchBinding { .. } => {
                 if let Some(var_type) = self.ctx.get_variable(sym_id) {
                     var_type.clone()
                 } else {
                     self.error(
                         &format!("variable '{}' used before initialization", resolve(&sym.name)),
-                        vec![("here".to_string(), span.clone())],
+                        vec![
+                            ("here".to_string(), span.clone()),
+                            ("declared here".to_string(), sym.source_location.unwrap()),
+                        ],
                         vec![],
                     );
                     Type::Error
@@ -633,6 +642,216 @@ impl<'reports> TypeInference<'reports> {
             }
 
             _ => {}
+        }
+    }
+
+    fn infer_match(&mut self, scrutinee: &mut Expr, arms: &mut Vec<MatchArm>) -> Type {
+        let scrutinee_ty = self.infer_expr(scrutinee);
+
+        if arms.is_empty() {
+            self.error("match expression must have at least one arm", vec![], vec![]);
+            return Type::Error;
+        }
+
+        for (i, arm) in arms.iter().enumerate() {
+            if !self.check_pattern_compatibility(&arm, &scrutinee_ty) {
+                self.error(
+                    &format!(
+                        "pattern in match arm {} is incompatible with scrutinee type {}",
+                        i + 1,
+                        self.format_type(&scrutinee_ty)
+                    ),
+                    vec![
+                        ("scrutinee has this type".to_string(), scrutinee.span.clone()),
+                        ("pattern here".to_string(), arm.span.clone()),
+                    ],
+                    vec![],
+                );
+            }
+        }
+
+        let mut arm_types = Vec::new();
+        for arm in arms.iter_mut() {
+            let body_ty = self.infer_expr(&mut arm.body);
+            arm_types.push(body_ty);
+        }
+
+        let mut unified_type = arm_types[0].clone();
+        for (i, arm_ty) in arm_types.iter().enumerate().skip(1) {
+            match self.unify_types(&unified_type, arm_ty) {
+                UnificationResult::Identical(_) => {}
+                UnificationResult::Unified(new_unified) => {
+                    unified_type = new_unified;
+                }
+                UnificationResult::Incompatible => {
+                    let report = ReportBuilder::builder(
+                        format!(
+                            "mismatched types in match arms: expected {}, found {}",
+                            self.format_type(&unified_type),
+                            self.format_type(arm_ty)
+                        ),
+                        ReportKind::Error,
+                    )
+                    .label_color_custom(
+                        &format!("this arm returns {}", self.format_type(&unified_type)),
+                        arms[0].span.start..arms[0].span.end,
+                        Color::BrightGreen,
+                    )
+                    .label_color_custom(
+                        &format!("this arm returns {}", self.format_type(arm_ty)),
+                        arms[i].span.start..arms[i].span.end,
+                        Color::BrightRed,
+                    )
+                    .note("all match arms must return the same type");
+
+                    self.reports.add(self.processed_file.unwrap(), report);
+                }
+            }
+        }
+
+        unified_type
+    }
+
+    fn check_pattern_compatibility(&mut self, arm: &MatchArm, scrutinee_ty: &Type) -> bool {
+        match &arm.pattern {
+            Pattern::Wildcard => true,
+            Pattern::Identifier(_) => true,
+            Pattern::Literal(lit) => {
+                let lit_ty = match lit {
+                    Literal::Bool(_) => Type::Bool,
+                    Literal::Char(_) => Type::Char,
+                    Literal::Float(_) => Type::Float,
+                    Literal::Integer(_) => Type::Int,
+                    Literal::String(_) => Type::String,
+                };
+                self.eq(&lit_ty, scrutinee_ty)
+            }
+            Pattern::EnumVariant { path, fields: pattern_fields, .. } => self
+                .check_enum_variant_pattern_compatibility(
+                    path,
+                    arm.span.clone(),
+                    pattern_fields,
+                    scrutinee_ty,
+                ),
+            Pattern::Struct { name, .. } => {
+                if let Some(symbol) = self.symbol_table.lookup_symbol(name) {
+                    if let Type::Named { name: scrutinee_name, .. } = scrutinee_ty {
+                        *scrutinee_name == symbol.name
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            }
+        }
+    }
+
+    fn check_enum_variant_pattern_compatibility(
+        &mut self,
+        path: &Vec<Identifier>,
+        span: Span,
+        pattern_fields: &Option<Vec<PatternField>>,
+        scrutinee_ty: &Type,
+    ) -> bool {
+        let base_sym = self.symbol_table.lookup_symbol(&path[0]);
+
+        let ident = &path[1];
+        if let Some(base_sym) = base_sym {
+            match &base_sym.kind {
+                SymbolKind::Enum { methods: _, variants, generics: enum_generics, .. } => {
+                    let mut variant_sym_id = None;
+                    for variant in variants {
+                        let variant_symbol = self.symbol_table.get_symbol_unchecked(&variant);
+                        if variant_symbol.name == *ident {
+                            variant_sym_id = Some(variant);
+                            break;
+                        }
+                    }
+
+                    if let Some(variant_id) = variant_sym_id {
+                        let variant_sym = self.symbol_table.get_symbol_unchecked(&variant_id);
+
+                        if let SymbolKind::EnumVariant { data, .. } = &variant_sym.kind {
+                            match data {
+                                EnumVariantData::Unit => true,
+                                EnumVariantData::Struct(variant_fields) => {
+                                    if let Some(pf) = pattern_fields {
+                                        for field in pf {
+                                            if let Some(str_field) =
+                                                variant_fields.iter().find(|f| f.name == field.name)
+                                            {
+                                                let mut field_ty = str_field.ty.clone();
+
+                                                if let Type::Named {
+                                                    generics: concrete_generics,
+                                                    ..
+                                                } = scrutinee_ty
+                                                {
+                                                    if !enum_generics.is_empty()
+                                                        && !concrete_generics.is_empty()
+                                                    {
+                                                        self.substitute_generic_params(
+                                                            &mut field_ty,
+                                                            enum_generics,
+                                                            concrete_generics,
+                                                        );
+                                                    }
+                                                }
+
+                                                self.ctx
+                                                    .add_variable(field.sym_id.unwrap(), field_ty);
+                                            } else {
+                                                self.error(
+                                                    &format!(
+                                                        "no field named {} found for this pattern",
+                                                        field.name.to_string().dimmed().bold()
+                                                    ),
+                                                    vec![("here".to_string(), span)],
+                                                    vec![],
+                                                );
+                                                return false;
+                                            }
+                                        }
+                                    }
+
+                                    true
+                                }
+                            }
+                        } else {
+                            self.error(
+                                "can only match enum variants with struct data",
+                                vec![("here".to_string(), span)],
+                                vec![],
+                            );
+                            false
+                        }
+                    } else {
+                        self.error(
+                            &format!(
+                                "no variant named {} found for this pattern",
+                                path[1].to_string().dimmed().bold()
+                            ),
+                            vec![("here".to_string(), span)],
+                            vec![],
+                        );
+                        false
+                    }
+                }
+                _ => {
+                    todo!()
+                }
+            }
+        } else {
+            self.error(
+                &format!(
+                    "no enum named {} found for this pattern",
+                    path[0].to_string().dimmed().bold()
+                ),
+                vec![("here".to_string(), span)],
+                vec![],
+            );
+            return false;
         }
     }
 }

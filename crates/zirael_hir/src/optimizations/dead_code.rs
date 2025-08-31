@@ -27,6 +27,7 @@ impl<'reports> AstLowering<'reports> {
             HirExprKind::Assign { .. }
             | HirExprKind::Call { .. }
             | HirExprKind::Block(_)
+            | HirExprKind::Match { .. }
             | HirExprKind::Error => false,
         }
     }

@@ -1,6 +1,6 @@
 use crate::{
     Keyword, TokenKind,
-    ast::{BinaryOp, Expr, ExprKind, Literal, UnaryOp},
+    ast::{BinaryOp, Expr, ExprKind, Literal, MatchArm, Pattern, PatternField, UnaryOp},
     parser::Parser,
     span::SpanUtils as _,
 };
@@ -382,6 +382,8 @@ impl<'a> Parser<'a> {
                     self.parse_block()
                 }
 
+                TokenKind::Keyword(Keyword::Match) => self.parse_match(),
+
                 _ => {
                     self.error_at_peek(format!("unexpected token in expression: {:?}", token.kind));
                     self.advance();
@@ -534,5 +536,187 @@ impl<'a> Parser<'a> {
             ExprKind::StaticCall { callee: Box::new(callee), args, call_info: None },
             start_span.to(end_span),
         )
+    }
+
+    fn parse_match(&mut self) -> Expr {
+        let start_span = self.peek_span();
+        self.advance();
+
+        let scrutinee = Box::new(self.parse_expr());
+
+        if !self.match_token(TokenKind::BraceOpen) {
+            self.error_at_current("expected '{' after match expression");
+        }
+
+        let mut arms = Vec::new();
+
+        while !self.check(&TokenKind::BraceClose) && !self.is_at_end() {
+            let arm = self.parse_match_arm();
+            arms.push(arm);
+
+            if self.check(&TokenKind::Comma) {
+                self.advance();
+            }
+        }
+
+        if !self.match_token(TokenKind::BraceClose) {
+            self.error_at_current("expected '}' after match arms");
+        }
+
+        let end_span = self.prev_span();
+        self.new_expr(ExprKind::Match { scrutinee, arms }, start_span.to(end_span))
+    }
+
+    fn parse_match_arm(&mut self) -> MatchArm {
+        let start_span = self.peek_span();
+        let pattern = self.parse_pattern();
+        let end_span = self.prev_span();
+
+        if !self.match_token(TokenKind::FatArrow) {
+            self.error_at_current("expected '=>' after match pattern");
+        }
+
+        let body = self.parse_expr();
+
+        MatchArm { pattern, body, span: start_span.to(end_span) }
+    }
+
+    fn parse_pattern(&mut self) -> Pattern {
+        if let Some(token) = self.peek() {
+            match &token.kind {
+                TokenKind::Underscore => {
+                    self.advance();
+                    Pattern::Wildcard
+                }
+                TokenKind::Identifier(name) => {
+                    let name = name.clone();
+                    self.advance();
+                    let identifier = get_or_intern(&name);
+
+                    if self.check(&TokenKind::DoubleColon) {
+                        self.parse_enum_variant_pattern(vec![identifier])
+                    } else if self.check(&TokenKind::BraceOpen) {
+                        self.parse_struct_pattern(identifier)
+                    } else {
+                        Pattern::Identifier(identifier)
+                    }
+                }
+                TokenKind::Integer(value) => {
+                    let value = *value;
+                    self.advance();
+                    Pattern::Literal(Literal::Integer(value))
+                }
+                TokenKind::Float(value) => {
+                    let value = *value;
+                    self.advance();
+                    Pattern::Literal(Literal::Float(value))
+                }
+                TokenKind::String(value) => {
+                    let value = value.clone();
+                    self.advance();
+                    Pattern::Literal(Literal::String(value))
+                }
+                TokenKind::Char(value) => {
+                    let value = *value;
+                    self.advance();
+                    Pattern::Literal(Literal::Char(value))
+                }
+                TokenKind::Bool(value) => {
+                    let value = *value;
+                    self.advance();
+                    Pattern::Literal(Literal::Bool(value))
+                }
+                _ => {
+                    self.error_at_peek(format!("unexpected token in pattern: {:?}", token.kind));
+                    self.advance();
+                    Pattern::Wildcard
+                }
+            }
+        } else {
+            self.error_at_current("unexpected end of input in pattern");
+            Pattern::Wildcard
+        }
+    }
+
+    fn parse_enum_variant_pattern(&mut self, mut path: Vec<Identifier>) -> Pattern {
+        while self.match_token(TokenKind::DoubleColon) {
+            if let Some(token) = self.peek() {
+                if let TokenKind::Identifier(name) = &token.kind {
+                    let name = name.clone();
+                    self.advance();
+                    path.push(get_or_intern(&name));
+                } else {
+                    self.error_at_peek("expected identifier after '::'");
+                    break;
+                }
+            } else {
+                self.error_at_current("expected identifier after '::'");
+                break;
+            }
+        }
+
+        let fields = if self.check(&TokenKind::BraceOpen) {
+            Some(self.parse_pattern_fields())
+        } else {
+            None
+        };
+
+        Pattern::EnumVariant { path, fields }
+    }
+
+    fn parse_struct_pattern(&mut self, name: Identifier) -> Pattern {
+        let fields = self.parse_pattern_fields();
+        Pattern::Struct { name, fields }
+    }
+
+    fn parse_pattern_fields(&mut self) -> Vec<PatternField> {
+        if !self.match_token(TokenKind::BraceOpen) {
+            self.error_at_current("expected '{' for pattern fields");
+            return vec![];
+        }
+
+        let mut fields = Vec::new();
+
+        while !self.check(&TokenKind::BraceClose) && !self.is_at_end() {
+            let start_span = self.peek_span();
+
+            if let Some(token) = self.peek() {
+                if let TokenKind::Identifier(field_name) = &token.kind {
+                    let field_name = field_name.clone();
+                    self.advance();
+                    let identifier = get_or_intern(&field_name);
+                    let end_span = self.prev_span();
+
+                    let pattern = if self.match_token(TokenKind::Colon) {
+                        Some(Box::new(self.parse_pattern()))
+                    } else {
+                        None
+                    };
+
+                    fields.push(PatternField {
+                        name: identifier,
+                        pattern,
+                        span: start_span.to(end_span),
+                        sym_id: None,
+                    });
+
+                    if !self.match_token(TokenKind::Comma) {
+                        break;
+                    }
+                } else {
+                    self.error_at_peek("expected field name in pattern");
+                    break;
+                }
+            } else {
+                self.error_at_current("unexpected end of input in pattern fields");
+                break;
+            }
+        }
+
+        if !self.match_token(TokenKind::BraceClose) {
+            self.error_at_current("expected '}' after pattern fields");
+        }
+
+        fields
     }
 }

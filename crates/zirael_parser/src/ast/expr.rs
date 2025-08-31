@@ -12,6 +12,35 @@ use std::fmt::{self, Debug, Formatter};
 use zirael_utils::prelude::*;
 
 #[derive(Clone, PartialEq, Debug)]
+pub struct MatchArm {
+    pub pattern: Pattern,
+    pub body: Expr,
+    pub span: Span,
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub enum Pattern {
+    /// Wildcard pattern `_`
+    Wildcard,
+    /// Identifier pattern `x`
+    Identifier(Identifier),
+    /// Literal pattern `42`, `"hello"`, etc.
+    Literal(Literal),
+    /// Enum variant pattern `Result::Ok { value }`
+    EnumVariant { path: Vec<Identifier>, fields: Option<Vec<PatternField>> },
+    /// Struct pattern `Point { x, y }`
+    Struct { name: Identifier, fields: Vec<PatternField> },
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct PatternField {
+    pub name: Identifier,
+    pub pattern: Option<Box<Pattern>>,
+    pub span: Span,
+    pub sym_id: Option<SymbolId>,
+}
+
+#[derive(Clone, PartialEq, Debug)]
 pub enum ExprKind {
     Literal(Literal),
     Identifier(Identifier, Option<SymbolId>),
@@ -28,6 +57,7 @@ pub enum ExprKind {
     // the last one in the chain is the method to call
     MethodCall { chain: Vec<Expr>, args: Vec<Expr>, call_info: Option<CallInfo> },
     StaticCall { callee: Box<Expr>, args: Vec<Expr>, call_info: Option<CallInfo> },
+    Match { scrutinee: Box<Expr>, arms: Vec<MatchArm> },
     CouldntParse(CouldntParse),
     StructInit { name: Box<Expr>, fields: HashMap<Identifier, Expr>, call_info: Option<CallInfo> },
 }
@@ -118,6 +148,7 @@ impl ExprKind {
             Self::IndexAccess(_, _) => "index access",
             Self::MethodCall { .. } => "method call",
             Self::StaticCall { .. } => "static call",
+            Self::Match { .. } => "match expression",
             Self::StructInit { .. } => "struct constructor",
             Self::CouldntParse(_) => "couldnt parse",
         }

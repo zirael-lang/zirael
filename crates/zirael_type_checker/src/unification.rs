@@ -214,6 +214,12 @@ impl<'reports> TypeInference<'reports> {
                     self.update_stmt_recursively(stmt);
                 }
             }
+            ExprKind::Match { scrutinee, arms } => {
+                self.update_expr_with_own_type(scrutinee);
+                for arm in arms {
+                    self.update_expr_recursively(&mut arm.body, resolved_ty);
+                }
+            }
             ExprKind::Literal(_) | ExprKind::Identifier(_, _) | ExprKind::CouldntParse(_) => {}
         }
     }

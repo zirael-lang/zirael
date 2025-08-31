@@ -1,7 +1,10 @@
 use crate::hir::{
     ExprContext, HirBody, HirEnum, HirFunction, HirFunctionSignature, HirItem, HirItemKind,
     HirModule, HirParam, HirStruct, HirTypeExtension, HirVariant,
-    expr::{AccessKind, FieldSymbol, HirExpr, HirExprKind, HirStmt},
+    expr::{
+        AccessKind, FieldSymbol, HirExpr, HirExprKind, HirMatchArm, HirPattern, HirPatternField,
+        HirStmt,
+    },
 };
 use id_arena::Arena;
 use std::{collections::HashMap, ops::Range};
@@ -428,6 +431,12 @@ impl<'reports> AstLowering<'reports> {
                 return self.lower_expr(inner);
             }
 
+            ExprKind::Match { scrutinee, arms } => {
+                let scrutinee_expr = Box::new(self.lower_expr(scrutinee));
+                let hir_arms = arms.iter_mut().map(|arm| self.lower_match_arm(arm)).collect();
+                HirExprKind::Match { scrutinee: scrutinee_expr, arms: hir_arms }
+            }
+
             ExprKind::CouldntParse(_) => {
                 self.error("Could not parse expression", vec![], vec![]);
                 HirExprKind::Error
@@ -477,6 +486,71 @@ impl<'reports> AstLowering<'reports> {
             }
             self.reports.add(file_id, report);
         }
+    }
+
+    fn lower_match_arm(&mut self, arm: &mut MatchArm) -> HirMatchArm {
+        let pattern = self.lower_pattern(&mut arm.pattern);
+        let body = self.lower_expr(&mut arm.body);
+        HirMatchArm { pattern, body, span: arm.span.clone() }
+    }
+
+    fn lower_pattern(&mut self, pattern: &mut Pattern) -> HirPattern {
+        match pattern {
+            Pattern::Wildcard => HirPattern::Wildcard,
+            Pattern::Identifier(name) => {
+                if let Some(symbol) = self.symbol_table.lookup_symbol(name) {
+                    HirPattern::Identifier(symbol.id)
+                } else {
+                    self.error("Unresolved pattern identifier", vec![], vec![]);
+                    HirPattern::Wildcard
+                }
+            }
+            Pattern::Literal(lit) => HirPattern::Literal(lit.clone()),
+            Pattern::EnumVariant { path, fields } => {
+                if let Some(first_name) = path.first() {
+                    if let Some(symbol) = self.symbol_table.lookup_symbol(first_name) {
+                        let hir_fields = if let Some(fields) = fields {
+                            Some(
+                                fields
+                                    .iter_mut()
+                                    .map(|field| self.lower_pattern_field(field))
+                                    .collect(),
+                            )
+                        } else {
+                            None
+                        };
+                        HirPattern::EnumVariant { symbol_id: symbol.id, fields: hir_fields }
+                    } else {
+                        self.error("Unresolved enum variant", vec![], vec![]);
+                        HirPattern::Wildcard
+                    }
+                } else {
+                    self.error("Empty enum variant path", vec![], vec![]);
+                    HirPattern::Wildcard
+                }
+            }
+            Pattern::Struct { name, fields } => {
+                if let Some(symbol) = self.symbol_table.lookup_symbol(name) {
+                    let hir_fields =
+                        fields.iter_mut().map(|field| self.lower_pattern_field(field)).collect();
+                    HirPattern::Struct { symbol_id: symbol.id, fields: hir_fields }
+                } else {
+                    self.error("Unresolved struct in pattern", vec![], vec![]);
+                    HirPattern::Wildcard
+                }
+            }
+        }
+    }
+
+    fn lower_pattern_field(&mut self, field: &mut PatternField) -> HirPatternField {
+        let symbol_id = self.symbol_table.lookup_symbol(&field.name).map(|s| s.id);
+        let pattern = if let Some(ref mut pat) = field.pattern {
+            Some(Box::new(self.lower_pattern(pat)))
+        } else {
+            None
+        };
+
+        HirPatternField { name: field.name, symbol_id, pattern, span: field.span.clone() }
     }
 }
 

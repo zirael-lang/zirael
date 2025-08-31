@@ -41,6 +41,9 @@ pub enum SymbolKind {
         is_variadic: bool,
         default_value: Option<Expr>,
     },
+    MatchBinding {
+        ty: Type,
+    },
     Struct {
         fields: Vec<StructField>,
         generics: Vec<GenericParameter>,
@@ -78,6 +81,7 @@ impl SymbolKind {
             Self::EnumVariant { .. } => "enum variant",
             Self::Temporary { .. } => "temporary",
             Self::TypeExtension { .. } => "type extension",
+            Self::MatchBinding { .. } => "match binding",
         }
     }
 

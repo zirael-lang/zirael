@@ -55,6 +55,9 @@ impl<'reports> TypeInference<'reports> {
             Type::MonomorphizedSymbol(sym) => self.format_type(&sym.display_ty),
             Type::Error => "error".bright_red().bold().to_string(),
         }
+        .dimmed()
+        .bold()
+        .to_string()
     }
 
     pub fn type_mismatch(&mut self, expected: &Type, found: &Type, span: Span) {

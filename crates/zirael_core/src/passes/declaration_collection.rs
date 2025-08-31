@@ -2,8 +2,8 @@ use crate::prelude::{ReportKind, WalkerContext, debug};
 use std::path::{Path, PathBuf};
 use zirael_parser::{
     Ast, AstId, AstWalker, Dependencies, ImportConflict, ImportKind, ItemKind, LexedModule,
-    ModuleId, Parameter, ParameterKind, ScopeType, Stmt, Symbol, SymbolId, SymbolKind, SymbolTable,
-    SymbolTableError, VarDecl, impl_ast_walker, item::Item,
+    MatchArm, ModuleId, Parameter, ParameterKind, Pattern, ScopeType, Stmt, Symbol, SymbolId,
+    SymbolKind, SymbolTable, SymbolTableError, Type, VarDecl, impl_ast_walker, item::Item,
 };
 use zirael_utils::{
     prelude::{
@@ -427,5 +427,24 @@ impl<'reports> AstWalker<'reports> for DeclarationCollection<'reports> {
             v.span,
         );
         var_decl.symbol_id = sym_id;
+    }
+
+    fn visit_match_arm(&mut self, _arm: &mut MatchArm) {
+        match &mut _arm.pattern {
+            Pattern::EnumVariant { fields, .. } => {
+                if let Some(fields) = fields {
+                    for field in fields {
+                        let sym_id = self.register_symbol(
+                            field.name,
+                            &SymbolKind::MatchBinding { ty: Type::Inferred },
+                            field.span.clone(),
+                        );
+
+                        field.sym_id = sym_id;
+                    }
+                }
+            }
+            _ => {}
+        }
     }
 }

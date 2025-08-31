@@ -3,8 +3,9 @@ use crate::{
     ast::{
         Abi, Ast, Attribute, BinaryOp, EnumDeclaration, EnumVariant, EnumVariantData, Expr,
         ExprKind, Function, FunctionModifiers, FunctionSignature, GenericArg, GenericParameter,
-        ImportKind, Item, ItemKind, Literal, Parameter, ParameterKind, Stmt, StmtKind,
-        StructDeclaration, StructField, TraitBound, Type, UnaryOp, VarDecl,
+        ImportKind, Item, ItemKind, Literal, MatchArm, Parameter, ParameterKind, Pattern,
+        PatternField, Stmt, StmtKind, StructDeclaration, StructField, TraitBound, Type, UnaryOp,
+        VarDecl,
     },
     symbols::SymbolId,
 };
@@ -283,6 +284,13 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
                     self.walk_expr(field);
                 }
             }
+            ExprKind::Match { scrutinee, arms } => {
+                self.visit_match(scrutinee, arms);
+                self.walk_expr(scrutinee);
+                for arm in arms {
+                    self.walk_match_arm(arm);
+                }
+            }
             ExprKind::CouldntParse(_) => {}
         }
     }
@@ -471,6 +479,44 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
         _args: &mut Vec<Expr>,
         _call_info: &mut Option<CallInfo>,
     ) {
+    }
+    fn visit_match(&mut self, _scrutinee: &mut Expr, _arms: &mut Vec<MatchArm>) {}
+    fn visit_match_arm(&mut self, _arm: &mut MatchArm) {}
+    fn visit_pattern(&mut self, _pattern: &mut Pattern) {}
+    fn visit_pattern_field(&mut self, _field: &mut PatternField) {}
+
+    fn walk_match_arm(&mut self, arm: &mut MatchArm) {
+        self.visit_match_arm(arm);
+        self.walk_pattern(&mut arm.pattern);
+        self.walk_expr(&mut arm.body);
+    }
+
+    fn walk_pattern(&mut self, pattern: &mut Pattern) {
+        self.visit_pattern(pattern);
+        match pattern {
+            Pattern::Wildcard => {}
+            Pattern::Identifier(_) => {}
+            Pattern::Literal(_) => {}
+            Pattern::EnumVariant { fields, .. } => {
+                if let Some(fields) = fields {
+                    for field in fields {
+                        self.walk_pattern_field(field);
+                    }
+                }
+            }
+            Pattern::Struct { fields, .. } => {
+                for field in fields {
+                    self.walk_pattern_field(field);
+                }
+            }
+        }
+    }
+
+    fn walk_pattern_field(&mut self, field: &mut PatternField) {
+        self.visit_pattern_field(field);
+        if let Some(pattern) = &mut field.pattern {
+            self.walk_pattern(pattern);
+        }
     }
 }
 

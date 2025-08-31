@@ -3,6 +3,36 @@ use zirael_parser::*;
 use zirael_utils::prelude::*;
 
 #[derive(Debug, Clone)]
+pub struct HirMatchArm {
+    pub pattern: HirPattern,
+    pub body: HirExpr,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub enum HirPattern {
+    Wildcard,
+    Identifier(SymbolId),
+    Literal(Literal),
+    EnumVariant {
+        symbol_id: SymbolId,
+        fields: Option<Vec<HirPatternField>>,
+    },
+    Struct {
+        symbol_id: SymbolId,
+        fields: Vec<HirPatternField>,
+    },
+}
+
+#[derive(Debug, Clone)]
+pub struct HirPatternField {
+    pub name: Identifier,
+    pub symbol_id: Option<SymbolId>,
+    pub pattern: Option<Box<HirPattern>>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
 pub struct HirExpr {
     pub kind: HirExprKind,
     pub ty: Type,
@@ -51,6 +81,10 @@ pub enum HirExprKind {
     IndexAccess {
         object: Box<HirExpr>,
         index: Box<HirExpr>,
+    },
+    Match {
+        scrutinee: Box<HirExpr>,
+        arms: Vec<HirMatchArm>,
     },
     Error,
 }

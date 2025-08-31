@@ -32,7 +32,8 @@ impl ExpectedSymbol {
                 Self::Value,
                 SymbolKind::Variable { .. }
                 | SymbolKind::Constant { .. }
-                | SymbolKind::Parameter { .. },
+                | SymbolKind::Parameter { .. }
+                | SymbolKind::MatchBinding { .. },
             ) => true,
             (Self::Any, _) => true,
             _ => false,
