@@ -183,7 +183,6 @@ impl Gen for IrItem {
             IrItemKind::Enum(en) => en.generate(p),
             IrItemKind::EnumVariant(_i) => {}
         }
-        p.newline();
     }
 }
 
@@ -315,7 +314,7 @@ impl Gen for IrField {
         self.ty.generate(cg);
         cg.write(" ");
         cg.write(&self.name);
-        cg.writeln(";");
+        cg.write(";\n");
     }
 }
 
@@ -534,7 +533,7 @@ impl Gen for IrExpr {
 
                 match &then_branch.kind {
                     IrExprKind::Block(block) => {
-                        p.writeln(" {");
+                        p.write(" {\n");
                         p.indent();
                         for stmt in &block.stmts {
                             stmt.generate(p);
@@ -543,7 +542,7 @@ impl Gen for IrExpr {
                         p.write_indented("}");
                     }
                     _ => {
-                        p.writeln(" {");
+                        p.write(" {\n");
                         p.indent();
                         p.write_indented("");
                         then_branch.generate(p);
@@ -556,7 +555,7 @@ impl Gen for IrExpr {
                 if let Some(else_branch) = else_branch {
                     match &else_branch.kind {
                         IrExprKind::Block(block) => {
-                            p.writeln(" else {");
+                            p.write(" else {\n");
                             p.indent();
                             for stmt in &block.stmts {
                                 stmt.generate(p);
@@ -569,7 +568,7 @@ impl Gen for IrExpr {
                             else_branch.generate(p);
                         }
                         _ => {
-                            p.writeln(" else {");
+                            p.write(" else {\n");
                             p.indent();
                             p.write_indented("");
                             else_branch.generate(p);
