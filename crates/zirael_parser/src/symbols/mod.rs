@@ -6,8 +6,8 @@ pub mod scopes;
 mod table;
 
 use crate::{
-    AstId, EnumVariantData, Expr, FunctionModifiers, FunctionSignature, GenericParameter,
-    StructField, Type,
+  AstId, EnumVariantData, Expr, FunctionModifiers, FunctionSignature, GenericParameter,
+  StructField, Type,
 };
 pub use relations::*;
 pub use scopes::*;
@@ -17,95 +17,95 @@ pub type SymbolId = Id<Symbol>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct VariableMove {
-    pub from: Span,
-    pub to: Span,
+  pub from: Span,
+  pub to: Span,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum SymbolKind {
-    Variable {
-        ty: Type,
-        is_heap: bool,                  // allocated with `box`
-        is_moved: Option<VariableMove>, // ownership has been moved
-    },
-    Constant {
-        ty: Type,
-        value: Option<Expr>,
-    },
-    Function {
-        signature: FunctionSignature,
-        modifiers: FunctionModifiers,
-    },
-    Parameter {
-        ty: Type,
-        is_variadic: bool,
-        default_value: Option<Expr>,
-    },
-    MatchBinding {
-        ty: Type,
-    },
-    Struct {
-        fields: Vec<StructField>,
-        generics: Vec<GenericParameter>,
-        methods: Vec<SymbolId>,
-    },
-    TypeExtension {
-        ty: Type,
-        methods: Vec<SymbolId>,
-    },
-    Enum {
-        generics: Vec<GenericParameter>,
-        variants: Vec<SymbolId>,
-        methods: Vec<SymbolId>,
-        id: AstId,
-    },
-    EnumVariant {
-        parent_enum: SymbolId,
-        data: EnumVariantData,
-    },
-    Temporary {
-        ty: Type,
-        lifetime: TemporaryLifetime,
-    },
+  Variable {
+    ty: Type,
+    is_heap: bool,                  // allocated with `box`
+    is_moved: Option<VariableMove>, // ownership has been moved
+  },
+  Constant {
+    ty: Type,
+    value: Option<Expr>,
+  },
+  Function {
+    signature: FunctionSignature,
+    modifiers: FunctionModifiers,
+  },
+  Parameter {
+    ty: Type,
+    is_variadic: bool,
+    default_value: Option<Expr>,
+  },
+  MatchBinding {
+    ty: Type,
+  },
+  Struct {
+    fields: Vec<StructField>,
+    generics: Vec<GenericParameter>,
+    methods: Vec<SymbolId>,
+  },
+  TypeExtension {
+    ty: Type,
+    methods: Vec<SymbolId>,
+  },
+  Enum {
+    generics: Vec<GenericParameter>,
+    variants: Vec<SymbolId>,
+    methods: Vec<SymbolId>,
+    id: AstId,
+  },
+  EnumVariant {
+    parent_enum: SymbolId,
+    data: EnumVariantData,
+  },
+  Temporary {
+    ty: Type,
+    lifetime: TemporaryLifetime,
+  },
 }
 
 impl SymbolKind {
-    pub fn name(&self) -> &str {
-        match self {
-            Self::Variable { .. } => "variable",
-            Self::Constant { .. } => "constant",
-            Self::Function { .. } => "function",
-            Self::Parameter { .. } => "parameter",
-            Self::Struct { .. } => "struct",
-            Self::Enum { .. } => "enum",
-            Self::EnumVariant { .. } => "enum variant",
-            Self::Temporary { .. } => "temporary",
-            Self::TypeExtension { .. } => "type extension",
-            Self::MatchBinding { .. } => "match binding",
-        }
+  pub fn name(&self) -> &str {
+    match self {
+      Self::Variable { .. } => "variable",
+      Self::Constant { .. } => "constant",
+      Self::Function { .. } => "function",
+      Self::Parameter { .. } => "parameter",
+      Self::Struct { .. } => "struct",
+      Self::Enum { .. } => "enum",
+      Self::EnumVariant { .. } => "enum variant",
+      Self::Temporary { .. } => "temporary",
+      Self::TypeExtension { .. } => "type extension",
+      Self::MatchBinding { .. } => "match binding",
     }
+  }
 
-    pub fn is_value(&self) -> bool {
-        matches!(self, Self::Variable { .. } | Self::Parameter { .. })
-    }
+  pub fn is_value(&self) -> bool {
+    matches!(self, Self::Variable { .. } | Self::Parameter { .. })
+  }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TemporaryLifetime {
-    Expression,
-    Statement,
-    Block,
+  Expression,
+  Statement,
+  Block,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Symbol {
-    pub id: SymbolId,
-    pub name: Identifier,
-    pub kind: SymbolKind,
-    pub scope: ScopeId,
-    pub source_location: Option<Span>,
-    pub is_used: bool,
-    pub declaration_order: usize,
-    pub imported_from: Option<ScopeId>,
-    pub canonical_symbol: SymbolId,
+  pub id: SymbolId,
+  pub name: Identifier,
+  pub kind: SymbolKind,
+  pub scope: ScopeId,
+  pub source_location: Option<Span>,
+  pub is_used: bool,
+  pub declaration_order: usize,
+  pub imported_from: Option<ScopeId>,
+  pub canonical_symbol: SymbolId,
 }

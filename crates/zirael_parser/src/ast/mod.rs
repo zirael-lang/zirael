@@ -18,11 +18,11 @@ use std::fmt::Debug;
 
 #[derive(Clone, Debug)]
 pub struct Ast {
-    pub items: Vec<Item>,
+  pub items: Vec<Item>,
 }
 
 impl Ast {
-    pub fn new(items: Vec<Item>) -> Self {
-        Self { items }
-    }
+  pub fn new(items: Vec<Item>) -> Self {
+    Self { items }
+  }
 }

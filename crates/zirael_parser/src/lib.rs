@@ -18,6 +18,6 @@ pub use walker::*;
 
 #[derive(Debug)]
 pub enum MainFunction {
-    Symbol(SymbolId),
-    Mangled(String),
+  Symbol(SymbolId),
+  Mangled(String),
 }

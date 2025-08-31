@@ -5,21 +5,21 @@ use std::fmt::Display;
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum PackageType {
-    #[serde(alias = "bin")]
-    Binary,
-    #[serde(alias = "lib")]
-    Library,
+  #[serde(alias = "bin")]
+  Binary,
+  #[serde(alias = "lib")]
+  Library,
 }
 
 impl Display for PackageType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Self::Binary => "binary",
-                Self::Library => "library",
-            }
-        )
-    }
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(
+      f,
+      "{}",
+      match self {
+        Self::Binary => "binary",
+        Self::Library => "library",
+      }
+    )
+  }
 }

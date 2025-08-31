@@ -3,19 +3,19 @@ use std::fmt::Display;
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug)]
 pub enum LibType {
-    Static,
-    Dynamic,
+  Static,
+  Dynamic,
 }
 
 impl Display for LibType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{:?}",
-            match self {
-                Self::Static => "static",
-                Self::Dynamic => "dynamic",
-            }
-        )
-    }
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(
+      f,
+      "{:?}",
+      match self {
+        Self::Static => "static",
+        Self::Dynamic => "dynamic",
+      }
+    )
+  }
 }

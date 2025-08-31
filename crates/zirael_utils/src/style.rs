@@ -14,10 +14,10 @@ pub const VALID: Style = AnsiColor::Cyan.on_default().effects(Effects::BOLD);
 pub const INVALID: Style = AnsiColor::Yellow.on_default().effects(Effects::BOLD);
 
 pub const CLAP_STYLING: Styles = Styles::styled()
-    .header(HEADER)
-    .usage(USAGE)
-    .literal(LITERAL)
-    .placeholder(PLACEHOLDER)
-    .error(ERROR)
-    .valid(VALID)
-    .invalid(INVALID);
+  .header(HEADER)
+  .usage(USAGE)
+  .literal(LITERAL)
+  .placeholder(PLACEHOLDER)
+  .error(ERROR)
+  .valid(VALID)
+  .invalid(INVALID);

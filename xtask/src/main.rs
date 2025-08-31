@@ -1,3 +1,3 @@
 fn main() -> anyhow::Result<()> {
-    xtaskops::tasks::main()
+  xtaskops::tasks::main()
 }
