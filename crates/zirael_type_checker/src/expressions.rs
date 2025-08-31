@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use zirael_parser::{
-    AstId, AstWalker, BinaryOp, CallInfo, EnumVariantData, Expr, ExprKind, Literal, MatchArm,
-    Pattern, PatternField, ScopeType, Stmt, StmtKind, SymbolId, SymbolKind, Type, UnaryOp, VarDecl,
-    WalkerContext,
+    AstId, AstWalker, BinaryOp, CallInfo, ElseBranch, EnumVariantData, Expr, ExprKind, If, Literal,
+    MatchArm, Pattern, PatternField, ScopeType, Stmt, StmtKind, SymbolId, SymbolKind, Type,
+    UnaryOp, VarDecl, WalkerContext,
 };
 use zirael_utils::prelude::{
     Color, Colorize, Identifier, ReportBuilder, ReportKind, Span, resolve, warn,
@@ -388,6 +388,9 @@ impl<'reports> TypeInference<'reports> {
                 StmtKind::Var(var) => {
                     self.infer_variable(var);
                 }
+                StmtKind::If(if_stmt) => {
+                    self.infer_if_stmt(if_stmt);
+                }
             }
         }
         self.pop_scope();
@@ -525,6 +528,71 @@ impl<'reports> TypeInference<'reports> {
                     vec![],
                 );
                 Type::Error
+            }
+        }
+    }
+
+    fn infer_if_stmt(&mut self, if_stmt: &mut If) {
+        let condition_type = self.infer_expr(&mut if_stmt.condition);
+        if !self.eq(&condition_type, &Type::Bool) {
+            self.error(
+                &format!(
+                    "if condition must be boolean, found {}",
+                    self.format_type(&condition_type)
+                ),
+                vec![("condition here".to_string(), if_stmt.condition.span.clone())],
+                vec![],
+            );
+        }
+
+        for stmt in &mut if_stmt.then_branch {
+            match &mut stmt.0 {
+                StmtKind::Expr(expr) => {
+                    self.infer_expr(expr);
+                }
+                StmtKind::Return(ret) => {
+                    if let Some(expr) = ret.value.as_mut() {
+                        self.infer_expr(expr);
+                    }
+                }
+                StmtKind::Var(var) => {
+                    self.infer_variable(var);
+                }
+                StmtKind::If(nested_if) => {
+                    self.infer_if_stmt(nested_if);
+                }
+            }
+        }
+
+        if let Some(else_branch) = &mut if_stmt.else_branch {
+            self.infer_else_branch(else_branch);
+        }
+    }
+
+    fn infer_else_branch(&mut self, else_branch: &mut ElseBranch) {
+        match else_branch {
+            ElseBranch::Block(statements, _else_branch_id) => {
+                for stmt in statements {
+                    match &mut stmt.0 {
+                        StmtKind::Expr(expr) => {
+                            self.infer_expr(expr);
+                        }
+                        StmtKind::Return(ret) => {
+                            if let Some(expr) = ret.value.as_mut() {
+                                self.infer_expr(expr);
+                            }
+                        }
+                        StmtKind::Var(var) => {
+                            self.infer_variable(var);
+                        }
+                        StmtKind::If(nested_if) => {
+                            self.infer_if_stmt(nested_if);
+                        }
+                    }
+                }
+            }
+            ElseBranch::If(nested_if) => {
+                self.infer_if_stmt(nested_if);
             }
         }
     }

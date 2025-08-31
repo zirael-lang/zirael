@@ -1,6 +1,8 @@
 use crate::TypeInference;
 use std::collections::HashMap;
-use zirael_parser::{Expr, ExprKind, GenericParameter, Stmt, StmtKind, Symbol, SymbolKind, Type};
+use zirael_parser::{
+    ElseBranch, Expr, ExprKind, GenericParameter, Stmt, StmtKind, Symbol, SymbolKind, Type,
+};
 use zirael_utils::prelude::Identifier;
 
 #[derive(Debug, Clone)]
@@ -252,6 +254,37 @@ impl<'reports> TypeInference<'reports> {
             StmtKind::Return(return_stmt) => {
                 if let Some(value) = &mut return_stmt.value {
                     self.update_expr_with_own_type(value);
+                }
+            }
+            StmtKind::If(if_stmt) => {
+                self.update_expr_with_own_type(&mut if_stmt.condition);
+                for stmt in &mut if_stmt.then_branch {
+                    self.update_stmt_recursively(stmt);
+                }
+                if let Some(else_branch) = &mut if_stmt.else_branch {
+                    match else_branch {
+                        ElseBranch::Block(statements, _else_branch_id) => {
+                            for stmt in statements {
+                                self.update_stmt_recursively(stmt);
+                            }
+                        }
+                        ElseBranch::If(nested_if) => {
+                            self.update_expr_with_own_type(&mut nested_if.condition);
+                            for stmt in &mut nested_if.then_branch {
+                                self.update_stmt_recursively(stmt);
+                            }
+                            if let Some(nested_else) = &mut nested_if.else_branch {
+                                match nested_else {
+                                    ElseBranch::Block(nested_statements, _nested_else_id) => {
+                                        for stmt in nested_statements {
+                                            self.update_stmt_recursively(stmt);
+                                        }
+                                    }
+                                    ElseBranch::If(_) => {}
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

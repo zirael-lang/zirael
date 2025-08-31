@@ -36,6 +36,8 @@ pub enum TokenKind {
     #[token("return", |_| Keyword::Return)]
     #[token("uint", |_| Keyword::Uint)]
     #[token("match", |_| Keyword::Match)]
+    #[token("if", |_| Keyword::If)]
+    #[token("else", |_| Keyword::Else)]
     Keyword(Keyword),
 
     // Brackets and braces

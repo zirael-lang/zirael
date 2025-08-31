@@ -1,5 +1,5 @@
 use crate::{
-    SymbolId,
+    AstId, SymbolId,
     ast::{expr::Expr, types::Type},
 };
 use zirael_utils::prelude::*;
@@ -18,6 +18,7 @@ pub enum StmtKind {
     Expr(Expr),
     Var(VarDecl),
     Return(Return),
+    If(If),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -34,4 +35,19 @@ pub struct VarDecl {
     pub value: Expr,
     pub span: Span,
     pub symbol_id: Option<SymbolId>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct If {
+    pub condition: Expr,
+    pub then_branch: Vec<Stmt>,
+    pub then_branch_id: AstId,
+    pub else_branch: Option<ElseBranch>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ElseBranch {
+    Block(Vec<Stmt>, AstId),
+    If(Box<If>),
 }

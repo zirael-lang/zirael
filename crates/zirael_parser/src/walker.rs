@@ -1,11 +1,11 @@
 use crate::{
     AstId, CallInfo, LexedModule, ModuleId, Return, ScopeType, SymbolTable, TypeExtension,
     ast::{
-        Abi, Ast, Attribute, BinaryOp, EnumDeclaration, EnumVariant, EnumVariantData, Expr,
-        ExprKind, Function, FunctionModifiers, FunctionSignature, GenericArg, GenericParameter,
-        ImportKind, Item, ItemKind, Literal, MatchArm, Parameter, ParameterKind, Pattern,
-        PatternField, Stmt, StmtKind, StructDeclaration, StructField, TraitBound, Type, UnaryOp,
-        VarDecl,
+        Abi, Ast, Attribute, BinaryOp, ElseBranch, EnumDeclaration, EnumVariant, EnumVariantData,
+        Expr, ExprKind, Function, FunctionModifiers, FunctionSignature, GenericArg,
+        GenericParameter, If, ImportKind, Item, ItemKind, Literal, MatchArm, Parameter,
+        ParameterKind, Pattern, PatternField, Stmt, StmtKind, StructDeclaration, StructField,
+        TraitBound, Type, UnaryOp, VarDecl,
     },
     symbols::SymbolId,
 };
@@ -378,6 +378,7 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
             StmtKind::Expr(expr) => self.walk_expr(expr),
             StmtKind::Var(var_decl) => self.walk_var_decl(var_decl),
             StmtKind::Return(ret) => self.walk_return(ret),
+            StmtKind::If(if_stmt) => self.walk_if(if_stmt),
         }
     }
 
@@ -385,6 +386,38 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
         self.visit_return(ret);
         if let Some(expr) = &mut ret.value {
             self.walk_expr(expr);
+        }
+    }
+
+    fn walk_if(&mut self, if_stmt: &mut If) {
+        self.visit_if(if_stmt);
+
+        self.walk_expr(&mut if_stmt.condition);
+
+        self.push_scope(ScopeType::Block(if_stmt.then_branch_id));
+        for stmt in &mut if_stmt.then_branch {
+            self.walk_stmt(stmt);
+        }
+        self.pop_scope();
+
+        if let Some(else_branch) = &mut if_stmt.else_branch {
+            self.walk_else_branch(else_branch);
+        }
+    }
+
+    fn walk_else_branch(&mut self, else_branch: &mut ElseBranch) {
+        self.visit_else_branch(else_branch);
+        match else_branch {
+            ElseBranch::Block(statements, else_branch_id) => {
+                self.push_scope(ScopeType::Block(*else_branch_id));
+                for stmt in statements {
+                    self.walk_stmt(stmt);
+                }
+                self.pop_scope();
+            }
+            ElseBranch::If(nested_if) => {
+                self.walk_if(nested_if);
+            }
         }
     }
 
@@ -464,6 +497,8 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
     fn visit_box(&mut self, _expr: &mut Expr) {}
     fn visit_assign(&mut self, _lhs: &mut Expr, _rhs: &mut Expr) {}
     fn visit_return(&mut self, _ret: &mut Return) {}
+    fn visit_if(&mut self, _if_stmt: &mut If) {}
+    fn visit_else_branch(&mut self, _else_branch: &mut ElseBranch) {}
     fn visit_struct_init(&mut self, _name: &mut Expr, _fields: &mut HashMap<Identifier, Expr>) {}
     fn visit_field_access(&mut self, _exprs: &mut Vec<Expr>) {}
     fn visit_method_call(

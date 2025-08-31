@@ -421,6 +421,9 @@ impl<'reports> AstLowering<'reports> {
 
                             hir_stmts.push(HirStmt::Var { symbol_id, init: expr });
                         }
+                        StmtKind::If(_if_stmt) => {
+                            todo!("HIR lowering for if statements not yet implemented");
+                        }
                     }
                 }
 

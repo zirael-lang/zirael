@@ -1,9 +1,10 @@
 use crate::prelude::{ReportKind, WalkerContext, debug};
 use std::path::{Path, PathBuf};
 use zirael_parser::{
-    Ast, AstId, AstWalker, Dependencies, ImportConflict, ImportKind, ItemKind, LexedModule,
-    MatchArm, ModuleId, Parameter, ParameterKind, Pattern, ScopeType, Stmt, Symbol, SymbolId,
-    SymbolKind, SymbolTable, SymbolTableError, Type, VarDecl, impl_ast_walker, item::Item,
+    Ast, AstId, AstWalker, Dependencies, ElseBranch, If, ImportConflict, ImportKind, ItemKind,
+    LexedModule, MatchArm, ModuleId, Parameter, ParameterKind, Pattern, ScopeType, Stmt, Symbol,
+    SymbolId, SymbolKind, SymbolTable, SymbolTableError, Type, VarDecl, impl_ast_walker,
+    item::Item,
 };
 use zirael_utils::{
     prelude::{
@@ -402,6 +403,35 @@ impl<'reports> AstWalker<'reports> for DeclarationCollection<'reports> {
         }
 
         self.symbol_table.exit_scope().unwrap();
+    }
+
+    fn walk_if(&mut self, if_stmt: &mut zirael_parser::If) {
+        self.walk_expr(&mut if_stmt.condition);
+
+        self.symbol_table.create_scope(ScopeType::Block(if_stmt.then_branch_id));
+        for stmt in &mut if_stmt.then_branch {
+            self.walk_stmt(stmt);
+        }
+        self.symbol_table.exit_scope().unwrap();
+
+        if let Some(else_branch) = &mut if_stmt.else_branch {
+            self.walk_else_branch(else_branch);
+        }
+    }
+
+    fn walk_else_branch(&mut self, else_branch: &mut zirael_parser::ElseBranch) {
+        match else_branch {
+            zirael_parser::ElseBranch::Block(statements, else_id) => {
+                self.symbol_table.create_scope(ScopeType::Block(*else_id));
+                for stmt in statements {
+                    self.walk_stmt(stmt);
+                }
+                self.symbol_table.exit_scope().unwrap();
+            }
+            zirael_parser::ElseBranch::If(nested_if) => {
+                self.walk_if(nested_if);
+            }
+        }
     }
 
     fn visit_parameter(&mut self, param: &mut Parameter) {
