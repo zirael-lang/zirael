@@ -661,7 +661,7 @@ impl<'a> Parser<'a> {
             None
         };
 
-        Pattern::EnumVariant { path, fields }
+        Pattern::EnumVariant { path, fields, resolved_variant: None }
     }
 
     fn parse_struct_pattern(&mut self, name: Identifier) -> Pattern {

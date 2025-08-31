@@ -638,28 +638,14 @@ impl<'reports> AstLowering<'reports> {
                 }
             }
             Pattern::Literal(lit) => HirPattern::Literal(lit.clone()),
-            Pattern::EnumVariant { path, fields } => {
-                if let Some(first_name) = path.first() {
-                    if let Some(symbol) = self.symbol_table.lookup_symbol(first_name) {
-                        let hir_fields = if let Some(fields) = fields {
-                            Some(
-                                fields
-                                    .iter_mut()
-                                    .map(|field| self.lower_pattern_field(field))
-                                    .collect(),
-                            )
-                        } else {
-                            None
-                        };
-                        HirPattern::EnumVariant { symbol_id: symbol.id, fields: hir_fields }
-                    } else {
-                        self.error("Unresolved enum variant", vec![], vec![]);
-                        HirPattern::Wildcard
-                    }
+            Pattern::EnumVariant { path, fields, resolved_variant } => {
+                let hir_fields = if let Some(fields) = fields {
+                    Some(fields.iter_mut().map(|field| self.lower_pattern_field(field)).collect())
                 } else {
-                    self.error("Empty enum variant path", vec![], vec![]);
-                    HirPattern::Wildcard
-                }
+                    None
+                };
+
+                HirPattern::EnumVariant { symbol_id: resolved_variant.unwrap(), fields: hir_fields }
             }
             Pattern::Struct { name, fields } => {
                 if let Some(symbol) = self.symbol_table.lookup_symbol(name) {

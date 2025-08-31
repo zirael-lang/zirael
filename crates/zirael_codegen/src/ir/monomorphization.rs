@@ -335,6 +335,17 @@ impl<'reports> HirLowering<'reports> {
                     .as_ref()
                     .map(|e| Box::new(self.monomorphize_expr(e, type_map))),
             },
+
+            IrExprKind::Match { scrutinee, arms } => IrExprKind::Match {
+                scrutinee: Box::new(self.monomorphize_expr(scrutinee, type_map)),
+                arms: arms
+                    .iter()
+                    .map(|arm| crate::ir::IrMatchArm {
+                        pattern: arm.pattern.clone(),
+                        body: self.monomorphize_expr(&arm.body, type_map),
+                    })
+                    .collect(),
+            },
         };
 
         IrExpr { ty, kind }

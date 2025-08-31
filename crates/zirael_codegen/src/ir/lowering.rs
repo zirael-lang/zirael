@@ -1,12 +1,12 @@
 use crate::ir::{
-    IrBlock, IrEnum, IrExpr, IrExprKind, IrField, IrFunction, IrItem, IrItemKind, IrModule,
-    IrParam, IrStmt, IrStruct, IrVariant, IrVariantData,
+    IrBlock, IrEnum, IrExpr, IrExprKind, IrField, IrFunction, IrItem, IrItemKind, IrMatchArm,
+    IrModule, IrParam, IrPattern, IrStmt, IrStruct, IrVariant, IrVariantData,
 };
 use itertools::Itertools as _;
 use std::{collections::HashMap, path::PathBuf, vec};
 use zirael_hir::hir::{
     HirBody, HirEnum, HirFunction, HirItem, HirItemKind, HirModule, HirStruct, HirTypeExtension,
-    expr::{FieldSymbol, HirExpr, HirExprKind, HirStmt},
+    expr::{FieldSymbol, HirExpr, HirExprKind, HirMatchArm, HirPattern, HirStmt},
 };
 use zirael_parser::{
     AstId, DropStackEntry, EnumVariantData, MainFunction, MonomorphizationId, ScopeType,
@@ -517,6 +517,13 @@ impl<'reports> HirLowering<'reports> {
                 then_branch: Box::new(self.lower_expr(*then_branch)),
                 else_branch: else_branch.map(|e| Box::new(self.lower_expr(*e))),
             },
+            HirExprKind::Match { arms, scrutinee } => {
+                let ir_scrutinee = self.lower_expr(*scrutinee);
+                let ir_arms =
+                    arms.into_iter().map(|arm| self.lower_match_arm(arm)).collect::<Vec<_>>();
+
+                IrExprKind::Match { scrutinee: Box::new(ir_scrutinee), arms: ir_arms }
+            }
             _ => {
                 warn!("unhandled expression: {expr:?}");
                 IrExprKind::Symbol(String::new())
@@ -555,5 +562,68 @@ impl<'reports> HirLowering<'reports> {
         }
 
         IrExpr { ty: expr_type, kind: fixed_kind }
+    }
+
+    fn lower_match_arm(&mut self, arm: HirMatchArm) -> IrMatchArm {
+        IrMatchArm { pattern: self.lower_pattern(arm.pattern), body: self.lower_expr(arm.body) }
+    }
+
+    fn lower_pattern(&mut self, pattern: HirPattern) -> IrPattern {
+        match pattern {
+            HirPattern::Wildcard => IrPattern::Wildcard,
+            HirPattern::Identifier(symbol_id) => {
+                let symbol = self.symbol_table.get_symbol_unchecked(&symbol_id);
+                IrPattern::Variable(resolve(&symbol.name))
+            }
+            HirPattern::Literal(literal) => IrPattern::Literal(literal),
+            HirPattern::EnumVariant { symbol_id, fields } => {
+                let tag_name = self.mangle_symbol(symbol_id);
+
+                let bindings = if let Some(fields) = fields {
+                    fields
+                        .into_iter()
+                        .filter_map(|field| {
+                            if let Some(symbol_id) = field.symbol_id {
+                                let field_name = self.mangle_symbol(symbol_id);
+
+                                Some((field_name.clone(), field_name))
+                            } else {
+                                debug!("invalid field pattern: {field:?}");
+                                None
+                            }
+                        })
+                        .collect()
+                } else {
+                    vec![]
+                };
+
+                IrPattern::EnumVariant { tag_name, bindings }
+            }
+            HirPattern::Struct { symbol_id, fields } => {
+                let tag_name = self.mangle_symbol(symbol_id);
+
+                let bindings = fields
+                    .into_iter()
+                    .filter_map(|field| {
+                        if let Some(pattern) = field.pattern {
+                            if let HirPattern::Identifier(bind_symbol_id) = *pattern {
+                                let bind_symbol =
+                                    self.symbol_table.get_symbol_unchecked(&bind_symbol_id);
+                                Some((resolve(&field.name), resolve(&bind_symbol.name)))
+                            } else {
+                                None
+                            }
+                        } else if let Some(symbol_id) = field.symbol_id {
+                            let bind_symbol = self.symbol_table.get_symbol_unchecked(&symbol_id);
+                            Some((resolve(&field.name), resolve(&bind_symbol.name)))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+
+                IrPattern::EnumVariant { tag_name, bindings }
+            }
+        }
     }
 }

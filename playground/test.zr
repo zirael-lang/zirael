@@ -3,39 +3,19 @@ enum Result<T, E> {
     Err { error: E },
 }
 
-fn divide(a: int, b: int): Result<int, string> {
-    b == 0 ? Result::Err("division by zero") : Result::Ok(a / b)
+fn divide(a: int, b: int): Result<int, bool> {
+    b == 0 ? Result::Err(false) : Result::Ok(a / b)
 }
 
 fn main() {
     var _result = divide(10, 2);
 
-    //var _res = match divide(10, 0) {
-    //    Result::Ok { value } => {
-    //        "success"
-    //    },
-    //    Result::Err { error } => {
-    //        error
-    //    }
-    //};
-
-    var x: int = 5;
-    
-    if x > 0 {
-        var _positive: int = 1;
-    }
-    
-    if x < 10 {
-        var _small: int = 1;
-    } else {
-        var _large: int = 0;
-    }
-    
-    if x == 0 {
-        var _zero: int = 0;
-    } else if x > 0 {
-        var _positive: int = 1;
-    } else {
-        var _negative: int = -1;
-    }
+    var _res = match divide(10, 0) {
+        Result::Ok { value } => {
+            true
+        },
+        Result::Err { error } => {
+            error
+        }
+    };
 }

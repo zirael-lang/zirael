@@ -27,7 +27,11 @@ pub enum Pattern {
     /// Literal pattern `42`, `"hello"`, etc.
     Literal(Literal),
     /// Enum variant pattern `Result::Ok { value }`
-    EnumVariant { path: Vec<Identifier>, fields: Option<Vec<PatternField>> },
+    EnumVariant {
+        path: Vec<Identifier>,
+        fields: Option<Vec<PatternField>>,
+        resolved_variant: Option<SymbolId>,
+    },
     /// Struct pattern `Point { x, y }`
     Struct { name: Identifier, fields: Vec<PatternField> },
 }

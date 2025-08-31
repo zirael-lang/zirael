@@ -2,7 +2,7 @@ use crate::{
     codegen::{Codegen, Gen},
     ir::{
         IrBlock, IrEnum, IrExpr, IrExprKind, IrField, IrFunction, IrItem, IrItemKind, IrModule,
-        IrParam, IrStmt, IrStruct, IrTypeExtension, IrVariantData,
+        IrParam, IrPattern, IrStmt, IrStruct, IrTypeExtension, IrVariantData,
     },
 };
 use itertools::Itertools as _;
@@ -578,6 +578,116 @@ impl Gen for IrExpr {
                         }
                     }
                 }
+            }
+            IrExprKind::Match { scrutinee, arms } => {
+                p.write("({\n");
+                p.indent();
+
+                p.write_indented("");
+                scrutinee.ty.generate(p);
+                p.write(" scrutinee_value =");
+
+                scrutinee.generate(p);
+                p.write(";\n");
+
+                p.write_indented("");
+                arms[0].body.ty.generate(p);
+
+                p.write(" match_result;\n");
+
+                for (i, arm) in arms.iter().enumerate() {
+                    if i == 0 {
+                        p.write_indented("if (");
+                    } else {
+                        p.write_indented("} else if (");
+                    }
+
+                    match &arm.pattern {
+                        IrPattern::Wildcard => {
+                            p.write("1");
+                        }
+                        IrPattern::Variable(_) => {
+                            p.write("1");
+                        }
+                        IrPattern::Literal(literal) => {
+                            p.write("scrutinee_value == ");
+                            match literal {
+                                Literal::Integer(val) => p.write(&val.to_string()),
+                                Literal::Float(val) => p.write(&format!("{val}f")),
+                                Literal::Char(val) => p.write(&format!("'{val}'")),
+                                Literal::String(val) => {
+                                    p.write(&format!("strcmp(scrutinee_value, \"{val}\") == 0"));
+                                }
+                                Literal::Bool(val) => p.write(if *val { "true" } else { "false" }),
+                            }
+                        }
+                        IrPattern::EnumVariant { tag_name, .. } => {
+                            p.write("scrutinee_value.tag == ");
+                            p.write(tag_name);
+                        }
+                    }
+
+                    p.writeln(") {");
+                    p.indent();
+
+                    match &arm.pattern {
+                        IrPattern::Variable(var_name) => {
+                            p.write_indented(&format!("auto {var_name} = scrutinee_value;\n"));
+                        }
+                        IrPattern::EnumVariant { tag_name, bindings } => {
+                            for (field_name, var_name) in bindings {
+                                p.write_indented(&format!(
+                                    "auto {var_name} = scrutinee_value.data.{tag_name}.{field_name};\n"
+                                ));
+                            }
+                        }
+                        _ => {}
+                    }
+
+                    p.write_indented("match_result = ");
+                    match &arm.body.kind {
+                        IrExprKind::Block(block) => {
+                            p.write("({\n");
+                            p.indent();
+                            for (idx, stmt) in block.stmts.iter().enumerate() {
+                                match stmt {
+                                    IrStmt::Return(Some(expr)) => {
+                                        p.write_indented("");
+                                        expr.generate(p);
+                                        p.write(";\n");
+                                        break;
+                                    }
+                                    IrStmt::Return(None) => {
+                                        p.write_indented("/* void return */\n");
+                                        break;
+                                    }
+                                    IrStmt::Expr(expr) if idx == block.stmts.len() - 1 => {
+                                        p.write_indented("");
+                                        expr.generate(p);
+                                        p.write(";\n");
+                                    }
+                                    _ => {
+                                        stmt.generate(p);
+                                    }
+                                }
+                            }
+                            p.dedent();
+                            p.write_indented("})");
+                        }
+                        _ => {
+                            arm.body.generate(p);
+                        }
+                    }
+                    p.write(";\n");
+
+                    p.dedent();
+                }
+
+                p.writeln("}");
+
+                p.write_indented("match_result;\n");
+                p.dedent();
+                p.write("})");
             }
         }
     }

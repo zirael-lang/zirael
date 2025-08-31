@@ -143,6 +143,21 @@ pub enum IrExprKind {
     FieldAccess(Vec<IrExpr>),
     Ternary(Box<IrExpr>, Box<IrExpr>, Box<IrExpr>),
     If { condition: Box<IrExpr>, then_branch: Box<IrExpr>, else_branch: Option<Box<IrExpr>> },
+    Match { scrutinee: Box<IrExpr>, arms: Vec<IrMatchArm> },
     // type provided to, for example, a sizeof call
     Type(Type),
+}
+
+#[derive(Clone, Debug)]
+pub struct IrMatchArm {
+    pub pattern: IrPattern,
+    pub body: IrExpr,
+}
+
+#[derive(Clone, Debug)]
+pub enum IrPattern {
+    Wildcard,
+    Variable(String),
+    Literal(Literal),
+    EnumVariant { tag_name: String, bindings: Vec<(String, String)> },
 }
