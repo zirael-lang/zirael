@@ -12,7 +12,7 @@ pub fn setup_logger(verbose: bool, test_logger: bool) {
       writeln!(buf, "{} {}", record.level().to_string().to_lowercase(), record.args())
     });
   } else {
-    builder.format(|buf, record| {
+    builder.format(move |buf, record| {
       use std::io::Write as _;
 
       let level_color = match record.level() {
@@ -25,10 +25,14 @@ pub fn setup_logger(verbose: bool, test_logger: bool) {
 
       writeln!(
         buf,
-        "{}{}\x1b[0m \x1b[90m{}\x1b[0m {}",
+        "{}{}\x1b[0m{} {}",
         level_color,
         record.level().to_string().to_lowercase(),
-        record.module_path().unwrap_or("unknown"),
+        if verbose {
+          format!(" \x1b[90m{}\x1b[0m", record.module_path().unwrap_or("unknown"))
+        } else {
+          "".to_string()
+        },
         record.args()
       )
     });
