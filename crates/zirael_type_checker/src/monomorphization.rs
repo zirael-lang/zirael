@@ -23,6 +23,10 @@ impl MonomorphizationTable {
   pub fn get_entry_mut(&mut self, id: MonomorphizationId) -> Option<&mut MonomorphizationEntry> {
     self.entries.get_mut(&id)
   }
+
+  pub fn has_entries(&mut self, sym: SymbolId) -> bool {
+    self.entries.values().any(|entry| entry.original_id == sym)
+  }
 }
 
 #[derive(Debug, Clone)]

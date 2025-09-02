@@ -146,7 +146,7 @@ impl<'reports> TypeInference<'reports> {
 
               if should_update {
                 let symbol = self.symbol_table.get_symbol_unchecked(&original_id);
-                let generics = self.get_generics_for_symbol(&symbol);
+                let generics = self.symbol_table.get_generics_for_symbol(&symbol);
 
                 if let (Some(generics), Some(entry)) =
                   (generics, self.mono_table.entries.get_mut(&mono_id))
@@ -279,34 +279,6 @@ impl<'reports> TypeInference<'reports> {
           }
         }
       }
-    }
-  }
-
-  fn get_generics_for_symbol(&self, symbol: &Symbol) -> Option<Vec<GenericParameter>> {
-    match &symbol.kind {
-      SymbolKind::Function { signature, .. } => {
-        let mut generics = vec![];
-
-        if let Some(parent_struct) = self.symbol_table.is_a_child_of_symbol(symbol.canonical_symbol)
-        {
-          let parent_struct = self.symbol_table.get_symbol_unchecked(&parent_struct);
-          if let SymbolKind::Struct { generics: gens, .. }
-          | SymbolKind::Enum { generics: gens, .. } = &parent_struct.kind
-          {
-            generics.extend(gens.clone());
-          }
-        }
-        generics.extend(signature.generics.clone());
-        Some(generics)
-      }
-      SymbolKind::Struct { generics, .. } | SymbolKind::Enum { generics, .. } => {
-        Some(generics.clone())
-      }
-      SymbolKind::EnumVariant { parent_enum, .. } => {
-        let sym = self.symbol_table.get_symbol_unchecked(parent_enum);
-        self.get_generics_for_symbol(&sym)
-      }
-      _ => None,
     }
   }
 }

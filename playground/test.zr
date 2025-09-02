@@ -3,24 +3,9 @@ enum Result<T, E> {
     Err { error: E },
 }
 
-fn divide(a: int, b: int): Result<int, bool> {
-    b == 0 ? Result::Err(false) : Result::Ok(a / b)
-}
+@extern
+fn puts(s: string): int;
 
 fn main() {
-    var _result = divide(10, 2);
-
-    var _res = match divide(10, 0) {
-        Result::Ok { value } => {
-            true
-        },
-        Result::Err { error } => {
-            error
-        }
-    };
-
-    var _test = match 10 {
-        10 => "yay",
-        0 => "not yay"
-    };
+    puts("Hello from extern C function!");
 }

@@ -9,6 +9,7 @@ repository.workspace = true
 id-arena = { workspace = true }
 zirael_parser = { workspace = true }
 zirael_utils = { workspace = true }
+zirael_type_checker = { workspace = true }
 
 [lints]
 workspace = true

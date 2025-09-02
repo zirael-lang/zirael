@@ -1,5 +1,5 @@
 use crate::{
-  SymbolId,
+  ExprKind, Literal, SymbolId,
   ast::{
     expr::Expr,
     types::{GenericParameter, Type},
@@ -94,6 +94,48 @@ pub enum ParameterKind {
 pub struct Attribute {
   pub name: Identifier,
   pub args: Option<Vec<Expr>>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ExpectedAttribute {
+  String,
+  Int,
+  Float,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AttributeValue {
+  String(String),
+  Int(i64),
+  Float(f64),
+}
+
+impl AttributeValue {
+  pub fn as_string(&self) -> Option<&String> {
+    match self {
+      AttributeValue::String(s) => Some(s),
+      _ => None,
+    }
+  }
+}
+
+impl Attribute {
+  pub fn get_arg_value(&self, index: usize, expected: ExpectedAttribute) -> Option<AttributeValue> {
+    let arg = self.args.as_ref()?.get(index)?;
+
+    match (&expected, &arg.kind) {
+      (ExpectedAttribute::String, ExprKind::Literal(Literal::String(s))) => {
+        Some(AttributeValue::String(s.clone()))
+      }
+      (ExpectedAttribute::Int, ExprKind::Literal(Literal::Integer(i))) => {
+        Some(AttributeValue::Int(*i))
+      }
+      (ExpectedAttribute::Float, ExprKind::Literal(Literal::Float(f))) => {
+        Some(AttributeValue::Float(*f))
+      }
+      _ => None,
+    }
+  }
 }
 
 #[derive(Debug, Clone, PartialEq)]

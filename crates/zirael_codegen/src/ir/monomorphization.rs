@@ -483,45 +483,23 @@ impl<'reports> HirLowering<'reports> {
     }
   }
 
-  pub fn get_generics_for_symbol(&self, symbol: &Symbol) -> Vec<GenericParameter> {
-    match &symbol.kind {
-      SymbolKind::Function { signature, .. } => {
-        let mut generics = vec![];
-
-        if let Some(parent_struct) = self.symbol_table.is_a_child_of_symbol(symbol.canonical_symbol)
-        {
-          let parent_struct = self.symbol_table.get_symbol_unchecked(&parent_struct);
-          if let SymbolKind::Struct { generics: gens, .. }
-          | SymbolKind::Enum { generics: gens, .. } = &parent_struct.kind
-          {
-            generics.extend(gens.clone());
-          }
-        }
-        generics.extend(signature.generics.clone());
-
-        generics
-      }
-      SymbolKind::Struct { generics, .. } | SymbolKind::Enum { generics, .. } => generics.clone(),
-      SymbolKind::EnumVariant { parent_enum, .. } => {
-        let sym = self.symbol_table.get_symbol_unchecked(parent_enum);
-        self.get_generics_for_symbol(&sym)
-      }
-      _ => unreachable!(),
-    }
-  }
-
   pub fn get_monomorphized_name(&mut self, mono_id: MonomorphizationId) -> String {
     if let Some(entry) = self.mono_table.entries.get(&mono_id) {
       let original_symbol = self.symbol_table.get_symbol_unchecked(&entry.original_id);
-      let generics = self.get_generics_for_symbol(&original_symbol);
+      let generics = self.symbol_table.get_generics_for_symbol(&original_symbol);
 
-      let type_arguments: Vec<Type> = generics
-        .iter()
-        .filter_map(|param| entry.concrete_types.get(&param.name))
-        .cloned()
-        .collect();
+      if let Some(generics) = generics {
+        let type_arguments: Vec<Type> = generics
+          .iter()
+          .filter_map(|param| entry.concrete_types.get(&param.name))
+          .cloned()
+          .collect();
 
-      return self.mangle_monomorphized_symbol(entry.original_id, mono_id, &type_arguments);
+        return self.mangle_monomorphized_symbol(entry.original_id, mono_id, &type_arguments);
+      } else {
+        debug!("no generics for {original_symbol:?}");
+        return self.mangle_symbol(entry.original_id);
+      }
     }
 
     panic!("Monomorphization ID {mono_id:?} not found")

@@ -30,8 +30,6 @@ pub enum Keyword {
   Else,
 
   #[strum(props(category = "modifier"))]
-  Extern,
-  #[strum(props(category = "modifier"))]
   Const,
   #[strum(props(category = "modifier"))]
   Async,
@@ -78,7 +76,6 @@ impl Keyword {
       Self::Match => "match",
       Self::If => "if",
       Self::Else => "else",
-      Self::Extern => "extern",
       Self::Const => "const",
       Self::Async => "async",
       Self::Int => "int",

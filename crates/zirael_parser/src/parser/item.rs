@@ -1,5 +1,6 @@
 use crate::{
-  AstId, Attribute, StructDeclaration, StructField, TokenKind, Type, TypeExtension,
+  AstId, Attribute, ExpectedAttribute, StructDeclaration, StructField, TokenKind, Type,
+  TypeExtension,
   ast::{
     Abi, EnumDeclaration, EnumVariant, EnumVariantData, Function, FunctionModifiers,
     FunctionSignature, ImportKind, Item, ItemKind, Keyword, Parameter, ParameterKind,
@@ -23,9 +24,9 @@ impl<'a> Parser<'a> {
 
     let id = self.fresh_id();
     let (kind, name) = if self.match_keyword(Keyword::Fn) {
-      self.parse_fn(id)
+      self.parse_fn(id, &attrs, span.clone())
     } else if self.match_keyword(Keyword::Struct) {
-      self.parse_struct(id)
+      self.parse_struct(id, span.clone())
     } else if self.match_keyword(Keyword::Enum) {
       self.parse_enum(id)
     } else if self.match_keyword(Keyword::Import) {
@@ -190,14 +191,14 @@ impl<'a> Parser<'a> {
     (ItemKind::Import(kind, span), default_ident())
   }
 
-  pub fn parse_single_method(&mut self, attrs: Vec<Attribute>) -> Option<Item> {
+  pub fn parse_single_method(&mut self, attrs: Vec<Attribute>, span: Span) -> Option<Item> {
     if !self.check_keyword(Keyword::Fn) {
       return None;
     }
 
     self.advance();
     let method_id = self.fresh_id();
-    let (method_kind, method_name) = self.parse_fn(method_id);
+    let (method_kind, method_name) = self.parse_fn(method_id, &attrs, span);
 
     if let ItemKind::Function(func) = method_kind {
       Some(Item {
@@ -214,8 +215,7 @@ impl<'a> Parser<'a> {
     }
   }
 
-  pub fn parse_struct(&mut self, id: AstId) -> (ItemKind, Identifier) {
-    let span = self.prev_span();
+  pub fn parse_struct(&mut self, id: AstId, span: Span) -> (ItemKind, Identifier) {
     let name = self.expect_identifier().unwrap_or_else(|| {
       self.error_at_current("struct name is required");
       default_ident()
@@ -243,10 +243,11 @@ impl<'a> Parser<'a> {
     let mut methods = vec![];
 
     while !self.check(&TokenKind::BraceClose) && !self.is_at_end() {
+      let span = self.prev_span();
       let attrs = self.parse_attrs();
 
       if self.check_keyword(Keyword::Fn) {
-        if let Some(method) = self.parse_single_method(attrs) {
+        if let Some(method) = self.parse_single_method(attrs, span) {
           methods.push(method);
         }
       } else if let Some(field_name) = self.expect_identifier() {
@@ -310,10 +311,11 @@ impl<'a> Parser<'a> {
     let mut methods = vec![];
 
     while !self.check(&TokenKind::BraceClose) && !self.is_at_end() {
+      let span = self.prev_span();
       let attrs = self.parse_attrs();
 
       if self.check_keyword(Keyword::Fn) {
-        if let Some(method) = self.parse_single_method(attrs) {
+        if let Some(method) = self.parse_single_method(attrs, span) {
           methods.push(method);
         }
       } else if let Some(variant_name) = self.expect_identifier() {
@@ -381,10 +383,11 @@ impl<'a> Parser<'a> {
 
     let mut items = vec![];
     while !self.check(&TokenKind::BraceClose) && !self.is_at_end() {
+      let span = self.prev_span();
       let attrs = self.parse_attrs();
 
       if self.check_keyword(Keyword::Fn) {
-        if let Some(method) = self.parse_single_method(attrs) {
+        if let Some(method) = self.parse_single_method(attrs, span) {
           items.push(method);
         }
       } else {
@@ -411,21 +414,28 @@ impl<'a> Parser<'a> {
     )
   }
 
-  pub fn parse_fn(&mut self, id: AstId) -> (ItemKind, Identifier) {
-    let span = self.prev_span();
+  pub fn parse_fn(
+    &mut self,
+    id: AstId,
+    attrs: &Vec<Attribute>,
+    span: Span,
+  ) -> (ItemKind, Identifier) {
     let async_ = self.match_keyword(Keyword::Async);
     let const_ = self.match_keyword(Keyword::Const);
-    let extern_ = self.match_keyword(Keyword::Extern);
+    let extern_ = attrs.iter().find(|attr| resolve(&attr.name) == "extern");
 
-    let abi = if extern_ {
-      if let Some(abi_name) = self.expect_string() {
-        self.advance();
-        Some(Abi(abi_name))
+    let (extern_, abi) = if let Some(extern_) = extern_ {
+      let abi = if let Some(abi) = extern_.get_arg_value(0, ExpectedAttribute::String)
+        && let Some(string) = abi.as_string()
+      {
+        Some(Abi(string.clone()))
       } else {
         None
-      }
+      };
+
+      (true, abi)
     } else {
-      None
+      (false, None)
     };
 
     let name = self.expect_identifier().unwrap_or_else(|| {
@@ -444,7 +454,13 @@ impl<'a> Parser<'a> {
     };
     let span = span.to(self.prev_span());
 
-    let body = if self.match_token(TokenKind::BraceOpen) { Some(self.parse_block()) } else { None };
+    let body = if self.match_token(TokenKind::BraceOpen) {
+      Some(self.parse_block())
+    } else if extern_ && self.match_token(TokenKind::Semicolon) {
+      None
+    } else {
+      None
+    };
 
     let signature = FunctionSignature { generics, parameters, return_type };
     let function = Function {

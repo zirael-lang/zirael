@@ -1352,6 +1352,7 @@ version = "0.1.0"
 dependencies = [
  "id-arena",
  "zirael_parser",
+ "zirael_type_checker",
  "zirael_utils",
 ]
 

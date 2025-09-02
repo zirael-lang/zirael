@@ -146,7 +146,6 @@ impl<'reports> HirLowering<'reports> {
       }
     }
 
-    // Fall back to the original symbol mangling if not a generic enum variant
     self.mangle_symbol(variant_symbol_id)
   }
 

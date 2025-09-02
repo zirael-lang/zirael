@@ -8,11 +8,13 @@ use crate::hir::{
 };
 use id_arena::Arena;
 use std::{collections::HashMap, ops::Range};
-use zirael_parser::{ast::item::Item, *};
+use zirael_parser::{ast::item::Item, monomorphized_symbol::MonomorphizedSymbol, *};
+use zirael_type_checker::monomorphization::MonomorphizationTable;
 use zirael_utils::prelude::*;
 
 pub struct AstLowering<'reports> {
-  symbol_table: SymbolTable,
+  pub symbol_table: SymbolTable,
+  pub mono_table: MonomorphizationTable,
   reports: Reports<'reports>,
   processed_file: Option<SourceFileId>,
   pub folded_vars: HashMap<SymbolId, HirExprKind>,
@@ -20,13 +22,18 @@ pub struct AstLowering<'reports> {
 }
 
 impl<'reports> AstLowering<'reports> {
-  pub fn new(symbol_table: &SymbolTable, reports: &Reports<'reports>) -> Self {
+  pub fn new(
+    symbol_table: &SymbolTable,
+    reports: &Reports<'reports>,
+    mono_table: MonomorphizationTable,
+  ) -> Self {
     Self {
       symbol_table: symbol_table.clone(),
       reports: reports.clone(),
       processed_file: None,
       folded_vars: HashMap::new(),
       ast_id_arena: Arena::new(),
+      mono_table,
     }
   }
 
@@ -66,6 +73,10 @@ impl<'reports> AstLowering<'reports> {
     }
 
     let symbol_id = item.symbol_id.unwrap();
+    let sym = self.symbol_table.get_symbol_unchecked(&symbol_id);
+    if self.try_unused_symbol(&sym) {
+      return None;
+    }
 
     match &mut item.kind {
       ItemKind::Function(func) => {
@@ -727,7 +738,8 @@ pub fn lower_ast_to_hir<'reports>(
   lexed_modules: &mut Vec<LexedModule>,
   symbol_table: &SymbolTable,
   reports: &Reports<'reports>,
+  mono: MonomorphizationTable,
 ) -> Vec<HirModule> {
-  let mut lowering = AstLowering::new(symbol_table, reports);
+  let mut lowering = AstLowering::new(symbol_table, reports, mono);
   lowering.lower_modules(lexed_modules)
 }

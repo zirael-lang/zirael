@@ -179,6 +179,7 @@ impl<'reports> AstWalker<'reports> for NameResolution<'reports> {
         SymbolRelationNode::Symbol(self.current_item.unwrap()),
         SymbolRelationNode::Symbol(id),
       );
+      self.symbol_table.mark_used(id).expect("invalid symbol id");
     }
   }
 

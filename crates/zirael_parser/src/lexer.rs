@@ -23,7 +23,6 @@ pub enum TokenKind {
   #[token("import", |_| Keyword::Import)]
   #[token("mod", |_| Keyword::Mod)]
   #[token("var", |_| Keyword::Var)]
-  #[token("extern", |_| Keyword::Extern)]
   #[token("const", |_| Keyword::Const)]
   #[token("async", |_| Keyword::Async)]
   #[token("int", |_| Keyword::Int)]

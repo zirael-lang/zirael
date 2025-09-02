@@ -1,5 +1,5 @@
 use crate::{
-  Type,
+  GenericParameter, Type,
   symbols::{
     Scope, ScopeId, ScopeType, Symbol, SymbolId, SymbolKind, TemporaryLifetime,
     relations::{SymbolRelationNode, SymbolRelations},
@@ -496,6 +496,45 @@ impl SymbolTable {
         }
       }
     });
+  }
+
+  pub fn get_generics_for_symbol(&self, symbol: &Symbol) -> Option<Vec<GenericParameter>> {
+    match &symbol.kind {
+      SymbolKind::Function { signature, .. } => {
+        let mut generics = vec![];
+
+        if let Some(parent_generics) = self.read(|table| {
+          table
+            .parent_symbols_lookup
+            .iter()
+            .find(|(_, children)| children.contains(&symbol.canonical_symbol))
+            .and_then(|(&parent_id, _)| {
+              table.symbols.get(parent_id).and_then(|parent_symbol| match &parent_symbol.kind {
+                SymbolKind::Struct { generics, .. } | SymbolKind::Enum { generics, .. } => {
+                  Some(generics.clone())
+                }
+                _ => None,
+              })
+            })
+        }) {
+          generics.extend(parent_generics);
+        }
+
+        generics.extend(signature.generics.clone());
+        Some(generics)
+      }
+
+      SymbolKind::Struct { generics, .. } | SymbolKind::Enum { generics, .. } => {
+        Some(generics.clone())
+      }
+
+      SymbolKind::EnumVariant { parent_enum, .. } => {
+        let parent_symbol = self.get_symbol_unchecked(parent_enum);
+        self.get_generics_for_symbol(&parent_symbol)
+      }
+
+      _ => None,
+    }
   }
 }
 
