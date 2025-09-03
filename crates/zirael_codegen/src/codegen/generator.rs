@@ -16,7 +16,7 @@ pub fn run_codegen(
   mut order: Vec<SymbolRelationNode>,
   used_externals: Vec<String>,
   main_fn: &Option<MainFunction>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<PathBuf> {
   let header = &mut Codegen::new();
   let implementation = &mut Codegen::new();
   let header_file = PathBuf::from(info.name.clone()).with_extension("h");
@@ -139,14 +139,12 @@ pub fn run_codegen(
     implementation.writeln("}");
   }
 
+  let output_file = info.write_to.join(info.name.clone()).with_extension("c");
   fs_err::create_dir_all(&info.write_to)?;
   fs_err::write(info.write_to.join(header_file), header.content.buffer())?;
-  fs_err::write(
-    info.write_to.join(info.name.clone()).with_extension("c"),
-    implementation.content.buffer(),
-  )?;
+  fs_err::write(output_file.clone(), implementation.content.buffer())?;
 
-  Ok(())
+  Ok(output_file)
 }
 
 fn function_signature(func: &IrFunction, name: &str, p: &mut Codegen) {
@@ -162,6 +160,23 @@ fn function_signature(func: &IrFunction, name: &str, p: &mut Codegen) {
     }
   }
   p.write(")");
+}
+
+const STANDARD_C_FUNCTIONS: &[&str] = &[
+  // <stdlib.h>
+  "malloc", "free", "calloc", "realloc", "exit", "abort", "atoi", "atol", "atof", "rand", "srand",
+  // <string.h>
+  "strlen", "strcpy", "strncpy", "strcat", "strncat", "strcmp", "strncmp", "strchr", "strrchr",
+  "memcpy", "memmove", "memset", "memcmp", // <stdio.h>
+  "printf", "scanf", "puts", "gets", "fopen", "fclose", "fread", "fwrite", "fgets", "fputs",
+  "fprintf", "fscanf", "sprintf", "sscanf", // <math.h>
+  "sin", "cos", "tan", "asin", "acos", "atan", "sinh", "cosh", "tanh", "sqrt", "pow", "exp", "log",
+  "log10", // <ctype.h>
+  "isalpha", "isdigit", "isalnum", "isspace", "isupper", "islower", "toupper", "tolower",
+];
+
+fn is_standard_c_function(name: &str) -> bool {
+  STANDARD_C_FUNCTIONS.contains(&name)
 }
 
 impl Gen for IrItem {
@@ -317,22 +332,52 @@ impl Gen for IrField {
 
 impl Gen for IrFunction {
   fn generate_header(&self, cg: &mut Codegen) {
-    function_signature(self, self.name.as_str(), cg);
-    cg.writeln(";");
-    cg.newline();
+    if let Some(extern_) = &self.extern_ {
+      if !is_standard_c_function(&extern_.original_name) {
+        function_signature(self, &extern_.original_name, cg);
+        cg.writeln(";");
+        cg.newline();
+      }
+    } else {
+      function_signature(self, self.name.as_str(), cg);
+      cg.writeln(";");
+      cg.newline();
+    }
   }
 
   fn generate(&self, p: &mut Codegen) {
     function_signature(self, self.name.as_str(), p);
 
-    if let Some(body) = &self.body {
-      if body.stmts.is_empty() {
-        p.writeln(";");
-        return;
-      }
+    if let Some(extern_) = &self.extern_ {
+      // todo: handle abi
+      p.write("{");
+      p.newline();
+      p.indent();
 
-      p.write(" ");
-      body.generate(p);
+      p.write_indented(&format!("return {}(", &extern_.original_name));
+      for (i, arg) in self.parameters.iter().enumerate() {
+        p.write(arg.name.as_str());
+        if i != self.parameters.len() - 1 {
+          p.write(", ");
+        }
+      }
+      p.write(");\n");
+
+      p.dedent();
+      p.write("}; ");
+      p.newline();
+    } else {
+      if let Some(body) = &self.body {
+        if body.stmts.is_empty() {
+          p.writeln(";");
+          return;
+        }
+
+        p.write(" ");
+        body.generate(p);
+      } else {
+        p.writeln(";");
+      }
     }
     p.newline();
   }

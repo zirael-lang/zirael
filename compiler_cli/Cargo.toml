@@ -9,6 +9,7 @@ description = "Zirael Compiler"
 clap = { workspace = true }
 fs-err = { workspace = true }
 zirael_core = { workspace = true }
+zirael_c_compiler = { workspace = true }
 
 [lints]
 workspace = true

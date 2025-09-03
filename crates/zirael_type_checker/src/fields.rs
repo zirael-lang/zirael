@@ -301,7 +301,7 @@ impl<'reports> TypeInference<'reports> {
         };
         *sym_id = Some(method_id);
 
-        self.infer_call(callee, args, call_info)
+        self.infer_call(callee, args, call_info, &mut vec![])
       } else {
         Type::Error
       }
@@ -367,7 +367,7 @@ impl<'reports> TypeInference<'reports> {
 
         if let Some(method_id) = found {
           *call_id = Some(method_id);
-          self.infer_call(&mut fields[1], args, call_info)
+          self.infer_call(&mut fields[1], args, call_info, &mut vec![])
         } else {
           self.error(
             &format!(
@@ -446,7 +446,7 @@ impl<'reports> TypeInference<'reports> {
 
           if let Some(method_id) = method_found {
             *call_id = Some(method_id);
-            self.infer_call(&mut fields[1], args, call_info)
+            self.infer_call(&mut fields[1], args, call_info, &mut vec![])
           } else {
             self.error(
               &format!(

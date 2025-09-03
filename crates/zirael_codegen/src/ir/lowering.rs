@@ -1,6 +1,6 @@
 use crate::ir::{
-  IrBlock, IrEnum, IrExpr, IrExprKind, IrField, IrFunction, IrItem, IrItemKind, IrMatchArm,
-  IrModule, IrParam, IrPattern, IrStmt, IrStruct, IrVariant, IrVariantData,
+  IrBlock, IrEnum, IrExpr, IrExprKind, IrField, IrFunction, IrFunctionExtern, IrItem, IrItemKind,
+  IrMatchArm, IrModule, IrParam, IrPattern, IrStmt, IrStruct, IrVariant, IrVariantData,
 };
 use itertools::Itertools as _;
 use std::{collections::HashMap, path::PathBuf, vec};
@@ -189,7 +189,7 @@ impl<'reports> HirLowering<'reports> {
     self.current_symbol_id = Some(item.symbol_id);
     match &mut item.kind {
       HirItemKind::Function(func) => {
-        let ir_function = self.lower_function(name.clone(), func);
+        let ir_function = self.lower_function(resolve(&sym.name), name.clone(), func);
 
         Some(IrItem {
           name,
@@ -294,7 +294,12 @@ impl<'reports> HirLowering<'reports> {
     IrStruct { fields, name, id: hir_struct.id }
   }
 
-  fn lower_function(&mut self, name: String, func: &mut HirFunction) -> IrFunction {
+  fn lower_function(
+    &mut self,
+    original_name: String,
+    name: String,
+    func: &mut HirFunction,
+  ) -> IrFunction {
     self.push_scope(ScopeType::Function(func.id));
     let parameters = func
       .signature
@@ -315,10 +320,13 @@ impl<'reports> HirLowering<'reports> {
       parameters,
       return_type,
       body,
-      is_extern: func.is_extern,
       is_const: func.is_const,
       is_async: func.is_async,
-      abi: func.abi.clone(),
+      extern_: if func.is_extern {
+        Some(IrFunctionExtern { original_name, abi: func.abi.clone() })
+      } else {
+        None
+      },
       id: func.id,
     }
   }

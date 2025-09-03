@@ -159,7 +159,48 @@ impl<'a> Parser<'a> {
 
   fn parse_function_call(&mut self, callee: Expr) -> Expr {
     let start_span = callee.span.clone();
-    self.advance();
+
+    let mut type_annotations = vec![];
+
+    if self.check(&TokenKind::LessThan) {
+      self.advance();
+
+      if !self.check(&TokenKind::GreaterThan) {
+        loop {
+          if let Some(ty) = self.parse_type() {
+            type_annotations.push(ty);
+          } else {
+            self.error_at_current("expected type in type annotation");
+            break;
+          }
+
+          if self.match_token(TokenKind::Comma) {
+            continue;
+          }
+
+          break;
+        }
+      }
+
+      if !self.match_token(TokenKind::GreaterThan) {
+        self.error_at_current("expected '>' after function type annotations");
+      }
+    }
+
+    if !self.match_token(TokenKind::ParenOpen) {
+      self.error_at_current("expected '(' after function name");
+      let end_span = self.prev_span();
+      return self.new_expr(
+        ExprKind::Call {
+          callee: Box::new(callee),
+          args: vec![],
+          call_info: None,
+          type_annotations,
+        },
+        start_span.to(end_span),
+      );
+    }
+
     let mut args = Vec::new();
 
     if !self.check(&TokenKind::ParenClose) {
@@ -180,7 +221,7 @@ impl<'a> Parser<'a> {
 
     let end_span = self.prev_span();
     self.new_expr(
-      ExprKind::Call { callee: Box::new(callee), args, call_info: None },
+      ExprKind::Call { callee: Box::new(callee), args, call_info: None, type_annotations },
       start_span.to(end_span),
     )
   }
@@ -275,6 +316,14 @@ impl<'a> Parser<'a> {
         match &token.kind {
           TokenKind::ParenOpen => {
             expr = self.parse_function_call(expr);
+          }
+          TokenKind::LessThan => {
+            // Look ahead to see if this is a function call with type annotations
+            if self.is_function_call_with_generics() {
+              expr = self.parse_function_call(expr);
+            } else {
+              break;
+            }
           }
           TokenKind::DoubleColon => {
             expr = self.parse_static_call(expr);
@@ -580,7 +629,6 @@ impl<'a> Parser<'a> {
         }
         TokenKind::Identifier(name) => {
           let name = name.clone();
-          let start_span = self.peek_span();
           self.advance();
           let identifier = get_or_intern(&name);
           let identifier_span = self.prev_span();
@@ -714,5 +762,65 @@ impl<'a> Parser<'a> {
     }
 
     fields
+  }
+
+  /// Helper method to determine if a '<' token starts a function call with generics
+  /// by looking ahead to find matching '>' followed by '('
+  fn is_function_call_with_generics(&mut self) -> bool {
+    let mut depth = 0;
+    let mut position = 0;
+
+    // Start from current position (which should be '<')
+    while let Some(token) = self.peek_ahead(position) {
+      match &token.kind {
+        TokenKind::LessThan => {
+          depth += 1;
+        }
+        TokenKind::GreaterThan => {
+          depth -= 1;
+          if depth == 0 {
+            // Found matching '>', now check if followed by '('
+            if let Some(next_token) = self.peek_ahead(position + 1) {
+              return next_token.kind == TokenKind::ParenOpen;
+            }
+            return false;
+          }
+        }
+        TokenKind::RightShift => {
+          // '>>' counts as two '>' tokens
+          depth -= 2;
+          if depth <= 0 {
+            if depth == 0 {
+              // Check if followed by '('
+              if let Some(next_token) = self.peek_ahead(position + 1) {
+                return next_token.kind == TokenKind::ParenOpen;
+              }
+            }
+            return false;
+          }
+        }
+        // If we encounter certain tokens that would never appear in type annotations,
+        // this is probably not a function call
+        TokenKind::Semicolon
+        | TokenKind::BraceOpen
+        | TokenKind::BraceClose
+        | TokenKind::ParenClose
+        | TokenKind::BracketClose => {
+          return false;
+        }
+        _ => {
+          // Continue looking ahead
+        }
+      }
+
+      position += 1;
+
+      // Safety limit to avoid infinite loops
+      if position > 50 {
+        return false;
+      }
+    }
+
+    false
   }
 }

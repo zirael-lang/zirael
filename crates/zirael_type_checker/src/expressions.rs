@@ -77,7 +77,9 @@ impl<'reports> TypeInference<'reports> {
       ExprKind::Block(stmts) => self.infer_block(stmts, expr.id),
       ExprKind::Unary(op, expr) => self.infer_unary(op, expr),
       ExprKind::Binary { left, op, right } => self.infer_binary(left, op, right),
-      ExprKind::Call { callee, args, call_info } => self.infer_call(callee, args, call_info),
+      ExprKind::Call { callee, args, call_info, type_annotations } => {
+        self.infer_call(callee, args, call_info, type_annotations)
+      }
       ExprKind::Paren(expr) => self.infer_expr(expr),
       ExprKind::StructInit { name, fields, call_info } => {
         self.infer_struct_init(name, fields, call_info)
@@ -229,8 +231,10 @@ impl<'reports> TypeInference<'reports> {
     match op {
       UnaryOp::Box => operand_ty,
       UnaryOp::Deref => {
-        if let Type::Reference(reference) = operand_ty {
-          *reference
+        if operand_ty == Type::Error {
+          Type::Error
+        } else if let Type::Reference(ty) | Type::Pointer(ty) = operand_ty {
+          *ty
         } else {
           self.error(
             "deref can be only applied to reference types",
@@ -384,6 +388,7 @@ impl<'reports> TypeInference<'reports> {
     callee: &mut Expr,
     args: &mut Vec<Expr>,
     call_info: &mut Option<CallInfo>,
+    type_annotations: &mut Vec<Type>,
   ) -> Type {
     if let Some((_, Some(sym_id))) = callee.as_identifier_mut() {
       let sym = self.symbol_table().get_symbol_unchecked(sym_id);
@@ -409,6 +414,19 @@ impl<'reports> TypeInference<'reports> {
           return Type::Error;
         }
 
+        if !type_annotations.is_empty() && type_annotations.len() != signature.generics.len() {
+          self.error(
+            &format!(
+              "wrong number of type annotations: expected {}, found {}",
+              signature.generics.len(),
+              type_annotations.len()
+            ),
+            vec![("in this call".to_string(), callee.span.clone())],
+            vec![],
+          );
+          return Type::Error;
+        }
+
         for arg in args.iter_mut() {
           self.infer_expr(arg);
           self.try_monomorphize_named_type(&mut arg.ty);
@@ -416,7 +434,13 @@ impl<'reports> TypeInference<'reports> {
 
         let mut generic_mapping = HashMap::new();
 
-        if !signature.generics.is_empty() {
+        if !type_annotations.is_empty() {
+          for (generic, annotation) in signature.generics.iter().zip(type_annotations.iter()) {
+            let mut resolved_annotation = annotation.clone();
+            self.try_monomorphize_named_type(&mut resolved_annotation);
+            generic_mapping.insert(generic.name, resolved_annotation);
+          }
+        } else if !signature.generics.is_empty() {
           for generic in signature.generics.iter() {
             if !self.ctx.is_generic_parameter(generic.name) {
               let _type_var = self.ctx.fresh_type_var(Some(generic.name));
@@ -431,8 +455,11 @@ impl<'reports> TypeInference<'reports> {
         };
 
         let mut valid = true;
-        for (arg, param) in args.iter().zip(params_to_check.iter()) {
-          self.infer_generic_types(&param.ty, &arg.ty, &mut generic_mapping);
+
+        if type_annotations.is_empty() {
+          for (arg, param) in args.iter().zip(params_to_check.iter()) {
+            self.infer_generic_types(&param.ty, &arg.ty, &mut generic_mapping);
+          }
         }
 
         let mut concrete_params = params_to_check.to_vec();
@@ -455,18 +482,43 @@ impl<'reports> TypeInference<'reports> {
         self.substitute_type_with_map(&mut return_type, &generic_mapping);
         signature.return_type = return_type.clone();
 
-        let monomorphized_id = if !generic_mapping.is_empty() && valid {
-          let all_generics_mapped =
-            signature.generics.iter().all(|g| generic_mapping.contains_key(&g.name));
+        let monomorphized_id = if !signature.generics.is_empty() && valid {
+          let unresolved_generics: Vec<_> =
+              signature.generics.iter().filter(|g| !generic_mapping.contains_key(&g.name)).collect();
 
-          if all_generics_mapped {
+          if unresolved_generics.is_empty() {
             Some(self.record_monomorphization_with_id(
               *sym_id,
               &generic_mapping,
               Some(MonomorphizationData::Signature(signature.clone())),
             ))
           } else {
-            None
+            let function_name = resolve(&sym.name);
+            let generics_list =
+                unresolved_generics.iter().map(|g| resolve(&g.name)).collect::<Vec<_>>().join(", ");
+
+            let suggestion = if type_annotations.is_empty() {
+              format!(
+                "consider providing explicit type annotations, e.g., '{}<{}>({})'",
+                function_name,
+                signature.generics.iter().map(|g| resolve(&g.name)).collect::<Vec<_>>().join(", "),
+                args.iter().map(|_| "_").collect::<Vec<_>>().join(", ")
+              )
+            } else {
+              "the provided type annotations are insufficient to resolve all generic parameters".to_string()
+            };
+
+            self.error(
+              &format!(
+                "cannot infer type parameter{} {} for function {}",
+                if unresolved_generics.len() > 1 { "s" } else { "" },
+                generics_list.dimmed().bold(),
+                function_name.dimmed().bold()
+              ),
+              vec![("in this call".to_string(), callee.span.clone())],
+              vec![suggestion],
+            );
+            return Type::Error;
           }
         } else {
           None
@@ -581,7 +633,7 @@ impl<'reports> TypeInference<'reports> {
         return Type::Error;
       }
 
-      if self.eq(&variable_ty, &Type::Void) {
+      if self.eq(&variable_ty, &Type::Void) && variable_ty != Type::Error {
         self.error(
           "cannot initialize variable with void type",
           vec![("here".to_string(), decl.span.clone())],

@@ -387,7 +387,7 @@ impl<'reports> AstLowering<'reports> {
         }
       }
 
-      ExprKind::Call { callee, args, call_info } => {
+      ExprKind::Call { callee, args, call_info, .. } => {
         let callee_expr = Box::new(self.lower_expr(callee));
         HirExprKind::Call {
           callee: callee_expr,

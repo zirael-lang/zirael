@@ -20,7 +20,7 @@ log = { workspace = true }
 once_cell = { workspace = true }
 parking_lot = { workspace = true }
 rayon = { workspace = true }
-serde = { version = "1.0.219", features = ["derive"] }
+serde = { workspace = true }
 
 [lints]
 workspace = true

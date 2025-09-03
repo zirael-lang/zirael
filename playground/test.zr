@@ -4,8 +4,15 @@ enum Result<T, E> {
 }
 
 @extern
-fn puts(s: string): int;
+fn malloc<T>(count: int): *T;
+
+@extern
+fn free<T>(block: *T);
 
 fn main() {
-    puts("Hello from extern C function!");
+    var _w = malloc<int>(8);
+    *_w = 123;
+    free(_w);
+
+    var _x = box 20;
 }

@@ -53,7 +53,12 @@ pub struct IrFunction {
   pub body: Option<IrBlock>,
   pub is_async: bool,
   pub is_const: bool,
-  pub is_extern: bool,
+  pub extern_: Option<IrFunctionExtern>,
+}
+
+#[derive(Clone, Debug)]
+pub struct IrFunctionExtern {
+  pub original_name: String,
   pub abi: Option<String>,
 }
 

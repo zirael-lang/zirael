@@ -65,7 +65,7 @@ impl<'ctx> CompilationUnit<'ctx> {
     })
   }
 
-  pub fn compile(&mut self) -> Result<()> {
+  pub fn compile(&mut self) -> Result<PathBuf> {
     let reports = self.context.reports();
     let sources = self.context.sources();
     let symbols = self.context.symbols();
@@ -110,9 +110,6 @@ impl<'ctx> CompilationUnit<'ctx> {
     reports.print(sources);
 
     let order = symbols.build_symbol_relations()?;
-    let _result =
-      run_codegen(ir, &self.info, order, decl.used_externals.clone(), &self.main_function_id);
-
-    Ok(())
+    run_codegen(ir, &self.info, order, decl.used_externals.clone(), &self.main_function_id)
   }
 }

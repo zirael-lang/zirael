@@ -211,8 +211,7 @@ impl<'reports> HirLowering<'reports> {
       body,
       is_async: original.is_async,
       is_const: original.is_const,
-      is_extern: original.is_extern,
-      abi: original.abi.clone(),
+      extern_: original.extern_.clone(),
       id: original.id,
     }
   }

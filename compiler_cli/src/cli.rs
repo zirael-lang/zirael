@@ -1,5 +1,6 @@
 use clap::{Parser, builder::Styles};
 use std::env::current_dir;
+use zirael_c_compiler::CBuild;
 use zirael_core::prelude::*;
 
 #[derive(Parser)]
@@ -79,9 +80,10 @@ pub const CLAP_STYLING: Styles = Styles::styled()
 pub fn try_cli() -> Result<()> {
   let cli = Cli::parse();
   setup_logger(cli.verbose, false);
+  let root = current_dir()?;
 
   let context = Context::new();
-  let write_to = cli.output;
+  let write_to = canonicalize_with_strip(root.join(cli.output))?;
 
   for dep in &cli.packages {
     if context.packages().contains(dep) {
@@ -125,7 +127,6 @@ pub fn try_cli() -> Result<()> {
     }
   }
 
-  let root = current_dir()?;
   let file = root.join(file);
   let contents = fs_err::read_to_string(file.clone())?;
 
@@ -141,7 +142,10 @@ pub fn try_cli() -> Result<()> {
       ty: cli.ty,
     },
   );
-  unit.compile()?;
+  let path = unit.compile()?;
+  let mut builder = CBuild::new(None, cli.ty, write_to.clone(), cli.lib_type, cli.mode)?;
+
+  builder.add_source(path).compile(cli.name)?;
 
   Ok(())
 }

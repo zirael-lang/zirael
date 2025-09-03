@@ -1,9 +1,9 @@
 [workspace]
 resolver = "2"
 members = [
-  "compiler_cli",
-  "crates/*",
-  "xtask",
+    "compiler_cli",
+    "crates/*",
+    "xtask",
 ]
 
 [workspace.package]
@@ -33,6 +33,8 @@ petgraph = "0.8.2"
 rayon = "1.10.0"
 strsim = "0.11.1"
 strum = { version = "0.27.2", features = ["derive"] }
+which = "8.0.0"
+serde = { version = "1.0.219", features = ["derive"] }
 
 zirael_codegen = { path = "crates/zirael_codegen", version = "0.1.0" }
 zirael_core = { path = "crates/zirael_core", version = "0.1.0" }
@@ -40,6 +42,7 @@ zirael_hir = { path = "crates/zirael_hir", version = "0.1.0" }
 zirael_parser = { path = "crates/zirael_parser", version = "0.1.0" }
 zirael_type_checker = { path = "crates/zirael_type_checker", version = "0.1.0" }
 zirael_utils = { path = "crates/zirael_utils", version = "0.1.0" }
+zirael_c_compiler = { path = "crates/zirael_c_compiler", version = "0.1.0" }
 
 # Rules were taken from egui
 [workspace.lints.rust]
