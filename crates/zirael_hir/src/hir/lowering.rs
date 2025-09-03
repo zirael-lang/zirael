@@ -387,27 +387,27 @@ impl<'reports> AstLowering<'reports> {
         }
       }
 
-      ExprKind::Call { callee, args, call_info, .. } => {
+      ExprKind::Call { callee, call, .. } => {
         let callee_expr = Box::new(self.lower_expr(callee));
         HirExprKind::Call {
           callee: callee_expr,
-          args: self.lower_call_args(args),
-          call_info: call_info.clone(),
+          args: self.lower_call_args(&mut call.args),
+          call_info: call.call_info.clone(),
         }
       }
 
-      ExprKind::StaticCall { callee, args, call_info } => {
+      ExprKind::StaticCall { callee, call } => {
         let ExprKind::FieldAccess(fields) = &mut callee.kind else { unreachable!() };
 
         let expr = self.lower_expr(&mut fields[1]);
         HirExprKind::Call {
           callee: Box::new(expr),
-          args: self.lower_call_args(args),
-          call_info: call_info.clone(),
+          args: self.lower_call_args(&mut call.args),
+          call_info: call.call_info.clone(),
         }
       }
 
-      ExprKind::MethodCall { chain, args, call_info } => {
+      ExprKind::MethodCall { chain, call } => {
         if chain.len() < 2 {
           self.error("Invalid method call chain", vec![], vec![]);
           return HirExpr {
@@ -436,12 +436,12 @@ impl<'reports> AstLowering<'reports> {
         } else {
           receiver
         }];
-        method_args.extend(self.lower_call_args(args));
+        method_args.extend(self.lower_call_args(&mut call.args));
 
         HirExprKind::Call {
           callee: Box::new(method_expr),
           args: method_args,
-          call_info: call_info.clone(),
+          call_info: call.call_info.clone(),
         }
       }
 

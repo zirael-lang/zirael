@@ -131,30 +131,31 @@ impl<'reports> TypeInference<'reports> {
     if let Type::Named { generics, .. } = resolved_ty {
       if !generics.is_empty() && generics.iter().any(|g| !matches!(g, Type::Inferred)) {
         match &mut expr.kind {
-          ExprKind::Call { call_info: Some(call_info), .. }
-          | ExprKind::StaticCall { call_info: Some(call_info), .. } => {
-            if let Some(mono_id) = call_info.monomorphized_id {
-              let (original_id, should_update) = {
-                let entry = match self.mono_table.entries.get(&mono_id) {
-                  Some(entry) => entry,
-                  None => return,
+          ExprKind::Call { call, .. } | ExprKind::StaticCall { call, .. } => {
+            if let Some(call_info) = &mut call.call_info {
+              if let Some(mono_id) = call_info.monomorphized_id {
+                let (original_id, should_update) = {
+                  let entry = match self.mono_table.entries.get(&mono_id) {
+                    Some(entry) => entry,
+                    None => return,
+                  };
+                  let has_inferred =
+                    entry.concrete_types.values().any(|ty| matches!(ty, Type::Inferred));
+                  (entry.original_id, has_inferred)
                 };
-                let has_inferred =
-                  entry.concrete_types.values().any(|ty| matches!(ty, Type::Inferred));
-                (entry.original_id, has_inferred)
-              };
 
-              if should_update {
-                let symbol = self.symbol_table.get_symbol_unchecked(&original_id);
-                let generics = self.symbol_table.get_generics_for_symbol(&symbol);
+                if should_update {
+                  let symbol = self.symbol_table.get_symbol_unchecked(&original_id);
+                  let generics = self.symbol_table.get_generics_for_symbol(&symbol);
 
-                if let (Some(generics), Some(entry)) =
-                  (generics, self.mono_table.entries.get_mut(&mono_id))
-                {
-                  if let Type::Named { generics: resolved_generics, .. } = resolved_ty {
-                    for (param, resolved_type) in generics.iter().zip(resolved_generics.iter()) {
-                      if !matches!(resolved_type, Type::Inferred) {
-                        entry.concrete_types.insert(param.name, resolved_type.clone());
+                  if let (Some(generics), Some(entry)) =
+                    (generics, self.mono_table.entries.get_mut(&mono_id))
+                  {
+                    if let Type::Named { generics: resolved_generics, .. } = resolved_ty {
+                      for (param, resolved_type) in generics.iter().zip(resolved_generics.iter()) {
+                        if !matches!(resolved_type, Type::Inferred) {
+                          entry.concrete_types.insert(param.name, resolved_type.clone());
+                        }
                       }
                     }
                   }
@@ -172,12 +173,12 @@ impl<'reports> TypeInference<'reports> {
     self.update_monomorphization(expr, resolved_ty);
 
     match &mut expr.kind {
-      ExprKind::Call { args, .. } | ExprKind::StaticCall { args, .. } => {
-        self.update_exprs(args);
+      ExprKind::Call { call, .. } | ExprKind::StaticCall { call, .. } => {
+        self.update_exprs(&mut call.args);
       }
-      ExprKind::MethodCall { chain, args, .. } => {
+      ExprKind::MethodCall { chain, call, .. } => {
         self.update_exprs(chain);
-        self.update_exprs(args);
+        self.update_exprs(&mut call.args);
       }
       ExprKind::Binary { left, right, .. }
       | ExprKind::Assign(left, right)

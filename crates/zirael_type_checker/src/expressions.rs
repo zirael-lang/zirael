@@ -77,8 +77,8 @@ impl<'reports> TypeInference<'reports> {
       ExprKind::Block(stmts) => self.infer_block(stmts, expr.id),
       ExprKind::Unary(op, expr) => self.infer_unary(op, expr),
       ExprKind::Binary { left, op, right } => self.infer_binary(left, op, right),
-      ExprKind::Call { callee, args, call_info, type_annotations } => {
-        self.infer_call(callee, args, call_info, type_annotations)
+      ExprKind::Call { callee, call } => {
+        self.infer_call(callee, &mut call.args, &mut call.call_info, &mut call.type_annotations)
       }
       ExprKind::Paren(expr) => self.infer_expr(expr),
       ExprKind::StructInit { name, fields, call_info } => {
@@ -86,12 +86,18 @@ impl<'reports> TypeInference<'reports> {
       }
       ExprKind::FieldAccess(fields) => self.infer_field_access(fields),
       ExprKind::IndexAccess(expr, index) => self.infer_index_access(expr, index),
-      ExprKind::MethodCall { chain, args, call_info } => {
-        self.infer_method_call(chain, args, call_info)
-      }
-      ExprKind::StaticCall { callee, args, call_info } => {
-        self.infer_static_call(callee, args, call_info)
-      }
+      ExprKind::MethodCall { chain, call } => self.infer_method_call(
+        chain,
+        &mut call.args,
+        &mut call.call_info,
+        &mut call.type_annotations,
+      ),
+      ExprKind::StaticCall { callee, call } => self.infer_static_call(
+        callee,
+        &mut call.args,
+        &mut call.call_info,
+        &mut call.type_annotations,
+      ),
       ExprKind::Ternary { true_expr, false_expr, condition } => {
         self.infer_ternary(condition, true_expr, false_expr)
       }
@@ -484,7 +490,7 @@ impl<'reports> TypeInference<'reports> {
 
         let monomorphized_id = if !signature.generics.is_empty() && valid {
           let unresolved_generics: Vec<_> =
-              signature.generics.iter().filter(|g| !generic_mapping.contains_key(&g.name)).collect();
+            signature.generics.iter().filter(|g| !generic_mapping.contains_key(&g.name)).collect();
 
           if unresolved_generics.is_empty() {
             Some(self.record_monomorphization_with_id(
@@ -495,7 +501,7 @@ impl<'reports> TypeInference<'reports> {
           } else {
             let function_name = resolve(&sym.name);
             let generics_list =
-                unresolved_generics.iter().map(|g| resolve(&g.name)).collect::<Vec<_>>().join(", ");
+              unresolved_generics.iter().map(|g| resolve(&g.name)).collect::<Vec<_>>().join(", ");
 
             let suggestion = if type_annotations.is_empty() {
               format!(
@@ -505,7 +511,8 @@ impl<'reports> TypeInference<'reports> {
                 args.iter().map(|_| "_").collect::<Vec<_>>().join(", ")
               )
             } else {
-              "the provided type annotations are insufficient to resolve all generic parameters".to_string()
+              "the provided type annotations are insufficient to resolve all generic parameters"
+                .to_string()
             };
 
             self.error(

@@ -78,6 +78,7 @@ impl<'reports> TypeInference<'reports> {
     chain: &mut [Expr],
     args: &mut Vec<Expr>,
     call_info: &mut Option<CallInfo>,
+    type_annotations: &mut Vec<Type>,
   ) -> Type {
     if chain.len() < 2 {
       return Type::Error;
@@ -115,6 +116,7 @@ impl<'reports> TypeInference<'reports> {
       args,
       method_expr.span.clone(),
       call_info,
+      type_annotations,
     )
   }
 
@@ -134,8 +136,9 @@ impl<'reports> TypeInference<'reports> {
     callee: &mut Box<Expr>,
     args: &mut Vec<Expr>,
     call_info: &mut Option<CallInfo>,
+    type_annotations: &mut Vec<Type>,
   ) -> Type {
-    self.resolve_static_call(callee, args, call_info)
+    self.resolve_static_call(callee, args, call_info, type_annotations)
   }
 
   fn get_field_type(&mut self, current_type: &Type, field_name: &str, field_span: Span) -> Type {
@@ -260,6 +263,7 @@ impl<'reports> TypeInference<'reports> {
     args: &mut Vec<Expr>,
     span: Span,
     call_info: &mut Option<CallInfo>,
+    type_annotations: &mut Vec<Type>,
   ) -> Type {
     let methods = self.get_methods(receiver_type);
 
@@ -301,7 +305,7 @@ impl<'reports> TypeInference<'reports> {
         };
         *sym_id = Some(method_id);
 
-        self.infer_call(callee, args, call_info, &mut vec![])
+        self.infer_call(callee, args, call_info, type_annotations)
       } else {
         Type::Error
       }
@@ -333,6 +337,7 @@ impl<'reports> TypeInference<'reports> {
     callee: &mut Box<Expr>,
     args: &mut Vec<Expr>,
     call_info: &mut Option<CallInfo>,
+    type_annotations: &mut Vec<Type>,
   ) -> Type {
     let ExprKind::FieldAccess(fields) = &mut callee.kind else {
       return Type::Error;
@@ -367,7 +372,7 @@ impl<'reports> TypeInference<'reports> {
 
         if let Some(method_id) = found {
           *call_id = Some(method_id);
-          self.infer_call(&mut fields[1], args, call_info, &mut vec![])
+          self.infer_call(&mut fields[1], args, call_info, type_annotations)
         } else {
           self.error(
             &format!(
@@ -446,7 +451,7 @@ impl<'reports> TypeInference<'reports> {
 
           if let Some(method_id) = method_found {
             *call_id = Some(method_id);
-            self.infer_call(&mut fields[1], args, call_info, &mut vec![])
+            self.infer_call(&mut fields[1], args, call_info, type_annotations)
           } else {
             self.error(
               &format!(

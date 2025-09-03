@@ -260,18 +260,18 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
       ExprKind::Paren(expr) => {
         self.walk_expr(expr);
       }
-      ExprKind::Call { callee, args, .. } => {
-        self.visit_function_call(callee, args);
-        for arg in args {
+      ExprKind::Call { callee, call, .. } => {
+        self.visit_function_call(callee, &mut call.args);
+        for arg in &mut call.args {
           self.walk_expr(arg);
         }
       }
       ExprKind::FieldAccess(exprs) => self.visit_field_access(exprs),
-      ExprKind::MethodCall { chain, args, call_info } => {
-        self.visit_method_call(chain, args, call_info);
+      ExprKind::MethodCall { chain, call } => {
+        self.visit_method_call(chain, &mut call.args, &mut call.call_info);
       }
-      ExprKind::StaticCall { callee, args, call_info } => {
-        self.visit_static_call(callee, args, call_info);
+      ExprKind::StaticCall { callee, call } => {
+        self.visit_static_call(callee, &mut call.args, &mut call.call_info);
       }
       ExprKind::IndexAccess(expr, index) => {
         self.walk_expr(expr);

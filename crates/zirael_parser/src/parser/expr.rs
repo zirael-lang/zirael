@@ -1,5 +1,6 @@
 use crate::{
-  Keyword, TokenKind,
+  BinaryOp::Ge,
+  GenericCall, Keyword, TokenKind, Type,
   ast::{BinaryOp, Expr, ExprKind, Literal, MatchArm, Pattern, PatternField, UnaryOp},
   parser::Parser,
   span::SpanUtils as _,
@@ -157,9 +158,7 @@ impl<'a> Parser<'a> {
     self.parse_postfix()
   }
 
-  fn parse_function_call(&mut self, callee: Expr) -> Expr {
-    let start_span = callee.span.clone();
-
+  fn parse_type_annotations(&mut self) -> Vec<Type> {
     let mut type_annotations = vec![];
 
     if self.check(&TokenKind::LessThan) {
@@ -187,15 +186,20 @@ impl<'a> Parser<'a> {
       }
     }
 
+    type_annotations
+  }
+
+  fn parse_function_call(&mut self, callee: Expr) -> Expr {
+    let start_span = callee.span.clone();
+    let type_annotations = self.parse_type_annotations();
+
     if !self.match_token(TokenKind::ParenOpen) {
       self.error_at_current("expected '(' after function name");
       let end_span = self.prev_span();
       return self.new_expr(
         ExprKind::Call {
           callee: Box::new(callee),
-          args: vec![],
-          call_info: None,
-          type_annotations,
+          call: GenericCall { args: vec![], call_info: None, type_annotations },
         },
         start_span.to(end_span),
       );
@@ -221,7 +225,10 @@ impl<'a> Parser<'a> {
 
     let end_span = self.prev_span();
     self.new_expr(
-      ExprKind::Call { callee: Box::new(callee), args, call_info: None, type_annotations },
+      ExprKind::Call {
+        callee: Box::new(callee),
+        call: GenericCall { args, call_info: None, type_annotations },
+      },
       start_span.to(end_span),
     )
   }
@@ -243,9 +250,10 @@ impl<'a> Parser<'a> {
 
     chain.push(method_name);
 
+    let type_annotations = self.parse_type_annotations();
+
     self.advance();
     let mut args = Vec::new();
-
     if !self.check(&TokenKind::ParenClose) {
       loop {
         args.push(self.parse_expr());
@@ -263,7 +271,10 @@ impl<'a> Parser<'a> {
     }
 
     let end_span = self.prev_span();
-    self.new_expr(ExprKind::MethodCall { chain, args, call_info: None }, start_span.to(end_span))
+    self.new_expr(
+      ExprKind::MethodCall { chain, call: GenericCall { args, call_info: None, type_annotations } },
+      start_span.to(end_span),
+    )
   }
 
   fn parse_field_access(&mut self, base: Expr) -> Expr {
@@ -546,6 +557,8 @@ impl<'a> Parser<'a> {
       self.new_expr(ExprKind::FieldAccess(vec![type_expr, method_name]), combined_span)
     };
 
+    let type_annotations = self.parse_type_annotations();
+
     let args = if self.match_token(TokenKind::ParenOpen) {
       let mut args = Vec::new();
 
@@ -572,7 +585,10 @@ impl<'a> Parser<'a> {
 
     let end_span = self.prev_span();
     self.new_expr(
-      ExprKind::StaticCall { callee: Box::new(callee), args, call_info: None },
+      ExprKind::StaticCall {
+        callee: Box::new(callee),
+        call: GenericCall { args, call_info: None, type_annotations },
+      },
       start_span.to(end_span),
     )
   }
