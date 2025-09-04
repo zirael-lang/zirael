@@ -3,16 +3,6 @@ enum Result<T, E> {
     Err { error: E },
 }
 
-@extern
-fn malloc<T>(count: int): *T;
-
-@extern
-fn free<T>(block: *T);
-
 fn main() {
-    var _w = malloc<int>(8);
-    *_w = 123;
-    free(_w);
 
-    var _x = box 20;
 }

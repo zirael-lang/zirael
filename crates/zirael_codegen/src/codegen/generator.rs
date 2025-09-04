@@ -369,7 +369,7 @@ impl Gen for IrFunction {
     } else {
       if let Some(body) = &self.body {
         if body.stmts.is_empty() {
-          p.writeln(";");
+          p.writeln(" {};");
           return;
         }
 
