@@ -3,6 +3,9 @@ enum Result<T, E> {
     Err { error: E },
 }
 
-fn main() {
+@extern
+fn puts(s: string): int;
 
+fn main() {
+    puts("Hello, World!");
 }

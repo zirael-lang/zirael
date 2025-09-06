@@ -1,4 +1,8 @@
+mod c_functions;
 mod generator;
+mod match_expr;
+mod resolver;
+mod writer;
 
 pub use generator::*;
 

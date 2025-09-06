@@ -1,3 +1,8 @@
+use crate::codegen::c_functions::is_standard_c_function;
+use crate::codegen::match_expr::generate_match;
+use crate::codegen::resolver::OrderResolver;
+use crate::codegen::writer::CodegenWriter;
+use crate::ir::IrMatchArm;
 use crate::{
   codegen::{Codegen, Gen},
   ir::{
@@ -5,6 +10,7 @@ use crate::{
     IrParam, IrPattern, IrStmt, IrStruct, IrTypeExtension, IrVariantData,
   },
 };
+use anyhow::Result;
 use itertools::Itertools as _;
 use std::path::PathBuf;
 use zirael_parser::{BinaryOp, Literal, MainFunction, SymbolRelationNode, Type, UnaryOp};
@@ -13,10 +19,10 @@ use zirael_utils::prelude::{CompilationInfo, debug, resolve};
 pub fn run_codegen(
   modules: &mut Vec<IrModule>,
   info: &CompilationInfo,
-  mut order: Vec<SymbolRelationNode>,
+  order: Vec<SymbolRelationNode>,
   used_externals: Vec<String>,
   main_fn: &Option<MainFunction>,
-) -> anyhow::Result<PathBuf> {
+) -> Result<PathBuf> {
   let header = &mut Codegen::new();
   let implementation = &mut Codegen::new();
   let header_file = PathBuf::from(info.name.clone()).with_extension("h");
@@ -26,53 +32,30 @@ pub fn run_codegen(
   header.writeln("#include <stdint.h>");
   header.writeln("#include <stdbool.h>");
 
-  let mut module_items = modules.iter().flat_map(|m| &m.items).cloned().collect::<Vec<_>>();
-  let mono_items = modules.iter().flat_map(|m| &m.mono_items).cloned().collect::<Vec<_>>();
+  OrderResolver::process_enum_monomorphization(modules);
 
-  let _c_main_function = module_items.iter().find(|item| item.name == "main");
+  let order = OrderResolver::resolve_order(modules, order);
+  let module_items: Vec<_> = modules.iter().flat_map(|m| &m.items).cloned().collect();
+  let mono_items: Vec<_> = modules.iter().flat_map(|m| &m.mono_items).cloned().collect();
 
-  if order.is_empty() {
-    order = module_items.iter().map(|i| SymbolRelationNode::Symbol(i.sym_id)).collect_vec();
-  }
+  generate_headers_in_order(&order, &module_items, &mono_items, header);
 
-  for module_item in &mut module_items {
-    if let IrItemKind::Enum(ref mut enum_data) = module_item.kind {
-      let mut mono_variants = vec![];
-      let mut remove = vec![];
+  CodegenWriter::write_includes(implementation, &header_file, &used_externals);
+  generate_implementations_in_order(&order, &module_items, &mono_items, implementation);
 
-      for (i, variant) in enum_data.variants.iter().enumerate() {
-        let variant_mono_items: Vec<_> = mono_items
-          .iter()
-          .filter_map(|m| {
-            if let IrItemKind::EnumVariant(ref ir_variant) = m.kind {
-              if variant.symbol_id == ir_variant.symbol_id {
-                Some(ir_variant.clone())
-              } else {
-                None
-              }
-            } else {
-              None
-            }
-          })
-          .collect();
+  OrderResolver::generate_remaining_mono_items(implementation, &mono_items, &order);
 
-        if !variant_mono_items.is_empty() {
-          mono_variants.extend(variant_mono_items);
-          remove.push(i);
-        }
-      }
+  CodegenWriter::write_main_function(implementation, main_fn);
+  CodegenWriter::write_files(info, header, implementation)
+}
 
-      if !mono_variants.is_empty() && !remove.is_empty() {
-        remove.sort_by(|a, b| b.cmp(a));
-        for i in remove {
-          enum_data.variants.remove(i);
-        }
-        enum_data.variants.extend(mono_variants);
-      }
-    }
-  }
-
-  for node in &order {
+fn generate_headers_in_order(
+  order: &[SymbolRelationNode],
+  module_items: &[IrItem],
+  mono_items: &[IrItem],
+  header: &mut Codegen,
+) {
+  for node in order {
     match node {
       SymbolRelationNode::Symbol(id) => {
         if let Some(item) = module_items.iter().find(|i| i.sym_id == *id) {
@@ -89,15 +72,15 @@ pub fn run_codegen(
       }
     }
   }
+}
 
-  implementation.writeln(&format!("#include \"{}\"", header_file.display()));
-  for external in used_externals {
-    let file = PathBuf::from(external.clone()).with_extension("h");
-    implementation.writeln(&format!("#include \"{}\"", file.display()));
-  }
-  implementation.writeln("");
-
-  for node in &order {
+fn generate_implementations_in_order(
+  order: &[SymbolRelationNode],
+  module_items: &[IrItem],
+  mono_items: &[IrItem],
+  implementation: &mut Codegen,
+) {
+  for node in order {
     match node {
       SymbolRelationNode::Symbol(id) => {
         let Some(item) = module_items.iter().find(|i| i.sym_id == *id) else {
@@ -106,7 +89,6 @@ pub fn run_codegen(
         };
 
         let has_monomorphized_versions = mono_items.iter().any(|m| m.sym_id == *id);
-
         if !has_monomorphized_versions {
           item.generate(implementation);
         }
@@ -118,33 +100,6 @@ pub fn run_codegen(
       }
     }
   }
-
-  for mono_item in mono_items {
-    if let Some(mono_id) = mono_item.mono_id {
-      let mono_node = SymbolRelationNode::Monomorphization(mono_id);
-      if !order.contains(&mono_node) {
-        mono_item.generate(implementation);
-      }
-    }
-  }
-
-  if let Some(func) = main_fn
-    && let MainFunction::Mangled(mangled) = func
-  {
-    implementation.writeln("int main() {");
-    implementation.indent();
-    implementation.writeln(&format!("{mangled}();"));
-    implementation.writeln("return 0;");
-    implementation.dedent();
-    implementation.writeln("}");
-  }
-
-  let output_file = info.write_to.join(info.name.clone()).with_extension("c");
-  fs_err::create_dir_all(&info.write_to)?;
-  fs_err::write(info.write_to.join(header_file), header.content.buffer())?;
-  fs_err::write(output_file.clone(), implementation.content.buffer())?;
-
-  Ok(output_file)
 }
 
 fn function_signature(func: &IrFunction, name: &str, p: &mut Codegen) {
@@ -160,23 +115,6 @@ fn function_signature(func: &IrFunction, name: &str, p: &mut Codegen) {
     }
   }
   p.write(")");
-}
-
-const STANDARD_C_FUNCTIONS: &[&str] = &[
-  // <stdlib.h>
-  "malloc", "free", "calloc", "realloc", "exit", "abort", "atoi", "atol", "atof", "rand", "srand",
-  // <string.h>
-  "strlen", "strcpy", "strncpy", "strcat", "strncat", "strcmp", "strncmp", "strchr", "strrchr",
-  "memcpy", "memmove", "memset", "memcmp", // <stdio.h>
-  "printf", "scanf", "puts", "gets", "fopen", "fclose", "fread", "fwrite", "fgets", "fputs",
-  "fprintf", "fscanf", "sprintf", "sscanf", // <math.h>
-  "sin", "cos", "tan", "asin", "acos", "atan", "sinh", "cosh", "tanh", "sqrt", "pow", "exp", "log",
-  "log10", // <ctype.h>
-  "isalpha", "isdigit", "isalnum", "isspace", "isupper", "islower", "toupper", "tolower",
-];
-
-fn is_standard_c_function(name: &str) -> bool {
-  STANDARD_C_FUNCTIONS.contains(&name)
 }
 
 impl Gen for IrItem {
@@ -437,6 +375,32 @@ impl Gen for IrStmt {
   }
 }
 
+fn get_binary_op(op: &BinaryOp) -> &str {
+  match op {
+    BinaryOp::Add => "+",
+    BinaryOp::Sub => "-",
+    BinaryOp::Mul => "*",
+    BinaryOp::Div => "/",
+    BinaryOp::Rem => "%",
+
+    BinaryOp::Eq => "==",
+    BinaryOp::Ne => "!=",
+    BinaryOp::Lt => "<",
+    BinaryOp::Le => "<=",
+    BinaryOp::Gt => ">",
+    BinaryOp::Ge => ">=",
+
+    BinaryOp::And => "&&",
+    BinaryOp::Or => "||",
+
+    BinaryOp::BitAnd => "&",
+    BinaryOp::BitOr => "|",
+    BinaryOp::BitXor => "^",
+    BinaryOp::Shl => "<<",
+    BinaryOp::Shr => ">>",
+  }
+}
+
 impl Gen for IrExpr {
   fn generate(&self, p: &mut Codegen) {
     match &self.kind {
@@ -525,29 +489,7 @@ impl Gen for IrExpr {
         UnaryOp::Box => {}
       },
       IrExprKind::Binary(lhs, op, rhs) => {
-        let op = match op {
-          BinaryOp::Add => "+",
-          BinaryOp::Sub => "-",
-          BinaryOp::Mul => "*",
-          BinaryOp::Div => "/",
-          BinaryOp::Rem => "%",
-
-          BinaryOp::Eq => "==",
-          BinaryOp::Ne => "!=",
-          BinaryOp::Lt => "<",
-          BinaryOp::Le => "<=",
-          BinaryOp::Gt => ">",
-          BinaryOp::Ge => ">=",
-
-          BinaryOp::And => "&&",
-          BinaryOp::Or => "||",
-
-          BinaryOp::BitAnd => "&",
-          BinaryOp::BitOr => "|",
-          BinaryOp::BitXor => "^",
-          BinaryOp::Shl => "<<",
-          BinaryOp::Shr => ">>",
-        };
+        let op = get_binary_op(op);
 
         lhs.generate(p);
         p.write(" ");
@@ -569,167 +511,67 @@ impl Gen for IrExpr {
         false_expr.generate(p);
       }
       IrExprKind::If { condition, then_branch, else_branch } => {
-        p.write("if (");
-        condition.generate(p);
-        p.write(")");
-
-        match &then_branch.kind {
-          IrExprKind::Block(block) => {
-            p.write(" {\n");
-            p.indent();
-            for stmt in &block.stmts {
-              stmt.generate(p);
-            }
-            p.dedent();
-            p.write_indented("}");
-          }
-          _ => {
-            p.write(" {\n");
-            p.indent();
-            p.write_indented("");
-            then_branch.generate(p);
-            p.writeln(";");
-            p.dedent();
-            p.write_indented("}");
-          }
-        }
-
-        if let Some(else_branch) = else_branch {
-          match &else_branch.kind {
-            IrExprKind::Block(block) => {
-              p.write(" else {\n");
-              p.indent();
-              for stmt in &block.stmts {
-                stmt.generate(p);
-              }
-              p.dedent();
-              p.write_indented("}");
-            }
-            IrExprKind::If { .. } => {
-              p.write(" else ");
-              else_branch.generate(p);
-            }
-            _ => {
-              p.write(" else {\n");
-              p.indent();
-              p.write_indented("");
-              else_branch.generate(p);
-              p.writeln(";");
-              p.dedent();
-              p.write_indented("}");
-            }
-          }
-        }
+        generate_if(p, condition, then_branch, else_branch)
       }
-      IrExprKind::Match { scrutinee, arms } => {
-        p.write("({\n");
+      IrExprKind::Match { scrutinee, arms } => generate_match(p, scrutinee, arms),
+    }
+  }
+}
+
+fn generate_if(
+  p: &mut Codegen,
+  condition: &IrExpr,
+  then_branch: &IrExpr,
+  else_branch: &Option<Box<IrExpr>>,
+) {
+  p.write("if (");
+  condition.generate(p);
+  p.write(")");
+
+  match &then_branch.kind {
+    IrExprKind::Block(block) => {
+      p.write(" {\n");
+      p.indent();
+      for stmt in &block.stmts {
+        stmt.generate(p);
+      }
+      p.dedent();
+      p.write_indented("}");
+    }
+    _ => {
+      p.write(" {\n");
+      p.indent();
+      p.write_indented("");
+      then_branch.generate(p);
+      p.writeln(";");
+      p.dedent();
+      p.write_indented("}");
+    }
+  }
+
+  if let Some(else_branch) = else_branch {
+    match &else_branch.kind {
+      IrExprKind::Block(block) => {
+        p.write(" else {\n");
         p.indent();
-
-        p.write_indented("");
-        scrutinee.ty.generate(p);
-        p.write(" scrutinee_value =");
-
-        scrutinee.generate(p);
-        p.write(";\n");
-
-        p.write_indented("");
-        arms[0].body.ty.generate(p);
-
-        p.write(" match_result;\n");
-
-        for (i, arm) in arms.iter().enumerate() {
-          if i == 0 {
-            p.write_indented("if (");
-          } else {
-            p.write_indented("} else if (");
-          }
-
-          match &arm.pattern {
-            IrPattern::Wildcard => {
-              p.write("1");
-            }
-            IrPattern::Variable(_) => {
-              p.write("1");
-            }
-            IrPattern::Literal(literal) => {
-              p.write("scrutinee_value == ");
-              match literal {
-                Literal::Integer(val) => p.write(&val.to_string()),
-                Literal::Float(val) => p.write(&format!("{val}f")),
-                Literal::Char(val) => p.write(&format!("'{val}'")),
-                Literal::String(val) => {
-                  p.write(&format!("strcmp(scrutinee_value, \"{val}\") == 0"));
-                }
-                Literal::Bool(val) => p.write(if *val { "true" } else { "false" }),
-              }
-            }
-            IrPattern::EnumVariant { tag_name, .. } => {
-              p.write("scrutinee_value.tag == ");
-              p.write(tag_name);
-            }
-          }
-
-          p.writeln(") {");
-          p.indent();
-
-          match &arm.pattern {
-            IrPattern::Variable(var_name) => {
-              p.write_indented(&format!("auto {var_name} = scrutinee_value;\n"));
-            }
-            IrPattern::EnumVariant { tag_name, bindings } => {
-              for (ty, field_name, var_name) in bindings {
-                p.write_indented("");
-                ty.generate(p);
-                p.write(&format!(" {var_name} = scrutinee_value.data.{tag_name}.{field_name};\n"));
-              }
-            }
-            _ => {}
-          }
-
-          p.write_indented("match_result = ");
-          match &arm.body.kind {
-            IrExprKind::Block(block) => {
-              p.write("({\n");
-              p.indent();
-              for (idx, stmt) in block.stmts.iter().enumerate() {
-                match stmt {
-                  IrStmt::Return(Some(expr)) => {
-                    p.write_indented("");
-                    expr.generate(p);
-                    p.write(";\n");
-                    break;
-                  }
-                  IrStmt::Return(None) => {
-                    p.write_indented("/* void return */\n");
-                    break;
-                  }
-                  IrStmt::Expr(expr) if idx == block.stmts.len() - 1 => {
-                    p.write_indented("");
-                    expr.generate(p);
-                    p.write(";\n");
-                  }
-                  _ => {
-                    stmt.generate(p);
-                  }
-                }
-              }
-              p.dedent();
-              p.write_indented("})");
-            }
-            _ => {
-              arm.body.generate(p);
-            }
-          }
-          p.write(";\n");
-
-          p.dedent();
+        for stmt in &block.stmts {
+          stmt.generate(p);
         }
-
-        p.writeln("}");
-
-        p.write_indented("match_result;\n");
         p.dedent();
-        p.write_indented("})");
+        p.write_indented("}");
+      }
+      IrExprKind::If { .. } => {
+        p.write(" else ");
+        else_branch.generate(p);
+      }
+      _ => {
+        p.write(" else {\n");
+        p.indent();
+        p.write_indented("");
+        else_branch.generate(p);
+        p.writeln(";");
+        p.dedent();
+        p.write_indented("}");
       }
     }
   }

@@ -83,6 +83,8 @@ pub fn try_cli() -> Result<()> {
   let root = current_dir()?;
 
   let context = Context::new();
+
+  create_dir_all(&cli.output)?;
   let write_to = canonicalize_with_strip(root.join(cli.output))?;
 
   for dep in &cli.packages {

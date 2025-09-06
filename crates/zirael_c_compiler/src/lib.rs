@@ -1,5 +1,3 @@
-#![feature(let_chains)]
-
 use crate::{
   compiler::{Compiler, CompilerKind},
   detect::{detect_compiler, resolve_from_kind},

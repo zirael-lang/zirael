@@ -49,3 +49,12 @@ fn strip_windows_long_path_prefix(path: PathBuf) -> PathBuf {
     path
   }
 }
+
+/// Creates a directory and all its parent components if they are missing.
+pub fn create_dir_all<P: AsRef<Path>>(path: P) -> Result<()> {
+  let path = path.as_ref();
+  if !path.exists() {
+    fs_err::create_dir_all(path)?;
+  }
+  Ok(())
+}
