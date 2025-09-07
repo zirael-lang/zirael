@@ -32,7 +32,6 @@ pub fn compile_project(config: &ProjectConfig) -> Result<()> {
         root: dep.root.clone(),
         write_to: write_to.clone(),
         ty: PackageType::Library,
-        keep_dead_code: config.keep_dead_code,
       },
     );
     unit.compile()?;
@@ -69,7 +68,6 @@ pub fn compile_project(config: &ProjectConfig) -> Result<()> {
       root: config.root.clone(),
       write_to: write_to.clone(),
       ty: config.project_type,
-      keep_dead_code: config.keep_dead_code,
     },
   );
   let path = unit.compile()?;

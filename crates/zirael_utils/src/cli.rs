@@ -71,11 +71,4 @@ pub struct Cli {
   )]
   pub output: PathBuf,
 
-  #[arg(
-    value_name = "keep-dead-code",
-    long = "keep-dead-code",
-    help = "Keep dead code in the final binary/library",
-    default_value_t = false
-  )]
-  pub keep_dead_code: bool,
 }

@@ -14,7 +14,6 @@ pub struct ProjectConfig {
   pub lib_type: LibType,
   pub output: PathBuf,
   pub root: PathBuf,
-  pub keep_dead_code: bool,
 }
 
 impl ProjectConfig {
@@ -30,7 +29,6 @@ impl ProjectConfig {
       lib_type: cli.lib_type,
       output: cli.output,
       root,
-      keep_dead_code: cli.keep_dead_code,
     })
   }
 }

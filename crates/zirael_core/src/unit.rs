@@ -101,7 +101,6 @@ impl<'ctx> CompilationUnit<'ctx> {
       symbols,
       reports,
       inference.mono_table.clone(),
-      self.info.keep_dead_code,
     );
     let ir = &mut lower_hir_to_ir(
       &mut hir,
@@ -112,7 +111,6 @@ impl<'ctx> CompilationUnit<'ctx> {
       self.info.mode,
       self.info.root.clone(),
       &mut self.main_function_id,
-      self.info.keep_dead_code,
     );
     reports.print(sources);
 

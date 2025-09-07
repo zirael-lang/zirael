@@ -19,7 +19,6 @@ pub struct AstLowering<'reports> {
   processed_file: Option<SourceFileId>,
   pub folded_vars: HashMap<SymbolId, HirExprKind>,
   ast_id_arena: Arena<()>,
-  pub keep_dead_code: bool,
 }
 
 impl<'reports> AstLowering<'reports> {
@@ -27,7 +26,6 @@ impl<'reports> AstLowering<'reports> {
     symbol_table: &SymbolTable,
     reports: &Reports<'reports>,
     mono_table: MonomorphizationTable,
-    remove_dead_code: bool,
   ) -> Self {
     Self {
       symbol_table: symbol_table.clone(),
@@ -36,7 +34,6 @@ impl<'reports> AstLowering<'reports> {
       folded_vars: HashMap::new(),
       ast_id_arena: Arena::new(),
       mono_table,
-      keep_dead_code: remove_dead_code,
     }
   }
 
@@ -77,7 +74,7 @@ impl<'reports> AstLowering<'reports> {
 
     let symbol_id = item.symbol_id.unwrap();
     let sym = self.symbol_table.get_symbol_unchecked(&symbol_id);
-    if self.try_unused_symbol(&sym) && !self.keep_dead_code {
+    if self.try_unused_symbol(&sym) {
       return None;
     }
 
@@ -742,8 +739,7 @@ pub fn lower_ast_to_hir<'reports>(
   symbol_table: &SymbolTable,
   reports: &Reports<'reports>,
   mono: MonomorphizationTable,
-  remove_dead_code: bool,
 ) -> Vec<HirModule> {
-  let mut lowering = AstLowering::new(symbol_table, reports, mono, remove_dead_code);
+  let mut lowering = AstLowering::new(symbol_table, reports, mono);
   lowering.lower_modules(lexed_modules)
 }

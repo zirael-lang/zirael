@@ -34,7 +34,6 @@ pub fn check_project(config: &CheckConfig) -> Result<()> {
         root: dep.root.clone(),
         write_to: write_to.clone(),
         ty: PackageType::Library,
-        keep_dead_code: false,
       },
     );
 
@@ -72,7 +71,6 @@ pub fn check_project(config: &CheckConfig) -> Result<()> {
       root: config.root.clone(),
       write_to: write_to.clone(),
       ty: config.project_type,
-      keep_dead_code: false,
     },
   );
 
