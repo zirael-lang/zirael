@@ -280,7 +280,6 @@ impl<'reports> TypeInference<'reports> {
         }
         StmtKind::Return(ret) => {
           if let Some(expr) = ret.value.as_mut() {
-            // Use function return type as expected type for return statements
             let expected_return_type = self.ctx.get_function_return_type().cloned();
             block_type = self.infer_expr_with_expected(expr, expected_return_type.as_ref());
           } else {
@@ -500,7 +499,7 @@ impl<'reports> TypeInference<'reports> {
     }
   }
 
-  fn infer_if_stmt(&mut self, if_stmt: &mut If) {
+  fn infer_if_stmt(&mut self, if_stmt: &mut If) -> Type {
     let condition_type = self.infer_expr(&mut if_stmt.condition);
     if !self.eq(&condition_type, &Type::Bool) {
       self.error(
@@ -510,60 +509,76 @@ impl<'reports> TypeInference<'reports> {
       );
     }
 
-    for stmt in &mut if_stmt.then_branch {
+    let then_type = self.infer_block_type(&mut if_stmt.then_branch);
+
+    let else_type = if let Some(else_branch) = &mut if_stmt.else_branch {
+      Some(self.infer_else_branch(else_branch))
+    } else {
+      None
+    };
+
+    match else_type {
+      Some(else_t) => {
+        if self.eq(&then_type, &else_t) {
+          then_type
+        } else {
+          self.error(
+            &format!(
+              "if-else branches have incompatible types: {} and {}",
+              self.format_type(&then_type),
+              self.format_type(&else_t)
+            ),
+            vec![],
+            vec![],
+          );
+          Type::Void 
+        }
+      }
+      None => {
+        Type::Void
+      }
+    }
+  }
+
+  fn infer_else_branch(&mut self, else_branch: &mut ElseBranch) -> Type {
+    match else_branch {
+      ElseBranch::Block(statements, _else_branch_id) => {
+        self.infer_block_type(statements)
+      }
+      ElseBranch::If(nested_if) => {
+        self.infer_if_stmt(nested_if)
+      }
+    }
+  }
+
+  fn infer_block_type(&mut self, statements: &mut [Stmt]) -> Type {
+    let mut last_type = Type::Void;
+
+    for stmt in statements {
       match &mut stmt.0 {
         StmtKind::Expr(expr) => {
-          self.infer_expr(expr);
+          last_type = self.infer_expr(expr);
         }
         StmtKind::Return(ret) => {
           if let Some(expr) = ret.value.as_mut() {
             let expected_return_type = self.ctx.get_function_return_type().cloned();
-            self.infer_expr_with_expected(expr, expected_return_type.as_ref());
+            let return_type = self.infer_expr_with_expected(expr, expected_return_type.as_ref());
+            return return_type; 
           }
+          return Type::Void;
         }
         StmtKind::Var(var) => {
           self.infer_variable(var);
+          last_type = Type::Void;
         }
         StmtKind::If(nested_if) => {
-          self.infer_if_stmt(nested_if);
+          last_type = self.infer_if_stmt(nested_if);
         }
       }
     }
 
-    if let Some(else_branch) = &mut if_stmt.else_branch {
-      self.infer_else_branch(else_branch);
-    }
+    last_type
   }
-
-  fn infer_else_branch(&mut self, else_branch: &mut ElseBranch) {
-    match else_branch {
-      ElseBranch::Block(statements, _else_branch_id) => {
-        for stmt in statements {
-          match &mut stmt.0 {
-            StmtKind::Expr(expr) => {
-              self.infer_expr(expr);
-            }
-            StmtKind::Return(ret) => {
-              if let Some(expr) = ret.value.as_mut() {
-                let expected_return_type = self.ctx.get_function_return_type().cloned();
-                self.infer_expr_with_expected(expr, expected_return_type.as_ref());
-              }
-            }
-            StmtKind::Var(var) => {
-              self.infer_variable(var);
-            }
-            StmtKind::If(nested_if) => {
-              self.infer_if_stmt(nested_if);
-            }
-          }
-        }
-      }
-      ElseBranch::If(nested_if) => {
-        self.infer_if_stmt(nested_if);
-      }
-    }
-  }
-
   pub fn infer_variable(&mut self, decl: &mut VarDecl) -> Type {
     let expected_type = if let Type::Inferred = decl.ty { None } else { Some(&decl.ty) };
     let value_ty = &self.infer_expr_with_expected(&mut decl.value, expected_type);
