@@ -30,12 +30,26 @@ impl<'reports> HirLowering<'reports> {
 
     self.push_scope(ScopeType::Module(module.id));
     for (id, entry) in struct_entries {
+      if self.keep_dead_code {
+        let original_symbol = self.symbol_table.get_symbol_unchecked(&entry.original_id);
+        if !original_symbol.is_used {
+          continue;
+        }
+      }
+      
       if let Some(monomorphized_item) = self.create_monomorphized_item(&id, &entry, module) {
         module.mono_items.push(monomorphized_item);
       }
     }
 
     for (id, entry) in func_entries {
+      if self.keep_dead_code {
+        let original_symbol = self.symbol_table.get_symbol_unchecked(&entry.original_id);
+        if !original_symbol.is_used {
+          continue;
+        }
+      }
+      
       if let Some(monomorphized_item) = self.create_monomorphized_item(&id, &entry, module) {
         module.mono_items.push(monomorphized_item);
       }

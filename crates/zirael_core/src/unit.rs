@@ -96,8 +96,13 @@ impl<'ctx> CompilationUnit<'ctx> {
     inference.walk_modules(&mut result.modules);
     reports.print(sources);
 
-    let mut hir =
-      lower_ast_to_hir(&mut result.modules, symbols, reports, inference.mono_table.clone());
+    let mut hir = lower_ast_to_hir(
+      &mut result.modules,
+      symbols,
+      reports,
+      inference.mono_table.clone(),
+      self.info.keep_dead_code,
+    );
     let ir = &mut lower_hir_to_ir(
       &mut hir,
       symbols,
@@ -107,6 +112,7 @@ impl<'ctx> CompilationUnit<'ctx> {
       self.info.mode,
       self.info.root.clone(),
       &mut self.main_function_id,
+      self.info.keep_dead_code,
     );
     reports.print(sources);
 

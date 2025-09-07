@@ -27,8 +27,9 @@ pub fn lower_hir_to_ir<'reports>(
   mode: Mode,
   root: PathBuf,
   main_function_id: &mut Option<MainFunction>,
+  keep_dead_code: bool,
 ) -> Vec<IrModule> {
-  let mut lowering = HirLowering::new(symbol_table, mono_table, reports, sources, mode, root);
+  let mut lowering = HirLowering::new(symbol_table, mono_table, reports, sources, mode, root, keep_dead_code);
   lowering.lower_modules(hir_modules, main_function_id)
 }
 
@@ -43,6 +44,7 @@ pub struct HirLowering<'reports> {
   pub current_mono_id: Option<MonomorphizationId>,
   pub current_symbol_id: Option<SymbolId>,
   pub current_items: Vec<IrItem>,
+  pub keep_dead_code: bool,
 }
 
 impl<'reports> HirLowering<'reports> {
@@ -53,6 +55,7 @@ impl<'reports> HirLowering<'reports> {
     sources: &Sources,
     mode: Mode,
     root: PathBuf,
+    keep_dead_code: bool,
   ) -> Self {
     Self {
       symbol_table: symbol_table.clone(),
@@ -65,6 +68,7 @@ impl<'reports> HirLowering<'reports> {
       current_mono_id: None,
       current_symbol_id: None,
       current_items: vec![],
+      keep_dead_code,
     }
   }
 

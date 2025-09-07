@@ -130,8 +130,87 @@ impl CBuild {
     pb.set_message("Compiling C sources...");
     pb.enable_steady_tick(Duration::from_millis(100));
 
+    match self.project_type {
+      PackageType::Library if self.lib_type == LibType::Static => {
+        self.compile_static_library(output_name.as_ref(), &pb)
+      }
+      _ => self.compile_direct(output_name.as_ref(), &pb),
+    }
+  }
+
+  fn compile_static_library(&self, output_name: &OsStr, pb: &ProgressBar) -> Result<PathBuf> {
+    let mut object_files = Vec::new();
+
+    for (i, source_file) in self.source_files.iter().enumerate() {
+      pb.set_message(format!(
+        "Compiling {} ({}/{})",
+        Path::new(source_file).file_name().unwrap_or(source_file).to_string_lossy(),
+        i + 1,
+        self.source_files.len()
+      ));
+
+      let obj_name =
+        Path::new(source_file).file_stem().unwrap_or_else(|| OsStr::new("obj")).to_string_lossy();
+      let obj_file = format!("{}.o", obj_name);
+
+      let mut command = Command::new(self.compiler.path());
+      self.configure_compile_command(&mut command, source_file, &obj_file)?;
+
+      debug!("Executing compilation command: {:?}", command);
+
+      let output =
+        command.current_dir(&*self.build_dir).output().context("Failed to execute compiler")?;
+
+      if !output.stdout.is_empty() {
+        debug!("Compilation stdout: {}", String::from_utf8_lossy(&output.stdout));
+      }
+      if !output.stderr.is_empty() {
+        debug!("Compilation stderr: {}", String::from_utf8_lossy(&output.stderr));
+      }
+
+      if !output.status.success() {
+        pb.finish_with_message("❌ Compilation failed");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if !stderr.is_empty() {
+          bail!("Compilation failed with error: {}", stderr);
+        } else {
+          bail!("Compilation failed with exit code: {}", output.status);
+        }
+      }
+
+      object_files.push(obj_file);
+    }
+
+    pb.set_message("Creating static library...");
+    let output_path = self.create_static_library(output_name, &object_files)?;
+
+    for obj_file in &object_files {
+      let obj_path = self.build_dir.join(obj_file);
+      if obj_path.exists() {
+        if let Err(e) = std::fs::remove_file(&obj_path) {
+          warn!("Failed to clean up object file {}: {}", obj_path.display(), e);
+        }
+      }
+    }
+
+    pb.finish_with_message(format!(
+      "{style}{status:>12}{style:#} C static library",
+      style = &HEADER,
+      status = "✅ Finished"
+    ));
+
+    ensure!(
+      output_path.exists(),
+      "Library creation succeeded but output file was not created: {}",
+      output_path.display()
+    );
+
+    Ok(output_path)
+  }
+
+  fn compile_direct(&self, output_name: &OsStr, pb: &ProgressBar) -> Result<PathBuf> {
     let mut command = Command::new(self.compiler.path());
-    self.configure_command(&mut command, output_name.as_ref())?;
+    self.configure_command(&mut command, output_name)?;
 
     debug!("Executing compilation command: {:?}", command);
 
@@ -158,7 +237,7 @@ impl CBuild {
       }
     }
 
-    let output_path = self.get_output_path(output_name.as_ref());
+    let output_path = self.get_output_path(output_name);
 
     pb.finish_with_message(format!(
       "{style}{status:>12}{style:#} C compilation",
@@ -171,6 +250,87 @@ impl CBuild {
       "Compilation succeeded but output file was not created: {}",
       output_path.display()
     );
+
+    Ok(output_path)
+  }
+
+  fn configure_compile_command(
+    &self,
+    command: &mut Command,
+    source_file: &OsStr,
+    obj_file: &str,
+  ) -> Result<()> {
+    command.arg(source_file);
+
+    for dir in &self.include_dirs {
+      command.arg(if self.compiler.kind() == &CompilerKind::Msvc { "/I" } else { "-I" });
+      command.arg(dir.as_os_str());
+    }
+
+    for define in &self.defines {
+      command.arg(if self.compiler.kind() == &CompilerKind::Msvc { "/D" } else { "-D" });
+      command.arg(define);
+    }
+
+    self.add_optimization_flags(command);
+    self.add_c_standard_flag(command, self.c_standard.as_deref())?;
+
+    // Compile only (don't link)
+    if self.compiler.kind() == &CompilerKind::Msvc {
+      command.arg("/c");
+      command.arg(format!("/Fo:{}", obj_file));
+    } else {
+      command.arg("-c");
+      command.arg("-o").arg(obj_file);
+    }
+
+    for flag in &self.flags {
+      command.arg(flag);
+    }
+
+    Ok(())
+  }
+
+  fn create_static_library(&self, output_name: &OsStr, object_files: &[String]) -> Result<PathBuf> {
+    let output_path = self.get_output_path(output_name);
+
+    let mut command = if self.compiler.kind() == &CompilerKind::Msvc {
+      let mut cmd = Command::new("lib");
+      cmd.arg(format!("/OUT:{}", output_path.display()));
+      cmd
+    } else {
+      let mut cmd = Command::new("ar");
+      cmd.arg("rcs");
+      cmd.arg(&output_path);
+      cmd
+    };
+
+    for obj_file in object_files {
+      command.arg(obj_file);
+    }
+
+    debug!("Executing library creation command: {:?}", command);
+
+    let output = command
+      .current_dir(&*self.build_dir)
+      .output()
+      .context("Failed to execute library archiver")?;
+
+    if !output.stdout.is_empty() {
+      debug!("Library creation stdout: {}", String::from_utf8_lossy(&output.stdout));
+    }
+    if !output.stderr.is_empty() {
+      debug!("Library creation stderr: {}", String::from_utf8_lossy(&output.stderr));
+    }
+
+    if !output.status.success() {
+      let stderr = String::from_utf8_lossy(&output.stderr);
+      if !stderr.is_empty() {
+        bail!("Library creation failed with error: {}", stderr);
+      } else {
+        bail!("Library creation failed with exit code: {}", output.status);
+      }
+    }
 
     Ok(output_path)
   }
@@ -287,18 +447,39 @@ impl CBuild {
   }
 
   fn get_output_path(&self, output_name: &OsStr) -> PathBuf {
-    self.build_dir.join(output_name).with_extension(match self.project_type {
+    let base_path = self.build_dir.join(output_name);
+
+    match self.project_type {
       PackageType::Library => match self.lib_type {
-        LibType::Static => "lib",
-        LibType::Dynamic => "dll",
+        LibType::Static => {
+          if cfg!(windows) && self.compiler.kind() == &CompilerKind::Msvc {
+            base_path.with_extension("lib")
+          } else {
+            let name = output_name.to_string_lossy();
+            if name.starts_with("lib") {
+              base_path.with_extension("a")
+            } else {
+              self.build_dir.join(format!("lib{}.a", name))
+            }
+          }
+        }
+        LibType::Dynamic => {
+          if cfg!(windows) {
+            base_path.with_extension("dll")
+          } else if cfg!(target_os = "macos") {
+            base_path.with_extension("dylib")
+          } else {
+            base_path.with_extension("so")
+          }
+        }
       },
       PackageType::Binary => {
         if cfg!(windows) {
-          "exe"
+          base_path.with_extension("exe")
         } else {
-          ""
+          base_path
         }
       }
-    })
+    }
   }
 }

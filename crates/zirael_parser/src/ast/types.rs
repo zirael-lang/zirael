@@ -48,6 +48,10 @@ impl Type {
   pub fn is_primitive(&self) -> bool {
     matches!(self, Self::String | Self::Char | Self::Int | Self::Uint | Self::Float | Self::Bool)
   }
+  
+  pub fn is_bool(&self) -> bool {
+    matches!(self, Self::Bool)
+  }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

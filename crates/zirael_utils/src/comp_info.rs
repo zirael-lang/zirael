@@ -8,4 +8,5 @@ pub struct CompilationInfo {
   pub name: String,
   pub write_to: PathBuf,
   pub ty: PackageType,
+  pub keep_dead_code: bool,
 }

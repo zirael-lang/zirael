@@ -2,7 +2,6 @@ mod ctx;
 mod enums;
 mod errors;
 mod expressions;
-mod fields;
 pub mod monomorphization;
 mod structs;
 mod substitution;
