@@ -61,6 +61,10 @@ impl<'reports> TypeInference<'reports> {
   }
 
   pub fn infer_expr(&mut self, expr: &mut Expr) -> Type {
+    self.infer_expr_with_expected(expr, None)
+  }
+
+  pub fn infer_expr_with_expected(&mut self, expr: &mut Expr, expected_type: Option<&Type>) -> Type {
     let ty = match &mut expr.kind {
       ExprKind::Literal(lit) => self.infer_literal(lit),
       ExprKind::Identifier(_, symbol_id) => {
@@ -77,13 +81,13 @@ impl<'reports> TypeInference<'reports> {
       }
       ExprKind::Assign(lhs, rhs) => self.infer_assignment(lhs, rhs),
       ExprKind::AssignOp(lhs, op, rhs) => self.infer_assign_op(lhs, op, rhs),
-      ExprKind::Block(stmts) => self.infer_block(stmts, expr.id),
+      ExprKind::Block(stmts) => self.infer_block_with_expected(stmts, expr.id, expected_type),
       ExprKind::Unary(op, expr) => self.infer_unary(op, expr),
       ExprKind::Binary { left, op, right } => self.infer_binary(left, op, right),
       ExprKind::Call { callee, call } => {
         self.infer_call(callee, &mut call.args, &mut call.call_info, &mut call.type_annotations)
       }
-      ExprKind::Paren(expr) => self.infer_expr(expr),
+      ExprKind::Paren(expr) => self.infer_expr_with_expected(expr, expected_type),
       ExprKind::StructInit { name, fields, call_info } => {
         self.infer_struct_init(name, fields, call_info)
       }
@@ -95,14 +99,15 @@ impl<'reports> TypeInference<'reports> {
         &mut call.call_info,
         &mut call.type_annotations,
       ),
-      ExprKind::StaticCall { callee, call } => self.infer_static_call(
+      ExprKind::StaticCall { callee, call } => self.infer_static_call_with_expected(
         callee,
         &mut call.args,
         &mut call.call_info,
         &mut call.type_annotations,
+        expected_type,
       ),
       ExprKind::Ternary { true_expr, false_expr, condition } => {
-        self.infer_ternary(condition, true_expr, false_expr)
+        self.infer_ternary_with_expected(condition, true_expr, false_expr, expected_type)
       }
       ExprKind::Match { scrutinee, arms } => self.infer_match(scrutinee, arms),
 
@@ -245,6 +250,70 @@ impl<'reports> TypeInference<'reports> {
     self.pop_scope();
 
     block_type
+  }
+
+  fn infer_block_with_expected(&mut self, stmts: &mut [Stmt], id: AstId, expected_type: Option<&Type>) -> Type {
+    self.push_scope(ScopeType::Block(id));
+    if stmts.is_empty() {
+      self.pop_scope();
+      return Type::Void;
+    }
+
+    let mut block_type = Type::Void;
+
+    for stmt in stmts.iter_mut() {
+      match &mut stmt.0 {
+        StmtKind::Expr(expr) => {
+          self.infer_expr_with_expected(expr, expected_type);
+        }
+        StmtKind::Return(ret) => {
+          if let Some(expr) = ret.value.as_mut() {
+            block_type = self.infer_expr_with_expected(expr, expected_type);
+          } else {
+            block_type = Type::Void;
+          }
+          break;
+        }
+        StmtKind::Var(var) => {
+          self.infer_variable(var);
+        }
+        StmtKind::If(if_stmt) => {
+          self.infer_if_stmt(if_stmt);
+        }
+      }
+    }
+    self.pop_scope();
+
+    block_type
+  }
+
+  fn infer_ternary_with_expected(
+    &mut self,
+    condition: &mut Expr,
+    true_expr: &mut Expr,
+    false_expr: &mut Expr,
+    expected_type: Option<&Type>,
+  ) -> Type {
+    let condition_ty = self.infer_expr(condition);
+    let true_ty = self.infer_expr_with_expected(true_expr, expected_type);
+    let false_ty = self.infer_expr_with_expected(false_expr, expected_type);
+
+    self.expect_type(&Type::Bool, &condition_ty, &condition.span, "ternary condition");
+
+    match self.unify_types(&true_ty, &false_ty) {
+      UnificationResult::Identical(ty) => ty,
+      UnificationResult::Unified(ty) => {
+        true_expr.ty = ty.clone();
+        false_expr.ty = ty.clone();
+        self.update_expr_recursively(true_expr, &ty);
+        self.update_expr_recursively(false_expr, &ty);
+        ty
+      }
+      UnificationResult::Incompatible => {
+        self.ternary_error(&true_ty, &false_ty, true_expr, false_expr);
+        Type::Error
+      }
+    }
   }
 
   pub fn infer_call(

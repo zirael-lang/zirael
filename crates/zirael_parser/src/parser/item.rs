@@ -207,7 +207,7 @@ impl<'a> Parser<'a> {
     let mut methods = vec![];
 
     while !self.check(&TokenKind::BraceClose) && !self.is_at_end() {
-      let span = self.prev_span();
+      let span = self.peek_span();
       let attrs = self.parse_attrs();
 
       if self.check_keyword(Keyword::Fn) {
