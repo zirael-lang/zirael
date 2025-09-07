@@ -40,6 +40,74 @@ impl<'reports> AstLowering<'reports> {
     }
   }
 
+  fn is_enum_variant_constructor(&self, name_expr: &Expr) -> bool {
+    let symbol_id = match &name_expr.kind {
+      ExprKind::Identifier(_, Some(sym_id)) => *sym_id,
+      ExprKind::Path(path) => {
+        if let Some(last_segment) = path.segments.last() {
+          if let Some(sym_id) = last_segment.symbol_id {
+            sym_id
+          } else {
+            return false;
+          }
+        } else {
+          return false;
+        }
+      }
+      _ => return false,
+    };
+
+    let symbol = self.symbol_table.get_symbol_unchecked(&symbol_id);
+    matches!(symbol.kind, SymbolKind::EnumVariant { .. })
+  }
+
+  fn get_variant_field_order(&self, name_expr: &Expr) -> Option<Vec<Identifier>> {
+    let symbol_id = match &name_expr.kind {
+      ExprKind::Identifier(_, Some(sym_id)) => *sym_id,
+      ExprKind::Path(path) => {
+        if let Some(last_segment) = path.segments.last() {
+          last_segment.symbol_id?
+        } else {
+          return None;
+        }
+      }
+      _ => return None,
+    };
+
+    let symbol = self.symbol_table.get_symbol_unchecked(&symbol_id);
+    if let SymbolKind::EnumVariant { data, .. } = &symbol.kind {
+      if let EnumVariantData::Struct(fields) = data {
+        return Some(fields.iter().map(|f| f.name).collect());
+      }
+    }
+    None
+  }
+
+  fn convert_enum_variant_to_call(&mut self, symbol_id: SymbolId) -> HirExprKind {
+    let symbol = self.symbol_table.get_symbol_unchecked(&symbol_id);
+    if let SymbolKind::EnumVariant { data, .. } = &symbol.kind {
+      match data {
+        EnumVariantData::Unit => {
+          HirExprKind::Call {
+            callee: Box::new(HirExpr {
+              kind: HirExprKind::Symbol(symbol_id),
+              ty: Type::Inferred,
+              span: Span { start: 0, end: 0 },
+              id: self.ast_id_arena.alloc(()),
+            }),
+            args: vec![],
+            call_info: None,
+          }
+        }
+        EnumVariantData::Struct(_) => {
+          HirExprKind::Symbol(symbol_id)
+        }
+      }
+    } else {
+      HirExprKind::Symbol(symbol_id)
+    }
+  }
+
   pub fn lower_modules(&mut self, lexed_modules: &mut Vec<LexedModule>) -> Vec<HirModule> {
     lexed_modules.iter_mut().map(|module| self.lower_module(module)).collect()
   }
@@ -337,11 +405,13 @@ impl<'reports> AstLowering<'reports> {
     let hir_kind = match &mut ast_expr.kind {
       ExprKind::Literal(lit) => HirExprKind::Literal(lit.clone()),
 
-      ExprKind::Identifier(_name, Some(symbol_id)) => HirExprKind::Symbol(*symbol_id),
+      ExprKind::Identifier(_name, Some(symbol_id)) => {
+        self.convert_enum_variant_to_call(*symbol_id)
+      }
 
       ExprKind::Identifier(name, None) => {
         if let Some(symbol) = self.symbol_table.lookup_symbol(name) {
-          HirExprKind::Symbol(symbol.id)
+          self.convert_enum_variant_to_call(symbol.id)
         } else {
           self.error("Unresolved identifier", vec![], vec![]);
           HirExprKind::Error
@@ -351,7 +421,7 @@ impl<'reports> AstLowering<'reports> {
       ExprKind::Path(path) => {
         if let Some(last_segment) = path.segments.last() {
           if let Some(symbol_id) = last_segment.symbol_id {
-            HirExprKind::Symbol(symbol_id)
+            self.convert_enum_variant_to_call(symbol_id)
           } else {
             self.error("Unresolved path", vec![], vec![]);
             HirExprKind::Error
@@ -463,17 +533,38 @@ impl<'reports> AstLowering<'reports> {
       }
 
       ExprKind::StructInit { name, fields, call_info } => {
-        let name_expr = Box::new(self.lower_expr(name));
+        let is_enum_variant = self.is_enum_variant_constructor(name);
+        
+        if is_enum_variant {
+          let callee = Box::new(self.lower_expr(name));
+          let mut field_values = Vec::new();
+          
+          if let Some(field_order) = self.get_variant_field_order(name) {
+            for field_name in field_order {
+              if let Some(field_expr) = fields.get_mut(&field_name) {
+                field_values.push(self.lower_expr(field_expr));
+              }
+            }
+          }
+          
+          HirExprKind::Call {
+            callee,
+            args: field_values,
+            call_info: call_info.clone(),
+          }
+        } else {
+          let name_expr = Box::new(self.lower_expr(name));
 
-        let mut fields_map = HashMap::new();
-        for (ident, val) in fields {
-          fields_map.insert(*ident, self.lower_expr(val));
-        }
+          let mut fields_map = HashMap::new();
+          for (ident, val) in fields {
+            fields_map.insert(*ident, self.lower_expr(val));
+          }
 
-        HirExprKind::StructInit {
-          name: name_expr,
-          fields: fields_map,
-          call_info: call_info.clone(),
+          HirExprKind::StructInit {
+            name: name_expr,
+            fields: fields_map,
+            call_info: call_info.clone(),
+          }
         }
       }
 

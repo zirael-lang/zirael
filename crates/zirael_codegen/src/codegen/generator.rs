@@ -491,11 +491,13 @@ impl Gen for IrExpr {
       IrExprKind::Binary(lhs, op, rhs) => {
         let op = get_binary_op(op);
 
+        p.write("(");
         lhs.generate(p);
         p.write(" ");
         p.write(op);
         p.write(" ");
         rhs.generate(p);
+        p.write(")");
       }
       IrExprKind::FieldAccess(fields) => {
         for part in fields {
