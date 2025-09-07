@@ -345,6 +345,20 @@ impl<'reports> AstLowering<'reports> {
         }
       }
 
+      ExprKind::Path(path) => {
+        if let Some(last_segment) = path.segments.last() {
+          if let Some(symbol_id) = last_segment.symbol_id {
+            HirExprKind::Symbol(symbol_id)
+          } else {
+            self.error("Unresolved path", vec![], vec![]);
+            HirExprKind::Error
+          }
+        } else {
+          self.error("Empty path", vec![], vec![]);
+          HirExprKind::Error
+        }
+      }
+
       ExprKind::Binary { left, op, right } => {
         let left_expr = Box::new(self.lower_expr(left));
         let right_expr = Box::new(self.lower_expr(right));

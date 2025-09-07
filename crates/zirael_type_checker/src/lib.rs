@@ -280,7 +280,11 @@ impl<'reports> AstWalker<'reports> for TypeInference<'reports> {
     }
 
     if let Some(body) = &mut func.body {
+      self.ctx.set_function_return_type(func.signature.return_type.clone());
+      
       let body_ty = self.infer_expr_with_expected(body, Some(&func.signature.return_type));
+
+      self.ctx.clear_function_return_type();
 
       self.substitute_type_with_map(&mut func.signature.return_type, &all_generic_type_vars);
 

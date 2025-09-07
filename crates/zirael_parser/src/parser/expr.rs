@@ -1,7 +1,7 @@
 use crate::{
   BinaryOp::Ge,
   GenericCall, Keyword, TokenKind, Type,
-  ast::{BinaryOp, Expr, ExprKind, Literal, MatchArm, Pattern, PatternField, UnaryOp},
+  ast::{BinaryOp, Expr, ExprKind, Literal, MatchArm, Pattern, PatternField, UnaryOp, Path, PathSegment},
   parser::Parser,
   span::SpanUtils as _,
 };
@@ -337,7 +337,7 @@ impl<'a> Parser<'a> {
             }
           }
           TokenKind::DoubleColon => {
-            expr = self.parse_static_call(expr);
+            expr = self.parse_path_continuation(expr);
           }
           TokenKind::Dot => {
             if let Some(next_token) = self.peek_ahead(1) {
@@ -407,8 +407,12 @@ impl<'a> Parser<'a> {
           let identifier_span = self.prev_span();
           let identifier = get_or_intern(&name);
 
+          if self.check(&TokenKind::DoubleColon) {
+            return self.parse_path_from_identifier(identifier, identifier_span);
+          }
+
           if self.check(&TokenKind::BraceOpen) {
-            return self.parse_struct_initializer(identifier, identifier_span);
+            return self.parse_struct_initializer_from_path(Path::from_identifier(identifier, identifier_span.clone()));
           }
 
           self.new_expr(ExprKind::Identifier(identifier, None), identifier_span)
@@ -471,128 +475,6 @@ impl<'a> Parser<'a> {
     self.new_expr(ExprKind::Block(stmts), start_span.to(end_span))
   }
 
-  fn parse_struct_initializer(&mut self, struct_name: Identifier, start_span: Span) -> Expr {
-    self.expect(TokenKind::BraceOpen);
-
-    let mut fields = HashMap::new();
-
-    if !self.check(&TokenKind::BraceClose) {
-      loop {
-        let start_position = self.position;
-
-        let field_name = if let Some(ident) = self.expect_identifier() {
-          ident
-        } else {
-          self.error_at_current("expected field name in struct initializer");
-          self.synchronize(&[TokenKind::Comma, TokenKind::BraceClose]);
-
-          if self.position == start_position && !self.is_at_end() {
-            self.advance();
-          }
-
-          if self.check(&TokenKind::BraceClose) {
-            break;
-          }
-          continue;
-        };
-
-        if !self.match_token(TokenKind::Colon) && !self.match_token(TokenKind::Equals) {
-          self.error_at_current("expected ':' or '=' after field name");
-          self.synchronize(&[TokenKind::Comma, TokenKind::BraceClose]);
-          if self.check(&TokenKind::BraceClose) {
-            break;
-          }
-          continue;
-        }
-
-        let value = self.parse_expr();
-        fields.insert(field_name, value);
-
-        if !self.match_token(TokenKind::Comma) {
-          break;
-        }
-
-        if self.check(&TokenKind::BraceClose) {
-          break;
-        }
-      }
-    }
-
-    if !self.match_token(TokenKind::BraceClose) {
-      self.error_at_current("expected '}' to close struct initializer");
-    }
-
-    let end_span = self.prev_span();
-    let expr_id = self.fresh_id();
-    self.new_expr(
-      ExprKind::StructInit {
-        name: Box::new(Expr::new(
-          ExprKind::Identifier(struct_name, None),
-          start_span.clone(),
-          expr_id,
-        )),
-        call_info: None,
-        fields,
-      },
-      start_span.to(end_span),
-    )
-  }
-
-  fn parse_static_call(&mut self, type_expr: Expr) -> Expr {
-    let start_span = type_expr.span.clone();
-
-    self.advance();
-
-    let method_name = if let Some(ident) = self.expect_identifier() {
-      let method_span = self.prev_span();
-      self.new_expr(ExprKind::Identifier(ident, None), method_span)
-    } else {
-      self.error_at_current("expected method name after '::'");
-      let error_span = self.prev_span();
-      self.new_expr(ExprKind::couldnt_parse(), error_span)
-    };
-
-    let callee = {
-      let combined_span = start_span.clone().to(method_name.span.clone());
-      self.new_expr(ExprKind::FieldAccess(vec![type_expr, method_name]), combined_span)
-    };
-
-    let type_annotations = self.parse_type_annotations();
-
-    let args = if self.match_token(TokenKind::ParenOpen) {
-      let mut args = Vec::new();
-
-      if !self.check(&TokenKind::ParenClose) {
-        loop {
-          args.push(self.parse_expr());
-
-          if self.match_token(TokenKind::Comma) {
-            continue;
-          }
-
-          break;
-        }
-      }
-
-      if !self.match_token(TokenKind::ParenClose) {
-        self.error_at_current("expected ')' after static method arguments");
-      }
-
-      args
-    } else {
-      vec![]
-    };
-
-    let end_span = self.prev_span();
-    self.new_expr(
-      ExprKind::StaticCall {
-        callee: Box::new(callee),
-        call: GenericCall { args, call_info: None, type_annotations },
-      },
-      start_span.to(end_span),
-    )
-  }
-
   fn parse_match(&mut self) -> Expr {
     let start_span = self.peek_span();
     self.advance();
@@ -650,10 +532,7 @@ impl<'a> Parser<'a> {
           let identifier_span = self.prev_span();
 
           if self.check(&TokenKind::DoubleColon) {
-            let mut path_expr =
-              self.new_expr(ExprKind::Identifier(identifier, None), identifier_span);
-
-            path_expr = self.parse_enum_variant_path(path_expr);
+            let path = self.parse_path_from_identifier_in_pattern(identifier, identifier_span);
 
             let fields = if self.check(&TokenKind::BraceOpen) {
               Some(self.parse_pattern_fields())
@@ -661,7 +540,7 @@ impl<'a> Parser<'a> {
               None
             };
 
-            Pattern::EnumVariant { path: Box::new(path_expr), fields, resolved_variant: None }
+            Pattern::EnumVariant { path, fields, resolved_variant: None }
           } else if self.check(&TokenKind::BraceOpen) {
             self.parse_struct_pattern(identifier)
           } else {
@@ -705,22 +584,119 @@ impl<'a> Parser<'a> {
     }
   }
 
-  fn parse_enum_variant_path(&mut self, mut path_expr: Expr) -> Expr {
+  fn parse_path_from_identifier_in_pattern(&mut self, first_identifier: Identifier, first_span: Span) -> Path {
+    let start_span = first_span.clone();
+    let mut segments = vec![PathSegment::new(first_identifier, first_span)];
+
     while self.match_token(TokenKind::DoubleColon) {
       if let Some(ident) = self.expect_identifier() {
-        let method_span = self.prev_span();
-        let method_expr = self.new_expr(ExprKind::Identifier(ident, None), method_span);
-
-        let combined_span = path_expr.span.clone().to(method_expr.span.clone());
-        path_expr =
-          self.new_expr(ExprKind::FieldAccess(vec![path_expr, method_expr]), combined_span);
+        let segment_span = self.prev_span();
+        let segment = PathSegment::new(ident, segment_span);
+        segments.push(segment);
       } else {
         self.error_at_current("expected identifier after '::'");
         break;
       }
     }
 
-    path_expr
+    let end_span = segments.last().map(|s| s.span.clone()).unwrap_or(start_span.clone());
+    Path::new(segments, start_span.to(end_span))
+  }
+
+  fn parse_path_continuation(&mut self, expr: Expr) -> Expr {
+    let start_span = expr.span.clone();
+    
+    let mut segments = match &expr.kind {
+      ExprKind::Identifier(ident, _) => {
+        vec![PathSegment::new(*ident, expr.span.clone())]
+      }
+      ExprKind::Path(path) => {
+        path.segments.clone()
+      }
+      _ => {
+        return self.parse_static_call_from_expr(expr);
+      }
+    };
+
+    while self.match_token(TokenKind::DoubleColon) {
+      if let Some(ident) = self.expect_identifier() {
+        let segment_span = self.prev_span();
+        let mut segment = PathSegment::new(ident, segment_span);
+
+        if self.check(&TokenKind::LessThan) && !self.is_function_call_with_generics() {
+          segment.type_args = self.parse_type_annotations();
+        }
+
+        segments.push(segment);
+      } else {
+        self.error_at_current("expected identifier after '::'");
+        break;
+      }
+    }
+
+    let end_span = segments.last().map(|s| s.span.clone()).unwrap_or(start_span.clone());
+    let path = Path::new(segments, start_span.clone().to(end_span.clone()));
+
+    if self.check(&TokenKind::BraceOpen) {
+      return self.parse_struct_initializer_from_path(path);
+    }
+
+    self.new_expr(ExprKind::Path(path), start_span.to(end_span))
+  }
+
+  fn parse_static_call_from_expr(&mut self, expr: Expr) -> Expr {
+    let start_span = expr.span.clone();
+
+    self.advance();
+
+    let method_name = if let Some(ident) = self.expect_identifier() {
+      let method_span = self.prev_span();
+      self.new_expr(ExprKind::Identifier(ident, None), method_span)
+    } else {
+      self.error_at_current("expected method name after '::'");
+      let error_span = self.prev_span();
+      self.new_expr(ExprKind::couldnt_parse(), error_span)
+    };
+
+    let callee = {
+      let combined_span = start_span.clone().to(method_name.span.clone());
+      self.new_expr(ExprKind::FieldAccess(vec![expr, method_name]), combined_span)
+    };
+
+    let type_annotations = self.parse_type_annotations();
+
+    let args = if self.match_token(TokenKind::ParenOpen) {
+      let mut args = Vec::new();
+
+      if !self.check(&TokenKind::ParenClose) {
+        loop {
+          args.push(self.parse_expr());
+
+          if self.match_token(TokenKind::Comma) {
+            continue;
+          }
+
+          break;
+        }
+      }
+
+      if !self.match_token(TokenKind::ParenClose) {
+        self.error_at_current("expected ')' after static method arguments");
+      }
+
+      args
+    } else {
+      vec![]
+    };
+
+    let end_span = self.prev_span();
+    self.new_expr(
+      ExprKind::StaticCall {
+        callee: Box::new(callee),
+        call: GenericCall { args, call_info: None, type_annotations },
+      },
+      start_span.to(end_span),
+    )
   }
 
   fn parse_struct_pattern(&mut self, name: Identifier) -> Pattern {
@@ -838,5 +814,103 @@ impl<'a> Parser<'a> {
     }
 
     false
+  }
+
+  fn parse_path_from_identifier(&mut self, first_identifier: Identifier, first_span: Span) -> Expr {
+    let start_span = first_span.clone();
+    let mut segments = vec![PathSegment::new(first_identifier, first_span)];
+
+    while self.match_token(TokenKind::DoubleColon) {
+      if let Some(ident) = self.expect_identifier() {
+        let segment_span = self.prev_span();
+        let mut segment = PathSegment::new(ident, segment_span);
+
+        if self.check(&TokenKind::LessThan) && !self.is_function_call_with_generics() {
+          segment.type_args = self.parse_type_annotations();
+        }
+
+        segments.push(segment);
+      } else {
+        self.error_at_current("expected identifier after '::'");
+        break;
+      }
+    }
+
+    let end_span = segments.last().map(|s| s.span.clone()).unwrap_or(start_span.clone());
+    let path = Path::new(segments, start_span.clone().to(end_span.clone()));
+
+    if self.check(&TokenKind::BraceOpen) {
+      return self.parse_struct_initializer_from_path(path);
+    }
+
+    self.new_expr(ExprKind::Path(path), start_span.to(end_span))
+  }
+
+  fn parse_struct_initializer_from_path(&mut self, path: Path) -> Expr {
+    let start_span = path.span.clone();
+    self.expect(TokenKind::BraceOpen);
+
+    let mut fields = HashMap::new();
+
+    if !self.check(&TokenKind::BraceClose) {
+      loop {
+        let start_position = self.position;
+
+        let field_name = if let Some(ident) = self.expect_identifier() {
+          ident
+        } else {
+          self.error_at_current("expected field name in struct initializer");
+          self.synchronize(&[TokenKind::Comma, TokenKind::BraceClose]);
+
+          if self.position == start_position && !self.is_at_end() {
+            self.advance();
+          }
+
+          if self.check(&TokenKind::BraceClose) {
+            break;
+          }
+          continue;
+        };
+
+        if !self.match_token(TokenKind::Colon) && !self.match_token(TokenKind::Equals) {
+          self.error_at_current("expected ':' or '=' after field name");
+          self.synchronize(&[TokenKind::Comma, TokenKind::BraceClose]);
+          if self.check(&TokenKind::BraceClose) {
+            break;
+          }
+          continue;
+        }
+
+        let value = self.parse_expr();
+        fields.insert(field_name, value);
+
+        if !self.match_token(TokenKind::Comma) {
+          break;
+        }
+
+        if self.check(&TokenKind::BraceClose) {
+          break;
+        }
+      }
+    }
+
+    if !self.match_token(TokenKind::BraceClose) {
+      self.error_at_current("expected '}' to close struct initializer");
+    }
+
+    let end_span = self.prev_span();
+    let expr_id = self.fresh_id();
+    self.new_expr(
+      ExprKind::StructInit {
+        name: Box::new(Expr::new(
+          ExprKind::Path(path),
+          start_span.clone(),
+          expr_id,
+        )),
+        call_info: None,
+        fields,
+      },
+      start_span.to(end_span),
+    )
   }
 }

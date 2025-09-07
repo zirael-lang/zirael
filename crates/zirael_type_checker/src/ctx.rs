@@ -7,10 +7,16 @@ pub struct TypeInferenceContext {
   pub variables: HashMap<SymbolId, Type>,
   pub next_type_var_id: usize,
   pub generic_params: HashMap<Identifier, usize>,
+  pub current_function_return_type: Option<Type>,
 }
 impl TypeInferenceContext {
   pub fn new() -> Self {
-    Self { variables: HashMap::new(), next_type_var_id: 0, generic_params: HashMap::new() }
+    Self { 
+      variables: HashMap::new(), 
+      next_type_var_id: 0, 
+      generic_params: HashMap::new(),
+      current_function_return_type: None,
+    }
   }
 
   pub fn add_variable(&mut self, symbol_id: SymbolId, type_: Type) {
@@ -40,5 +46,17 @@ impl TypeInferenceContext {
     let id = self.next_type_var_id;
     self.next_type_var_id += 1;
     id
+  }
+
+  pub fn set_function_return_type(&mut self, return_type: Type) {
+    self.current_function_return_type = Some(return_type);
+  }
+
+  pub fn get_function_return_type(&self) -> Option<&Type> {
+    self.current_function_return_type.as_ref()
+  }
+
+  pub fn clear_function_return_type(&mut self) {
+    self.current_function_return_type = None;
   }
 }

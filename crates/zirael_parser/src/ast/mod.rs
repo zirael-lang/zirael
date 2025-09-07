@@ -3,6 +3,7 @@ pub mod item;
 mod keyword;
 pub mod monomorphized_symbol;
 mod operator;
+mod path;
 mod stmt;
 mod types;
 
@@ -10,6 +11,7 @@ pub use expr::*;
 pub use item::*;
 pub use keyword::*;
 pub use operator::*;
+pub use path::*;
 pub use stmt::*;
 pub use types::*;
 

@@ -2,6 +2,7 @@ use crate::{
   AstId, Type,
   ast::{
     operator::{BinaryOp, UnaryOp},
+    path::Path,
     stmt::Stmt,
   },
   symbols::SymbolId,
@@ -28,7 +29,7 @@ pub enum Pattern {
   Literal(Literal),
   /// Enum variant pattern `Result::Ok { value }`
   EnumVariant {
-    path: Box<Expr>,
+    path: Path,
     fields: Option<Vec<PatternField>>,
     resolved_variant: Option<SymbolId>,
   },
@@ -49,6 +50,7 @@ pub struct PatternField {
 pub enum ExprKind {
   Literal(Literal),
   Identifier(Identifier, Option<SymbolId>),
+  Path(Path),
   Binary { left: Box<Expr>, op: BinaryOp, right: Box<Expr> },
   Ternary { condition: Box<Expr>, true_expr: Box<Expr>, false_expr: Box<Expr> },
   Block(Vec<Stmt>),
@@ -141,6 +143,28 @@ impl Expr {
       _ => None,
     }
   }
+
+  pub fn as_path(&self) -> Option<&Path> {
+    match &self.kind {
+      ExprKind::Path(path) => Some(path),
+      _ => None,
+    }
+  }
+
+  pub fn as_path_mut(&mut self) -> Option<&mut Path> {
+    match &mut self.kind {
+      ExprKind::Path(path) => Some(path),
+      _ => None,
+    }
+  }
+
+  pub fn as_path_or_simple(&self) -> Option<Path> {
+    match &self.kind {
+      ExprKind::Path(path) => Some(path.clone()),
+      ExprKind::Identifier(ident, _) => Some(Path::from_identifier(*ident, self.span.clone())),
+      _ => None,
+    }
+  }
 }
 
 impl ExprKind {
@@ -148,6 +172,7 @@ impl ExprKind {
     match self {
       Self::Literal(_) => "literal",
       Self::Identifier(_, _) => "identifier",
+      Self::Path(_) => "path",
       Self::Binary { .. } => "binary expression",
       Self::Ternary { .. } => "ternary expression",
       Self::Block(_) => "block",
@@ -167,6 +192,6 @@ impl ExprKind {
   }
 
   pub fn can_be_borrowed(&self) -> bool {
-    matches!(self, Self::Identifier(_, _) | Self::FieldAccess(_) | Self::IndexAccess(_, _))
+    matches!(self, Self::Identifier(_, _) | Self::Path(_) | Self::FieldAccess(_) | Self::IndexAccess(_, _))
   }
 }

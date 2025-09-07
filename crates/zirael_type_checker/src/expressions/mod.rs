@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use zirael_parser::{
   AstId, AstWalker, BinaryOp, CallInfo, ElseBranch, EnumVariantData, Expr, ExprKind, If, Literal,
-  MatchArm, Pattern, PatternField, ScopeType, Stmt, StmtKind, SymbolId, SymbolKind, Type, UnaryOp,
+  MatchArm, Path, Pattern, PatternField, ScopeType, Stmt, StmtKind, SymbolId, SymbolKind, Type, UnaryOp,
   VarDecl, WalkerContext,
 };
 use zirael_utils::prelude::{
@@ -110,6 +110,7 @@ impl<'reports> TypeInference<'reports> {
         self.infer_ternary_with_expected(condition, true_expr, false_expr, expected_type)
       }
       ExprKind::Match { scrutinee, arms } => self.infer_match(scrutinee, arms),
+      ExprKind::Path(path) => self.infer_path_with_expected(path, expected_type),
 
       _ => {
         warn!("unimplemented expr: {:#?}", expr);
@@ -233,7 +234,9 @@ impl<'reports> TypeInference<'reports> {
         }
         StmtKind::Return(ret) => {
           if let Some(expr) = ret.value.as_mut() {
-            block_type = self.infer_expr(expr);
+            // Use function return type as expected type for return statements
+            let expected_return_type = self.ctx.get_function_return_type().cloned();
+            block_type = self.infer_expr_with_expected(expr, expected_return_type.as_ref());
           } else {
             block_type = Type::Void;
           }
@@ -268,7 +271,9 @@ impl<'reports> TypeInference<'reports> {
         }
         StmtKind::Return(ret) => {
           if let Some(expr) = ret.value.as_mut() {
-            block_type = self.infer_expr_with_expected(expr, expected_type);
+            // Use function return type as expected type for return statements
+            let expected_return_type = self.ctx.get_function_return_type().cloned();
+            block_type = self.infer_expr_with_expected(expr, expected_return_type.as_ref());
           } else {
             block_type = Type::Void;
           }
@@ -511,7 +516,8 @@ impl<'reports> TypeInference<'reports> {
         }
         StmtKind::Return(ret) => {
           if let Some(expr) = ret.value.as_mut() {
-            self.infer_expr(expr);
+            let expected_return_type = self.ctx.get_function_return_type().cloned();
+            self.infer_expr_with_expected(expr, expected_return_type.as_ref());
           }
         }
         StmtKind::Var(var) => {
@@ -538,7 +544,8 @@ impl<'reports> TypeInference<'reports> {
             }
             StmtKind::Return(ret) => {
               if let Some(expr) = ret.value.as_mut() {
-                self.infer_expr(expr);
+                let expected_return_type = self.ctx.get_function_return_type().cloned();
+                self.infer_expr_with_expected(expr, expected_return_type.as_ref());
               }
             }
             StmtKind::Var(var) => {
@@ -557,7 +564,8 @@ impl<'reports> TypeInference<'reports> {
   }
 
   pub fn infer_variable(&mut self, decl: &mut VarDecl) -> Type {
-    let value_ty = &self.infer_expr(&mut decl.value);
+    let expected_type = if let Type::Inferred = decl.ty { None } else { Some(&decl.ty) };
+    let value_ty = &self.infer_expr_with_expected(&mut decl.value, expected_type);
     let variable_ty = if let Type::Inferred = decl.ty { value_ty.clone() } else { decl.ty.clone() };
 
     if let Some(symbol_id) = decl.symbol_id {
@@ -781,37 +789,30 @@ impl<'reports> TypeInference<'reports> {
 
   fn check_enum_variant_pattern_compatibility(
     &mut self,
-    path: &mut Box<Expr>,
+    path: &mut Path,
     span: Span,
     pattern_fields: &mut Option<Vec<PatternField>>,
     scrutinee_ty: &Type,
   ) -> Option<SymbolId> {
-    let ExprKind::FieldAccess(fields) = &mut path.kind else {
+    if path.segments.len() < 2 {
+      return None;
+    }
+
+    let enum_segment = &path.segments[0];
+    let variant_segment = &path.segments[1];
+
+    let Some(enum_sym_id) = enum_segment.symbol_id else {
       return None;
     };
 
-    let Some((_, sym_id)) = fields[0].as_identifier_unchecked() else {
-      self.non_struct_type(fields[0].span.clone(), file!(), line!());
-      return None;
-    };
-
-    let Some((ident, call_id)) = fields[1].as_identifier_mut() else {
-      self.error(
-        "right now, only one level of static calls are supported",
-        vec![("in this field access".to_string(), fields[1].span.clone())],
-        vec![],
-      );
-      return None;
-    };
-
-    let sym = self.symbol_table.get_symbol_unchecked(&sym_id);
-    match &sym.kind {
+    let enum_sym = self.symbol_table.get_symbol_unchecked(&enum_sym_id);
+    match &enum_sym.kind {
       SymbolKind::Enum { methods: _, variants, generics: enum_generics, .. } => {
         let mut variant_sym_id = None;
         for variant in variants {
           let variant_symbol = self.symbol_table.get_symbol_unchecked(&variant);
-          if variant_symbol.name == *ident {
-            variant_sym_id = Some(variant);
+          if variant_symbol.name == variant_segment.identifier {
+            variant_sym_id = Some(*variant);
             break;
           }
         }
@@ -821,7 +822,7 @@ impl<'reports> TypeInference<'reports> {
 
           if let SymbolKind::EnumVariant { data, .. } = &variant_sym.kind {
             match data {
-              EnumVariantData::Unit => Some(*variant_id),
+              EnumVariantData::Unit => Some(variant_id),
               EnumVariantData::Struct(variant_fields) => {
                 if let Some(pf) = pattern_fields {
                   for field in pf {
@@ -854,7 +855,7 @@ impl<'reports> TypeInference<'reports> {
                   }
                 }
 
-                Some(*variant_id)
+                Some(variant_id)
               }
             }
           } else {
@@ -878,6 +879,62 @@ impl<'reports> TypeInference<'reports> {
       _ => {
         todo!()
       }
+    }
+  }
+
+  fn infer_path_with_expected(&mut self, path: &mut Path, expected_type: Option<&Type>) -> Type {
+    if let Some(last_segment) = path.segments.last() {
+      if let Some(symbol_id) = last_segment.symbol_id {
+        let symbol = self.symbol_table.get_symbol_unchecked(&symbol_id);
+        match &symbol.kind {
+          SymbolKind::EnumVariant { parent_enum, .. } => {
+            let parent_symbol = self.symbol_table.get_symbol_unchecked(parent_enum);
+            if let SymbolKind::Enum { generics, .. } = &parent_symbol.kind {
+              if generics.is_empty() {
+                Type::Named { name: parent_symbol.name, generics: vec![] }
+              } else {
+                if let Some(expected) = expected_type {
+                  if let Type::Named { name, generics: expected_generics } = expected {
+                    if *name == parent_symbol.name {
+                      return expected.clone();
+                    }
+                  }
+                }
+                self.error(
+                  "cannot infer generic enum variant type without context - provide explicit type annotation",
+                  vec![("here".to_string(), path.span.clone())],
+                  vec![],
+                );
+                Type::Error
+              }
+            } else {
+              self.error(
+                "invalid parent enum for variant",
+                vec![("here".to_string(), path.span.clone())],
+                vec![],
+              );
+              Type::Error
+            }
+          }
+          _ => {
+            self.infer_identifier(symbol_id, &path.span)
+          }
+        }
+      } else {
+        self.error(
+          "unresolved path",
+          vec![("here".to_string(), path.span.clone())],
+          vec![],
+        );
+        Type::Error
+      }
+    } else {
+      self.error(
+        "empty path",
+        vec![("here".to_string(), path.span.clone())],
+        vec![],
+      );
+      Type::Error
     }
   }
 }

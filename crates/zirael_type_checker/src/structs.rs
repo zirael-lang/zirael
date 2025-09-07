@@ -1,7 +1,7 @@
 use crate::{TypeInference, monomorphization::MonomorphizationData};
 use std::{collections::HashMap, vec};
 use zirael_parser::{
-  AstWalker, CallInfo, Expr, ExprKind, SymbolKind, Type,
+  AstWalker, CallInfo, EnumVariantData, Expr, ExprKind, SymbolKind, Type,
   ast::monomorphized_symbol::MonomorphizedSymbol,
 };
 use zirael_utils::ident_table::{Identifier, resolve};
@@ -13,18 +13,75 @@ impl<'reports> TypeInference<'reports> {
     fields: &mut HashMap<Identifier, Expr>,
     call_info: &mut Option<CallInfo>,
   ) -> Type {
-    let struct_sym_id = if let ExprKind::Identifier(_, Some(sym_id)) = &name_expr.kind {
-      *sym_id
-    } else {
-      return Type::Error;
+    let struct_sym_id = match &name_expr.kind {
+      ExprKind::Identifier(_, Some(sym_id)) => *sym_id,
+      ExprKind::Path(path) => {
+        if let Some(last_segment) = path.segments.last() {
+          if let Some(sym_id) = last_segment.symbol_id {
+            sym_id
+          } else {
+            self.error(
+              "unresolved path in struct initialization",
+              vec![("here".to_string(), name_expr.span.clone())],
+              vec![],
+            );
+            return Type::Error;
+          }
+        } else {
+          self.error(
+            "empty path in struct initialization",
+            vec![("here".to_string(), name_expr.span.clone())],
+            vec![],
+          );
+          return Type::Error;
+        }
+      }
+      _ => {
+        self.error(
+          "expected identifier or path in struct initialization",
+          vec![("here".to_string(), name_expr.span.clone())],
+          vec![],
+        );
+        return Type::Error;
+      }
     };
 
-    let (struct_fields, generics, symbol_name) = {
+    let (struct_fields, generics, symbol_name, parent_enum_id) = {
       let symbol = self.symbol_table.get_symbol_unchecked(&struct_sym_id);
-      if let SymbolKind::Struct { fields: struct_fields, generics, .. } = &symbol.kind {
-        (struct_fields.clone(), generics.clone(), symbol.name)
-      } else {
-        return Type::Error;
+      match &symbol.kind {
+        SymbolKind::Struct { fields: struct_fields, generics, .. } => {
+          (struct_fields.clone(), generics.clone(), symbol.name, None)
+        }
+        SymbolKind::EnumVariant { parent_enum, data } => {
+          let parent_symbol = self.symbol_table.get_symbol_unchecked(parent_enum);
+          if let SymbolKind::Enum { generics, .. } = &parent_symbol.kind {
+            if let EnumVariantData::Struct(variant_fields) = data {
+              (variant_fields.clone(), generics.clone(), symbol.name, Some(*parent_enum))
+            } else {
+              self.error(
+                "cannot initialize non-struct enum variant with struct syntax",
+                vec![("here".to_string(), name_expr.span.clone())],
+                vec![],
+              );
+              return Type::Error;
+            }
+          } else {
+            self.error(
+              "invalid parent enum for variant",
+              vec![("here".to_string(), name_expr.span.clone())],
+              vec![],
+            );
+            return Type::Error;
+          }
+        }
+        _ => {
+          self.error(
+            "expected struct or enum variant for initialization",
+            vec![("here".to_string(), name_expr.span.clone())],
+            vec![],
+          );
+          return Type::Error;
+        }
       }
     };
 
@@ -71,7 +128,12 @@ impl<'reports> TypeInference<'reports> {
     }
 
     if generics.is_empty() {
-      Type::Named { name: symbol_name, generics: vec![] }
+      if let Some(parent_enum_id) = parent_enum_id {
+        let parent_symbol = self.symbol_table.get_symbol_unchecked(&parent_enum_id);
+        Type::Named { name: parent_symbol.name, generics: vec![] }
+      } else {
+        Type::Named { name: symbol_name, generics: vec![] }
+      }
     } else {
       let concrete_generics: Vec<Type> = generics
         .iter()
@@ -129,12 +191,24 @@ impl<'reports> TypeInference<'reports> {
           concrete_types: generic_map,
         });
 
+        let display_type = if let Some(parent_enum_id) = parent_enum_id {
+          let parent_symbol = self.symbol_table.get_symbol_unchecked(&parent_enum_id);
+          Type::Named { name: parent_symbol.name, generics: concrete_generics }
+        } else {
+          Type::Named { name: symbol_name, generics: concrete_generics }
+        };
+
         Type::MonomorphizedSymbol(MonomorphizedSymbol {
           id: monomorphized_id,
-          display_ty: Box::new(Type::Named { name: symbol_name, generics: concrete_generics }),
+          display_ty: Box::new(display_type),
         })
       } else {
-        Type::Named { name: symbol_name, generics: concrete_generics }
+        if let Some(parent_enum_id) = parent_enum_id {
+          let parent_symbol = self.symbol_table.get_symbol_unchecked(&parent_enum_id);
+          Type::Named { name: parent_symbol.name, generics: concrete_generics }
+        } else {
+          Type::Named { name: symbol_name, generics: concrete_generics }
+        }
       }
     }
   }

@@ -215,7 +215,7 @@ impl<'reports> TypeInference<'reports> {
           self.update_expr_recursively(&mut arm.body, resolved_ty);
         }
       }
-      ExprKind::Literal(_) | ExprKind::Identifier(_, _) | ExprKind::CouldntParse(_) => {}
+      ExprKind::Literal(_) | ExprKind::Identifier(_, _) | ExprKind::Path(_) | ExprKind::CouldntParse(_) => {}
     }
   }
 

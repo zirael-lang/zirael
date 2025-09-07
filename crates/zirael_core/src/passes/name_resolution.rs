@@ -1,6 +1,6 @@
 use crate::prelude::{WalkerContext, warn};
 use zirael_parser::{
-  AstWalker, CallInfo, Expr, ExprKind, MatchArm, Pattern, ScopeType, Symbol, SymbolId, SymbolKind,
+  AstWalker, CallInfo, Expr, ExprKind, MatchArm, Pattern, Path, PathSegment, ScopeType, Symbol, SymbolId, SymbolKind,
   SymbolRelationNode, SymbolTable, Type, impl_ast_walker, item::Item,
 };
 use zirael_utils::prelude::*;
@@ -33,7 +33,8 @@ impl ExpectedSymbol {
         SymbolKind::Variable { .. }
         | SymbolKind::Constant { .. }
         | SymbolKind::Parameter { .. }
-        | SymbolKind::MatchBinding { .. },
+        | SymbolKind::MatchBinding { .. }
+        | SymbolKind::EnumVariant { .. },
       ) => true,
       (Self::Any, _) => true,
       _ => false,
@@ -136,6 +137,186 @@ impl<'reports> NameResolution<'reports> {
     report
   }
 
+  fn resolve_path(&mut self, path: &mut Path, expected: ExpectedSymbol) -> Option<SymbolId> {
+    if path.segments.is_empty() {
+      return None;
+    }
+
+    let first_segment = &mut path.segments[0];
+    let first_id = self.resolve_identifier(&first_segment.identifier, first_segment.span.clone(), ExpectedSymbol::Any)?;
+    first_segment.symbol_id = Some(first_id);
+
+    let mut current_symbol_id = first_id;
+
+    for segment in &mut path.segments[1..] {
+      let current_symbol = self.symbol_table.get_symbol_unchecked(&current_symbol_id);
+      
+      match &current_symbol.kind {
+        SymbolKind::Struct { methods, .. } => {
+          let mut found = None;
+          for method_id in methods {
+            let method_symbol = self.symbol_table.get_symbol_unchecked(method_id);
+            if method_symbol.name == segment.identifier {
+              found = Some(*method_id);
+              break;
+            }
+          }
+          
+          if let Some(method_id) = found {
+            segment.symbol_id = Some(method_id);
+            current_symbol_id = method_id;
+          } else {
+            self.report_unknown_symbol(&segment.identifier, segment.span.clone(), &ExpectedSymbol::Any);
+            return None;
+          }
+        }
+        SymbolKind::Enum { methods, variants, .. } => {
+          let mut found = None;
+          
+          for method_id in methods {
+            let method_symbol = self.symbol_table.get_symbol_unchecked(method_id);
+            if method_symbol.name == segment.identifier {
+              found = Some(*method_id);
+              break;
+            }
+          }
+          
+          if found.is_none() {
+            for variant_id in variants {
+              let variant_symbol = self.symbol_table.get_symbol_unchecked(variant_id);
+              if variant_symbol.name == segment.identifier {
+                found = Some(*variant_id);
+                break;
+              }
+            }
+          }
+          
+          if let Some(found_id) = found {
+            segment.symbol_id = Some(found_id);
+            current_symbol_id = found_id;
+          } else {
+            self.report_unknown_symbol(&segment.identifier, segment.span.clone(), &ExpectedSymbol::Any);
+            return None;
+          }
+        }
+        _ => {
+          self.report_unknown_symbol(&segment.identifier, segment.span.clone(), &ExpectedSymbol::Any);
+          return None;
+        }
+      }
+    }
+
+    let final_symbol = self.symbol_table.get_symbol_unchecked(&current_symbol_id);
+    if !expected.matches(&final_symbol.kind) {
+      let found_kind = article(final_symbol.kind.name()).dimmed().bold();
+      let expected_kind = article(expected.name()).dimmed().bold();
+      self.error(
+        &format!("expected {expected_kind}, found {found_kind}"),
+        vec![(format!("found {found_kind} here"), path.span.clone())],
+        vec![],
+      );
+      return None;
+    }
+
+    Some(current_symbol_id)
+  }
+
+  fn resolve_path_for_construction(&mut self, path: &mut Path) -> Option<SymbolId> {
+    let first_segment = &mut path.segments[0];
+    let Some(first_id) = self.resolve_identifier(&first_segment.identifier, first_segment.span.clone(), ExpectedSymbol::Type) else {
+      return self.try_resolve_enum_variant_path(path);
+    };
+    first_segment.symbol_id = Some(first_id);
+
+    if path.segments.len() == 1 {
+      return Some(first_id);
+    }
+
+    let mut current_symbol_id = first_id;
+
+    for segment in &mut path.segments[1..] {
+      let current_symbol = self.symbol_table.get_symbol_unchecked(&current_symbol_id);
+      
+      match &current_symbol.kind {
+        SymbolKind::Struct { methods, .. } => {
+          let mut found = None;
+          for method_id in methods {
+            let method_symbol = self.symbol_table.get_symbol_unchecked(method_id);
+            if method_symbol.name == segment.identifier {
+              found = Some(*method_id);
+              break;
+            }
+          }
+          
+          if let Some(method_id) = found {
+            segment.symbol_id = Some(method_id);
+            current_symbol_id = method_id;
+          } else {
+            self.report_unknown_symbol(&segment.identifier, segment.span.clone(), &ExpectedSymbol::Any);
+            return None;
+          }
+        }
+        SymbolKind::Enum { methods, variants, .. } => {
+          let mut found = None;
+          
+          for method_id in methods {
+            let method_symbol = self.symbol_table.get_symbol_unchecked(method_id);
+            if method_symbol.name == segment.identifier {
+              found = Some(*method_id);
+              break;
+            }
+          }
+          
+          if found.is_none() {
+            for variant_id in variants {
+              let variant_symbol = self.symbol_table.get_symbol_unchecked(variant_id);
+              if variant_symbol.name == segment.identifier {
+                found = Some(*variant_id);
+                break;
+              }
+            }
+          }
+          
+          if let Some(found_id) = found {
+            segment.symbol_id = Some(found_id);
+            current_symbol_id = found_id;
+          } else {
+            self.report_unknown_symbol(&segment.identifier, segment.span.clone(), &ExpectedSymbol::Any);
+            return None;
+          }
+        }
+        _ => {
+          self.report_unknown_symbol(&segment.identifier, segment.span.clone(), &ExpectedSymbol::Any);
+          return None;
+        }
+      }
+    }
+
+    Some(current_symbol_id)
+  }
+
+  fn try_resolve_enum_variant_path(&mut self, path: &mut Path) -> Option<SymbolId> {
+    if path.segments.len() >= 2 {
+      let enum_segment = &mut path.segments[0];
+      if let Some(enum_id) = self.resolve_identifier(&enum_segment.identifier, enum_segment.span.clone(), ExpectedSymbol::Enum) {
+        enum_segment.symbol_id = Some(enum_id);
+        
+        let enum_symbol = self.symbol_table.get_symbol_unchecked(&enum_id);
+        if let SymbolKind::Enum { variants, .. } = &enum_symbol.kind {
+          let variant_segment = &mut path.segments[1];
+          for variant_id in variants {
+            let variant_symbol = self.symbol_table.get_symbol_unchecked(variant_id);
+            if variant_symbol.name == variant_segment.identifier {
+              variant_segment.symbol_id = Some(*variant_id);
+              return Some(*variant_id);
+            }
+          }
+        }
+      }
+    }
+    None
+  }
+
   fn visit_static_call_base(&mut self, _callee: &mut Expr) {
     let ExprKind::FieldAccess(fields) = &mut _callee.kind else {
       self.error("expected field access in static call", vec![], vec![]);
@@ -166,20 +347,31 @@ impl<'reports> AstWalker<'reports> for NameResolution<'reports> {
   }
 
   fn visit_function_call(&mut self, callee: &mut Expr, _args: &mut [Expr]) {
-    let span = callee.span.clone();
-    let Some((ident, ident_sym_id)) = callee.as_identifier_mut() else {
-      self.error("expected identifier in function call", vec![], vec![]);
-      return;
-    };
+    match &mut callee.kind {
+      ExprKind::Identifier(ident, ident_sym_id) => {
+        let span = callee.span.clone();
+        if let Some(id) = self.resolve_identifier(ident, span, ExpectedSymbol::Function) {
+          *ident_sym_id = Some(id);
 
-    if let Some(id) = self.resolve_identifier(ident, span, ExpectedSymbol::Function) {
-      *ident_sym_id = Some(id);
-
-      self.symbol_table.new_relation(
-        SymbolRelationNode::Symbol(self.current_item.unwrap()),
-        SymbolRelationNode::Symbol(id),
-      );
-      self.symbol_table.mark_used(id).expect("invalid symbol id");
+          self.symbol_table.new_relation(
+            SymbolRelationNode::Symbol(self.current_item.unwrap()),
+            SymbolRelationNode::Symbol(id),
+          );
+          self.symbol_table.mark_used(id).expect("invalid symbol id");
+        }
+      }
+      ExprKind::Path(path) => {
+        if let Some(id) = self.resolve_path(path, ExpectedSymbol::Function) {
+          self.symbol_table.new_relation(
+            SymbolRelationNode::Symbol(self.current_item.unwrap()),
+            SymbolRelationNode::Symbol(id),
+          );
+          self.symbol_table.mark_used(id).expect("invalid symbol id");
+        }
+      }
+      _ => {
+        self.error("expected identifier or path in function call", vec![], vec![]);
+      }
     }
   }
 
@@ -191,20 +383,38 @@ impl<'reports> AstWalker<'reports> for NameResolution<'reports> {
   }
 
   fn visit_struct_init(&mut self, name: &mut Expr, _fields: &mut HashMap<Identifier, Expr>) {
-    let span = name.span.clone();
-    let Some((ident, ident_sym_id)) = name.as_identifier_mut() else {
-      self.error("expected identifier in struct init", vec![], vec![]);
-      return;
-    };
+    match &mut name.kind {
+      ExprKind::Identifier(ident, ident_sym_id) => {
+        let span = name.span.clone();
+        if let Some(id) = self.resolve_identifier(ident, span, ExpectedSymbol::Struct) {
+          *ident_sym_id = Some(id);
 
-    if let Some(id) = self.resolve_identifier(ident, span, ExpectedSymbol::Struct) {
-      *ident_sym_id = Some(id);
+          self.symbol_table.new_relation(
+            SymbolRelationNode::Symbol(self.current_item.unwrap()),
+            SymbolRelationNode::Symbol(id),
+          );
+        }
+      }
+      ExprKind::Path(path) => {
+        if let Some(id) = self.resolve_path_for_construction(path) {
+          self.symbol_table.new_relation(
+            SymbolRelationNode::Symbol(self.current_item.unwrap()),
+            SymbolRelationNode::Symbol(id),
+          );
 
-      self.symbol_table.new_relation(
-        SymbolRelationNode::Symbol(self.current_item.unwrap()),
-        SymbolRelationNode::Symbol(id),
-      );
+          let symbol = self.symbol_table.get_symbol_unchecked(&id);
+          if let SymbolKind::EnumVariant { .. } = &symbol.kind {
+          }
+        }
+      }
+      _ => {
+        self.error("expected identifier or path in struct init", vec![], vec![]);
+      }
     }
+  }
+
+  fn visit_path(&mut self, path: &mut Path) {
+    self.resolve_path(path, ExpectedSymbol::Value);
   }
 
   fn visit_field_access(&mut self, fields: &mut Vec<Expr>) {
@@ -254,7 +464,18 @@ impl<'reports> AstWalker<'reports> for NameResolution<'reports> {
 
   fn visit_match_arm(&mut self, _arm: &mut MatchArm) {
     match &mut _arm.pattern {
-      Pattern::EnumVariant { path, .. } => self.visit_static_call_base(path),
+      Pattern::EnumVariant { path, .. } => {
+        if let Some(id) = self.resolve_path_for_construction(path) {
+          let symbol = self.symbol_table.get_symbol_unchecked(&id);
+          if !matches!(symbol.kind, SymbolKind::EnumVariant { .. }) {
+            self.error(
+              "expected enum variant in pattern",
+              vec![("not an enum variant".to_string(), path.span.clone())],
+              vec![],
+            );
+          }
+        }
+      }
       _ => {}
     }
   }

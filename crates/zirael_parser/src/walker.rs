@@ -1,5 +1,5 @@
 use crate::{
-  AstId, CallInfo, LexedModule, ModuleId, Return, ScopeType, SymbolTable, TypeExtension,
+  AstId, CallInfo, LexedModule, ModuleId, Path, PathSegment, Return, ScopeType, SymbolTable, TypeExtension,
   ast::{
     Abi, Ast, Attribute, BinaryOp, ElseBranch, EnumDeclaration, EnumVariant, EnumVariantData, Expr,
     ExprKind, Function, FunctionModifiers, FunctionSignature, GenericArg, GenericParameter, If,
@@ -232,6 +232,7 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
     match &mut expr.kind {
       ExprKind::Literal(lit) => self.walk_literal(lit),
       ExprKind::Identifier(id, sym_id) => self.walk_identifier(id, sym_id, expr.span.clone()),
+      ExprKind::Path(path) => self.walk_path(path),
       ExprKind::Binary { left, op, right } => {
         self.walk_expr(left);
         self.visit_binary_op(op);
@@ -366,6 +367,20 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
     self.visit_identifier(id, sym_id, span);
   }
 
+  fn walk_path(&mut self, path: &mut Path) {
+    self.visit_path(path);
+    for segment in &mut path.segments {
+      self.walk_path_segment(segment);
+    }
+  }
+
+  fn walk_path_segment(&mut self, segment: &mut PathSegment) {
+    self.visit_path_segment(segment);
+    for type_arg in &mut segment.type_args {
+      self.walk_type(type_arg);
+    }
+  }
+
   fn walk_stmt(&mut self, stmt: &mut Stmt) {
     self.visit_stmt(stmt);
     self.walk_stmt_kind(&mut stmt.0);
@@ -490,6 +505,8 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
     _span: Span,
   ) {
   }
+  fn visit_path(&mut self, _path: &mut Path) {}
+  fn visit_path_segment(&mut self, _segment: &mut PathSegment) {}
   fn visit_stmt(&mut self, _stmt: &mut Stmt) {}
   fn visit_var_decl(&mut self, _var_decl: &mut VarDecl) {}
   fn visit_function_call(&mut self, _callee: &mut Expr, _args: &mut [Expr]) {}
