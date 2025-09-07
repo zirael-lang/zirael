@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 use zirael_parser::{
   AstId, AstWalker, BinaryOp, CallInfo, ElseBranch, EnumVariantData, Expr, ExprKind, If, Literal,
-  MatchArm, Path, Pattern, PatternField, ScopeType, Stmt, StmtKind, SymbolId, SymbolKind, Type, UnaryOp,
-  VarDecl, WalkerContext,
+  MatchArm, Path, Pattern, PatternField, ScopeType, Stmt, StmtKind, SymbolId, SymbolKind, Type,
+  UnaryOp, VarDecl, WalkerContext,
 };
 use zirael_utils::prelude::{
-  Color, Colorize, Identifier, ReportBuilder, ReportKind, Span, resolve, warn,
+  Color, Colorize, Identifier, ReportBuilder, ReportKind, Span, debug, resolve, warn,
 };
 
 use crate::{
@@ -64,7 +64,11 @@ impl<'reports> TypeInference<'reports> {
     self.infer_expr_with_expected(expr, None)
   }
 
-  pub fn infer_expr_with_expected(&mut self, expr: &mut Expr, expected_type: Option<&Type>) -> Type {
+  pub fn infer_expr_with_expected(
+    &mut self,
+    expr: &mut Expr,
+    expected_type: Option<&Type>,
+  ) -> Type {
     let ty = match &mut expr.kind {
       ExprKind::Literal(lit) => self.infer_literal(lit),
       ExprKind::Identifier(_, symbol_id) => {
@@ -255,7 +259,12 @@ impl<'reports> TypeInference<'reports> {
     block_type
   }
 
-  fn infer_block_with_expected(&mut self, stmts: &mut [Stmt], id: AstId, expected_type: Option<&Type>) -> Type {
+  fn infer_block_with_expected(
+    &mut self,
+    stmts: &mut [Stmt],
+    id: AstId,
+    expected_type: Option<&Type>,
+  ) -> Type {
     self.push_scope(ScopeType::Block(id));
     if stmts.is_empty() {
       self.pop_scope();
@@ -328,174 +337,166 @@ impl<'reports> TypeInference<'reports> {
     call_info: &mut Option<CallInfo>,
     type_annotations: &mut Vec<Type>,
   ) -> Type {
-    if let Some((_, Some(sym_id))) = callee.as_identifier_mut() {
-      let sym = self.symbol_table().get_symbol_unchecked(sym_id);
-      if let SymbolKind::Function { signature, .. } = &sym.kind {
-        let signature = &mut signature.clone();
-
-        let expected_arg_count = if signature.is_static() {
-          signature.parameters.len()
-        } else {
-          signature.parameters.len() - 1
-        };
-
-        if args.len() != expected_arg_count {
-          self.error(
-            &format!(
-              "wrong number of arguments: expected {}, found {}",
-              expected_arg_count,
-              args.len()
-            ),
-            vec![("in this call".to_string(), callee.span.clone())],
-            vec![],
-          );
-          return Type::Error;
-        }
-
-        if !type_annotations.is_empty() && type_annotations.len() != signature.generics.len() {
-          self.error(
-            &format!(
-              "wrong number of type annotations: expected {}, found {}",
-              signature.generics.len(),
-              type_annotations.len()
-            ),
-            vec![("in this call".to_string(), callee.span.clone())],
-            vec![],
-          );
-          return Type::Error;
-        }
-
-        for arg in args.iter_mut() {
-          self.infer_expr(arg);
-          self.try_monomorphize_named_type(&mut arg.ty);
-        }
-
-        let mut generic_mapping = HashMap::new();
-
-        if !type_annotations.is_empty() {
-          for (generic, annotation) in signature.generics.iter().zip(type_annotations.iter()) {
-            let mut resolved_annotation = annotation.clone();
-            self.try_monomorphize_named_type(&mut resolved_annotation);
-            generic_mapping.insert(generic.name, resolved_annotation);
-          }
-        } else if !signature.generics.is_empty() {
-          for generic in signature.generics.iter() {
-            if !self.ctx.is_generic_parameter(generic.name) {
-              let _type_var = self.ctx.fresh_type_var(Some(generic.name));
-            }
-          }
-        }
-
-        let params_to_check = if signature.is_static() {
-          &mut signature.parameters[..]
-        } else {
-          &mut signature.parameters[1..]
-        };
-
-        let mut valid = true;
-
-        if type_annotations.is_empty() {
-          for (arg, param) in args.iter().zip(params_to_check.iter()) {
-            self.infer_generic_types(&param.ty, &arg.ty, &mut generic_mapping);
-          }
-        }
-
-        let mut concrete_params = params_to_check.to_vec();
-        for param in concrete_params.iter_mut() {
-          self.substitute_type_with_map(&mut param.ty, &generic_mapping);
-        }
-
-        for (i, (arg, param)) in args.iter().zip(concrete_params.iter()).enumerate() {
-          if !self.expect_type(&param.ty, &arg.ty, &arg.span, &format!("argument {}", i + 1)) {
-            valid = false;
-          }
-        }
-        signature.parameters = concrete_params.clone();
-
-        if !valid {
-          return Type::Error;
-        }
-
-        let mut return_type = signature.return_type.clone();
-        self.substitute_type_with_map(&mut return_type, &generic_mapping);
-        signature.return_type = return_type.clone();
-
-        let monomorphized_id = if !signature.generics.is_empty() && valid {
-          let unresolved_generics: Vec<_> =
-            signature.generics.iter().filter(|g| !generic_mapping.contains_key(&g.name)).collect();
-
-          if unresolved_generics.is_empty() {
-            Some(self.record_monomorphization_with_id(
-              *sym_id,
-              &generic_mapping,
-              Some(MonomorphizationData::Signature(signature.clone())),
-            ))
-          } else {
-            let function_name = resolve(&sym.name);
-            let generics_list =
-              unresolved_generics.iter().map(|g| resolve(&g.name)).collect::<Vec<_>>().join(", ");
-
-            let suggestion = if type_annotations.is_empty() {
-              format!(
-                "consider providing explicit type annotations, e.g., '{}<{}>({})'",
-                function_name,
-                signature.generics.iter().map(|g| resolve(&g.name)).collect::<Vec<_>>().join(", "),
-                args.iter().map(|_| "_").collect::<Vec<_>>().join(", ")
-              )
-            } else {
-              "the provided type annotations are insufficient to resolve all generic parameters"
-                .to_string()
-            };
-
-            self.error(
-              &format!(
-                "cannot infer type parameter{} {} for function {}",
-                if unresolved_generics.len() > 1 { "s" } else { "" },
-                generics_list.dimmed().bold(),
-                function_name.dimmed().bold()
-              ),
-              vec![("in this call".to_string(), callee.span.clone())],
-              vec![suggestion],
-            );
-            return Type::Error;
-          }
-        } else {
-          None
-        };
-
-        *call_info = Some(CallInfo {
-          original_symbol: *sym_id,
-          monomorphized_id,
-          concrete_types: generic_mapping.clone(),
-        });
-
-        return return_type;
+    let sym_id = if let Some((_, Some(sym_id))) = callee.as_identifier_mut() {
+      sym_id.clone()
+    } else if let ExprKind::Path(Path { segments, .. }) = &callee.kind {
+      if let Some(sym_id) = segments.last().and_then(|seg| seg.symbol_id) {
+        sym_id
       } else {
+        panic!()
+      }
+    } else {
+      panic!()
+    };
+
+    let sym = self.symbol_table().get_symbol_unchecked(&sym_id);
+    if let SymbolKind::Function { signature, .. } = &sym.kind {
+      let signature = &mut signature.clone();
+
+      let expected_arg_count = if signature.is_static() {
+        signature.parameters.len()
+      } else {
+        signature.parameters.len() - 1
+      };
+
+      if args.len() != expected_arg_count {
         self.error(
-          &format!("cannot call non-function type: {}", sym.kind.name()),
+          &format!(
+            "wrong number of arguments: expected {}, found {}",
+            expected_arg_count,
+            args.len()
+          ),
           vec![("in this call".to_string(), callee.span.clone())],
           vec![],
         );
         return Type::Error;
       }
-    }
 
-    let callee_type = self.infer_expr(callee);
-    match callee_type {
-      Type::Function { params, return_type } => {
-        if !self.check_call_args(&params, args, &callee.span) {
-          return Type::Error;
-        }
-        *return_type
-      }
-      _ => {
+      if !type_annotations.is_empty() && type_annotations.len() != signature.generics.len() {
         self.error(
-          &format!("cannot call non-function type: {}", self.format_type(&callee_type)),
+          &format!(
+            "wrong number of type annotations: expected {}, found {}",
+            signature.generics.len(),
+            type_annotations.len()
+          ),
           vec![("in this call".to_string(), callee.span.clone())],
           vec![],
         );
-        Type::Error
+        return Type::Error;
       }
+
+      for arg in args.iter_mut() {
+        self.infer_expr(arg);
+        self.try_monomorphize_named_type(&mut arg.ty);
+      }
+
+      let mut generic_mapping = HashMap::new();
+
+      if !type_annotations.is_empty() {
+        for (generic, annotation) in signature.generics.iter().zip(type_annotations.iter()) {
+          let mut resolved_annotation = annotation.clone();
+          self.try_monomorphize_named_type(&mut resolved_annotation);
+          generic_mapping.insert(generic.name, resolved_annotation);
+        }
+      } else if !signature.generics.is_empty() {
+        for generic in signature.generics.iter() {
+          if !self.ctx.is_generic_parameter(generic.name) {
+            let _type_var = self.ctx.fresh_type_var(Some(generic.name));
+          }
+        }
+      }
+
+      let params_to_check = if signature.is_static() {
+        &mut signature.parameters[..]
+      } else {
+        &mut signature.parameters[1..]
+      };
+
+      let mut valid = true;
+
+      if type_annotations.is_empty() {
+        for (arg, param) in args.iter().zip(params_to_check.iter()) {
+          self.infer_generic_types(&param.ty, &arg.ty, &mut generic_mapping);
+        }
+      }
+
+      let mut concrete_params = params_to_check.to_vec();
+      for param in concrete_params.iter_mut() {
+        self.substitute_type_with_map(&mut param.ty, &generic_mapping);
+      }
+
+      for (i, (arg, param)) in args.iter().zip(concrete_params.iter()).enumerate() {
+        if !self.expect_type(&param.ty, &arg.ty, &arg.span, &format!("argument {}", i + 1)) {
+          valid = false;
+        }
+      }
+      signature.parameters = concrete_params.clone();
+
+      if !valid {
+        return Type::Error;
+      }
+
+      let mut return_type = signature.return_type.clone();
+      self.substitute_type_with_map(&mut return_type, &generic_mapping);
+      signature.return_type = return_type.clone();
+
+      let monomorphized_id = if !signature.generics.is_empty() && valid {
+        let unresolved_generics: Vec<_> =
+          signature.generics.iter().filter(|g| !generic_mapping.contains_key(&g.name)).collect();
+
+        if unresolved_generics.is_empty() {
+          Some(self.record_monomorphization_with_id(
+            sym_id,
+            &generic_mapping,
+            Some(MonomorphizationData::Signature(signature.clone())),
+          ))
+        } else {
+          let function_name = resolve(&sym.name);
+          let generics_list =
+            unresolved_generics.iter().map(|g| resolve(&g.name)).collect::<Vec<_>>().join(", ");
+
+          let suggestion = if type_annotations.is_empty() {
+            format!(
+              "consider providing explicit type annotations, e.g., '{}<{}>({})'",
+              function_name,
+              signature.generics.iter().map(|g| resolve(&g.name)).collect::<Vec<_>>().join(", "),
+              args.iter().map(|_| "_").collect::<Vec<_>>().join(", ")
+            )
+          } else {
+            "the provided type annotations are insufficient to resolve all generic parameters"
+              .to_string()
+          };
+
+          self.error(
+            &format!(
+              "cannot infer type parameter{} {} for function {}",
+              if unresolved_generics.len() > 1 { "s" } else { "" },
+              generics_list.dimmed().bold(),
+              function_name.dimmed().bold()
+            ),
+            vec![("in this call".to_string(), callee.span.clone())],
+            vec![suggestion],
+          );
+          return Type::Error;
+        }
+      } else {
+        None
+      };
+
+      *call_info = Some(CallInfo {
+        original_symbol: sym_id,
+        monomorphized_id,
+        concrete_types: generic_mapping.clone(),
+      });
+
+      return return_type;
+    } else {
+      self.error(
+        &format!("cannot call non-function type: {}", sym.kind.name()),
+        vec![("in this call".to_string(), callee.span.clone())],
+        vec![],
+      );
+      return Type::Error;
     }
   }
 
@@ -617,6 +618,7 @@ impl<'reports> TypeInference<'reports> {
         }
       }
       _ => {
+        debug!("identifier '{}' resolved to symbol: {:#?}", resolve(&sym.name), sym);
         self.error(
           &format!("identifier '{}' cannot be used in this context", resolve(&sym.name)),
           vec![("here".to_string(), span.clone())],
@@ -916,24 +918,14 @@ impl<'reports> TypeInference<'reports> {
               Type::Error
             }
           }
-          _ => {
-            self.infer_identifier(symbol_id, &path.span)
-          }
+          _ => self.infer_identifier(symbol_id, &path.span),
         }
       } else {
-        self.error(
-          "unresolved path",
-          vec![("here".to_string(), path.span.clone())],
-          vec![],
-        );
+        self.error("unresolved path", vec![("here".to_string(), path.span.clone())], vec![]);
         Type::Error
       }
     } else {
-      self.error(
-        "empty path",
-        vec![("here".to_string(), path.span.clone())],
-        vec![],
-      );
+      self.error("empty path", vec![("here".to_string(), path.span.clone())], vec![]);
       Type::Error
     }
   }
