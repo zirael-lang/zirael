@@ -1,6 +1,7 @@
 mod attrs;
 mod expr;
 mod generics;
+mod imports;
 mod item;
 mod stmt;
 mod ty;

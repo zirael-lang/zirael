@@ -155,42 +155,6 @@ impl<'a> Parser<'a> {
     }
   }
 
-  pub fn parse_import(&mut self) -> (ItemKind, Identifier) {
-    let string = self.expect_string().unwrap_or_default();
-    let span = self.prev_span();
-    let current_file = self.source.path();
-    let path = current_file.parent().unwrap_or(&PathBuf::new()).join(string.clone());
-
-    let is_path_import =
-      string.starts_with("./") || string.starts_with('/') || string.starts_with('\\');
-
-    let kind = if is_path_import {
-      if path.is_file() && path.extension().is_some_and(|ext| ext == "zr") {
-        self.discover_queue.push((path.clone(), span.clone()));
-        ImportKind::Path(path)
-      } else {
-        let error_msg = if !path.exists() {
-          format!("couldn't find file: {}", path.display())
-        } else if path.extension().is_none_or(|ext| ext != "zr") {
-          format!("import file must have .zr extension: {}", path.display())
-        } else {
-          format!("import path is not a file: {}", path.display())
-        };
-
-        self.error_at(error_msg, span.clone());
-
-        ImportKind::Path(path)
-      }
-    } else {
-      let parts = string.split('/').map(get_or_intern).collect::<Vec<_>>();
-      ImportKind::ExternalModule(parts)
-    };
-
-    let span = span.to(self.prev_span());
-
-    (ItemKind::Import(kind, span), default_ident())
-  }
-
   pub fn parse_single_method(&mut self, attrs: Vec<Attribute>, span: Span) -> Option<Item> {
     if !self.check_keyword(Keyword::Fn) {
       return None;
