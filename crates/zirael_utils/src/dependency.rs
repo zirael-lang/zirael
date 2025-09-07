@@ -1,6 +1,6 @@
 use anyhow::bail;
+use parking_lot::RwLock;
 use std::{path::PathBuf, str::FromStr, sync::Arc};
-use zirael_utils::prelude::RwLock;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Dependency {

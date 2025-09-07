@@ -1,0 +1,22 @@
+/// Describes the memory layout requirements for a type or allocation.
+///
+/// A `Layout` specifies both the size and alignment constraints needed
+/// to properly allocate memory for a particular type. This ensures that
+/// allocated memory satisfies both space requirements and hardware
+/// alignment constraints for optimal performance and correctness.
+
+/// # Invariants
+///
+/// - `size` must be non-negative
+/// - `align` must represent a valid power-of-two alignment
+/// - The total size should not cause the end address to wrap around
+///   when added to any validly aligned starting address
+struct Layout {
+    /// The number of bytes required for this allocation.
+    size: int,
+
+    /// The required memory alignment for this allocation.
+    ///
+    /// Specifies the alignment boundary that allocated memory must satisfy.
+    align: Alignment
+}

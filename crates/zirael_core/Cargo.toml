@@ -12,6 +12,9 @@ zirael_hir = { workspace = true }
 zirael_parser = { workspace = true }
 zirael_type_checker = { workspace = true }
 zirael_utils = { workspace = true }
+anyhow = { workspace = true }
+zirael_c_compiler = { workspace = true }
+fs-err = { workspace = true }
 
 [lints]
 workspace = true

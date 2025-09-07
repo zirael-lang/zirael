@@ -2,6 +2,7 @@ use crate::{
   passes::{DeclarationCollection, MemoryAnalysis, NameResolution},
   prelude::*,
 };
+use zirael_codegen::ir::IrModule;
 use zirael_codegen::{codegen::run_codegen, ir::lower_hir_to_ir};
 use zirael_hir::hir::lowering::lower_ast_to_hir;
 use zirael_type_checker::TypeInference;
@@ -65,7 +66,7 @@ impl<'ctx> CompilationUnit<'ctx> {
     })
   }
 
-  pub fn compile(&mut self) -> Result<PathBuf> {
+  pub fn check(&mut self) -> (Vec<IrModule>, Vec<String>) {
     let reports = self.context.reports();
     let sources = self.context.sources();
     let symbols = self.context.symbols();
@@ -109,7 +110,13 @@ impl<'ctx> CompilationUnit<'ctx> {
     );
     reports.print(sources);
 
-    let order = symbols.build_symbol_relations()?;
-    run_codegen(ir, &self.info, order, decl.used_externals.clone(), &self.main_function_id)
+    (ir.clone(), decl.used_externals.clone())
+  }
+
+  pub fn compile(&mut self) -> Result<PathBuf> {
+    let (ref mut ir, used_externals) = self.check();
+
+    let order = self.context.symbols().build_symbol_relations()?;
+    run_codegen(ir, &self.info, order, used_externals, &self.main_function_id)
   }
 }
