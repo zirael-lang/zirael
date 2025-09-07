@@ -123,6 +123,16 @@ impl<'a> Parser<'a> {
     }
   }
 
+  pub fn canonicalize_path(&mut self, path: &Path, span: Span) -> PathBuf {
+    match canonicalize_with_strip(path) {
+      Ok(canonical_path) => canonical_path,
+      Err(err) => {
+        self.error_at(format!("{err}"), span);
+        path.to_path_buf()
+      }
+    }
+  }
+
   fn handle_mod_single(&mut self, string: String, base_path: &Path, span: Span) {
     let path = base_path.join(&string);
 
@@ -137,7 +147,7 @@ impl<'a> Parser<'a> {
         self.error_at(format!("couldn't find index.zr in directory: {}", path.display()), span);
       }
     } else {
-      let path_with_ext = path.with_extension("zr");
+      let path_with_ext = self.canonicalize_path(&path.with_extension("zr"), span.clone());
       if path_with_ext.is_file() {
         self.discover_queue.push((path_with_ext, span));
       } else {

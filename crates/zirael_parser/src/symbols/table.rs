@@ -447,6 +447,10 @@ impl SymbolTable {
   }
 
   pub fn new_relation(&self, referrer: SymbolRelationNode, referred: SymbolRelationNode) {
+    if referrer == referred {
+      return;
+    }
+    
     self.write(|table| {
       table.symbol_relations.entry(referrer, referred);
     });

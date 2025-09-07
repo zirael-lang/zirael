@@ -36,7 +36,7 @@ impl<'reports> Parser<'reports> {
   fn handle_path_import(&mut self, string: String, span: &Span) -> ImportKind {
     let current_file = self.source.path();
     let base_dir = current_file.parent().unwrap_or(Path::new(""));
-    let path = base_dir.join(&string);
+    let path = self.canonicalize_path(&base_dir.join(&string), span.clone());
 
     if self.is_valid_zr_file(&path) {
       self.discover_queue.push((path.clone(), span.clone()));

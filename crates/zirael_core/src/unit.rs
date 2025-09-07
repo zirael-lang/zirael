@@ -101,6 +101,7 @@ impl<'ctx> CompilationUnit<'ctx> {
       symbols,
       reports,
       inference.mono_table.clone(),
+      self.info.ty == PackageType::Library,
     );
     let ir = &mut lower_hir_to_ir(
       &mut hir,

@@ -291,7 +291,7 @@ impl<'reports> TypeInference<'reports> {
           self.infer_variable(var);
         }
         StmtKind::If(if_stmt) => {
-          self.infer_if_stmt(if_stmt);
+          block_type = self.infer_if_stmt(if_stmt);
         }
       }
     }
@@ -531,23 +531,17 @@ impl<'reports> TypeInference<'reports> {
             vec![],
             vec![],
           );
-          Type::Void 
+          Type::Void
         }
       }
-      None => {
-        Type::Void
-      }
+      None => Type::Void,
     }
   }
 
   fn infer_else_branch(&mut self, else_branch: &mut ElseBranch) -> Type {
     match else_branch {
-      ElseBranch::Block(statements, _else_branch_id) => {
-        self.infer_block_type(statements)
-      }
-      ElseBranch::If(nested_if) => {
-        self.infer_if_stmt(nested_if)
-      }
+      ElseBranch::Block(statements, _else_branch_id) => self.infer_block_type(statements),
+      ElseBranch::If(nested_if) => self.infer_if_stmt(nested_if),
     }
   }
 
@@ -563,7 +557,7 @@ impl<'reports> TypeInference<'reports> {
           if let Some(expr) = ret.value.as_mut() {
             let expected_return_type = self.ctx.get_function_return_type().cloned();
             let return_type = self.infer_expr_with_expected(expr, expected_return_type.as_ref());
-            return return_type; 
+            return return_type;
           }
           return Type::Void;
         }
@@ -579,6 +573,7 @@ impl<'reports> TypeInference<'reports> {
 
     last_type
   }
+
   pub fn infer_variable(&mut self, decl: &mut VarDecl) -> Type {
     let expected_type = if let Type::Inferred = decl.ty { None } else { Some(&decl.ty) };
     let value_ty = &self.infer_expr_with_expected(&mut decl.value, expected_type);

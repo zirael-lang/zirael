@@ -50,6 +50,10 @@ impl<'reports> AstLowering<'reports> {
       return false;
     }
 
+    if self.is_library {
+      return false;
+    }
+
     let is_unused = if let Some(generics) = self.symbol_table.get_generics_for_symbol(symbol) {
       if !generics.is_empty() { !self.mono_table.has_entries(symbol.id) } else { !symbol.is_used }
     } else {

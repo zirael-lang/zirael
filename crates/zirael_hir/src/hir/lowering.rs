@@ -8,7 +8,7 @@ use crate::hir::{
 };
 use id_arena::Arena;
 use std::{collections::HashMap, ops::Range};
-use zirael_parser::{ast::item::Item, monomorphized_symbol::MonomorphizedSymbol, *};
+use zirael_parser::{ast::item::Item, *};
 use zirael_type_checker::monomorphization::MonomorphizationTable;
 use zirael_utils::prelude::*;
 
@@ -19,6 +19,7 @@ pub struct AstLowering<'reports> {
   processed_file: Option<SourceFileId>,
   pub folded_vars: HashMap<SymbolId, HirExprKind>,
   ast_id_arena: Arena<()>,
+  pub is_library: bool,
 }
 
 impl<'reports> AstLowering<'reports> {
@@ -26,6 +27,7 @@ impl<'reports> AstLowering<'reports> {
     symbol_table: &SymbolTable,
     reports: &Reports<'reports>,
     mono_table: MonomorphizationTable,
+    is_library: bool,
   ) -> Self {
     Self {
       symbol_table: symbol_table.clone(),
@@ -34,6 +36,7 @@ impl<'reports> AstLowering<'reports> {
       folded_vars: HashMap::new(),
       ast_id_arena: Arena::new(),
       mono_table,
+      is_library,
     }
   }
 
@@ -753,7 +756,8 @@ pub fn lower_ast_to_hir<'reports>(
   symbol_table: &SymbolTable,
   reports: &Reports<'reports>,
   mono: MonomorphizationTable,
+  is_library: bool,
 ) -> Vec<HirModule> {
-  let mut lowering = AstLowering::new(symbol_table, reports, mono);
+  let mut lowering = AstLowering::new(symbol_table, reports, mono, is_library);
   lowering.lower_modules(lexed_modules)
 }

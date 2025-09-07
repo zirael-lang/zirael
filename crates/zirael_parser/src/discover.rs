@@ -1,9 +1,10 @@
 use crate::{
-  ModuleDiscoveryResult, ModuleId,
+  LexedModule, ModuleDiscoveryResult, ModuleId,
   ast::{Ast, ImportKind, ItemKind},
   parser::Parser,
 };
 use petgraph::Graph;
+use std::path::Path;
 use zirael_utils::prelude::*;
 
 pub fn determine_lexed_modules<'a>(
@@ -13,127 +14,247 @@ pub fn determine_lexed_modules<'a>(
 ) -> ModuleDiscoveryResult {
   debug!("starting module discovery from entrypoint: {entrypoint:?}");
 
-  let mut all_modules = Vec::new();
-  let mut graph = Graph::new();
-  let mut module_to_node = HashMap::new();
-  let processed = Mutex::new(HashSet::new());
-  let mut current_wave = vec![ModuleId::File(entrypoint)];
-  let mut wave_number = 1;
+  let mut discovery = ModuleDiscovery::new(entrypoint);
 
-  let entrypoint_id = ModuleId::File(entrypoint);
-  let entrypoint_node = graph.add_node(entrypoint_id.clone());
-  module_to_node.insert(entrypoint_id, entrypoint_node);
+  while discovery.has_pending_modules() {
+    let wave_results = discovery.process_current_wave(sources, reports);
+    discovery.process_wave_results(wave_results);
+  }
 
-  while !current_wave.is_empty() {
-    let wave_results: Vec<_> = current_wave
+  debug!("Module discovery completed. Total modules processed: {}", discovery.all_modules.len());
+
+  discovery.into_result()
+}
+
+struct ModuleDiscovery {
+  all_modules: Vec<LexedModule>,
+  graph: Graph<ModuleId, ()>,
+  module_to_node: HashMap<ModuleId, petgraph::graph::NodeIndex>,
+  processed: Mutex<HashSet<ModuleId>>,
+  current_wave: Vec<ModuleId>,
+  wave_number: usize,
+}
+
+impl ModuleDiscovery {
+  fn new(entrypoint: SourceFileId) -> Self {
+    let mut graph = Graph::new();
+    let mut module_to_node = HashMap::new();
+
+    let entrypoint_id = ModuleId::File(entrypoint);
+    let entrypoint_node = graph.add_node(entrypoint_id.clone());
+    module_to_node.insert(entrypoint_id.clone(), entrypoint_node);
+
+    Self {
+      all_modules: Vec::new(),
+      graph,
+      module_to_node,
+      processed: Mutex::new(HashSet::new()),
+      current_wave: vec![entrypoint_id],
+      wave_number: 1,
+    }
+  }
+
+  fn has_pending_modules(&self) -> bool {
+    !self.current_wave.is_empty()
+  }
+
+  fn process_current_wave<'a>(&self, sources: &Sources, reports: &Reports<'a>) -> Vec<WaveResult> {
+    self
+      .current_wave
+      .clone()
       .into_par_iter()
-      .filter_map(|module_id| {
-        let file_id = module_id.as_file()?;
+      .filter_map(|module_id| self.process_single_module(module_id, sources, reports))
+      .collect()
+  }
 
-        {
-          let mut proc = processed.lock();
-          if proc.contains(&module_id) {
-            debug!("module {module_id:?} already processed, skipping");
-            return None;
-          }
-          proc.insert(module_id.clone());
-        }
+  fn process_single_module<'a>(
+    &self,
+    module_id: ModuleId,
+    sources: &Sources,
+    reports: &Reports<'a>,
+  ) -> Option<WaveResult> {
+    let file_id = module_id.as_file()?;
 
-        let mut parser = Parser::new(sources.get_unchecked(file_id));
-        let result = parser.parse(file_id);
-
-        let mut discovered_modules = Vec::new();
-
-        for (path, span) in parser.discover_queue {
-          let contents = fs_err::read_to_string(path.clone());
-          let Ok(contents) = contents else {
-            let err = contents.unwrap_err();
-            debug!("failed to read dependency file: {}", path.display());
-            reports.add(
-              file_id,
-              ReportBuilder::builder(
-                format!(
-                  "Failed to read contents of {} while discovering dependencies: {}",
-                  path.display().to_string().dimmed(),
-                  err
-                ),
-                ReportKind::Error,
-              )
-              .label("failed while resolving this file", span),
-            );
-            continue;
-          };
-          let new_file_id = sources.add_owned(contents, path.clone());
-          debug!("discovered file dependency: {} -> {:?}", path.display(), new_file_id);
-          discovered_modules.push(ModuleId::File(new_file_id));
-        }
-
-        let external_deps = extract_external_dependencies(&result.ast);
-        for ext_module in external_deps {
-          debug!("discovered external dependency: {ext_module:?}");
-          discovered_modules.push(ModuleId::External(ext_module));
-        }
-
-        for report in parser.reports {
-          reports.add(file_id, report.clone());
-        }
-
-        Some((result, discovered_modules))
-      })
-      .collect();
-
-    let mut next_wave = Vec::new();
-    for (module, discovered) in wave_results {
-      let current_id = &module.id;
-
-      if !module_to_node.contains_key(current_id) {
-        let node = graph.add_node(current_id.clone());
-        module_to_node.insert(current_id.clone(), node);
-      }
-
-      let current_node = module_to_node[current_id];
-
-      for dep_id in &discovered {
-        let dep_node =
-          *module_to_node.entry(dep_id.clone()).or_insert_with(|| graph.add_node(dep_id.clone()));
-
-        graph.add_edge(current_node, dep_node, ());
-
-        if dep_id.as_file().is_some() {
-          next_wave.push(dep_id.clone());
-        }
-      }
-
-      all_modules.push(module);
+    if self.is_already_processed(&module_id) {
+      debug!("module {module_id:?} already processed, skipping");
+      return None;
     }
 
+    self.mark_as_processed(module_id.clone());
+
+    let parse_result = self.parse_module(file_id, sources, reports)?;
+    let discovered_modules = self.discover_dependencies(file_id, &parse_result, sources, reports);
+
+    Some(WaveResult { module: parse_result.module, discovered_modules })
+  }
+
+  fn is_already_processed(&self, module_id: &ModuleId) -> bool {
+    self.processed.lock().contains(module_id)
+  }
+
+  fn mark_as_processed(&self, module_id: ModuleId) {
+    self.processed.lock().insert(module_id);
+  }
+
+  fn parse_module<'a>(
+    &self,
+    file_id: SourceFileId,
+    sources: &Sources,
+    reports: &Reports<'a>,
+  ) -> Option<ParseResult> {
+    let mut parser = Parser::new(sources.get_unchecked(file_id));
+    let result = parser.parse(file_id);
+
+    for report in parser.reports {
+      reports.add(file_id, report.clone());
+    }
+
+    Some(ParseResult { module: result, discover_queue: parser.discover_queue })
+  }
+
+  fn discover_dependencies<'a>(
+    &self,
+    file_id: SourceFileId,
+    parse_result: &ParseResult,
+    sources: &Sources,
+    reports: &Reports<'a>,
+  ) -> Vec<ModuleId> {
+    let mut discovered = Vec::new();
+
+    for (path, span) in &parse_result.discover_queue {
+      if let Some(module_id) = self.process_file_dependency(file_id, path, span, sources, reports) {
+        discovered.push(module_id);
+      }
+    }
+
+    let external_deps = extract_external_dependencies(&parse_result.module.ast);
+    for ext_module in external_deps {
+      debug!("discovered external dependency: {ext_module:?}");
+      discovered.push(ModuleId::External(ext_module));
+    }
+
+    discovered
+  }
+
+  fn process_file_dependency<'a>(
+    &self,
+    file_id: SourceFileId,
+    path: &Path,
+    span: &Span,
+    sources: &Sources,
+    reports: &Reports<'a>,
+  ) -> Option<ModuleId> {
+    match fs_err::read_to_string(path) {
+      Ok(contents) => {
+        let new_file_id = sources.add_owned(contents, path.to_path_buf());
+        debug!("discovered file dependency: {} -> {:?}", path.display(), new_file_id);
+        Some(ModuleId::File(new_file_id))
+      }
+      Err(err) => {
+        debug!("failed to read dependency file: {}", path.display());
+        self.report_file_read_error(file_id, path, &err, span, reports);
+        None
+      }
+    }
+  }
+
+  fn report_file_read_error<'a>(
+    &self,
+    file_id: SourceFileId,
+    path: &Path,
+    err: &std::io::Error,
+    span: &Span,
+    reports: &Reports<'a>,
+  ) {
+    reports.add(
+      file_id,
+      ReportBuilder::builder(
+        format!(
+          "Failed to read contents of {} while discovering dependencies: {}",
+          path.display().to_string().dimmed(),
+          err
+        ),
+        ReportKind::Error,
+      )
+      .label("failed while resolving this file", span.clone()),
+    );
+  }
+
+  fn process_wave_results(&mut self, wave_results: Vec<WaveResult>) {
+    let mut next_wave = Vec::new();
+
+    for result in wave_results {
+      self.add_module_to_graph(&result);
+      self.all_modules.push(result.module);
+
+      for dep_id in result.discovered_modules {
+        if dep_id.as_file().is_some() {
+          next_wave.push(dep_id);
+        }
+      }
+    }
+
+    self.prepare_next_wave(next_wave);
+  }
+
+  fn add_module_to_graph(&mut self, result: &WaveResult) {
+    let current_id = &result.module.id;
+
+    let current_node = self.get_or_create_node(current_id);
+
+    for dep_id in &result.discovered_modules {
+      let dep_node = self.get_or_create_node(dep_id);
+      self.graph.add_edge(current_node, dep_node, ());
+    }
+  }
+
+  fn get_or_create_node(&mut self, module_id: &ModuleId) -> petgraph::graph::NodeIndex {
+    *self
+      .module_to_node
+      .entry(module_id.clone())
+      .or_insert_with(|| self.graph.add_node(module_id.clone()))
+  }
+
+  fn prepare_next_wave(&mut self, mut next_wave: Vec<ModuleId>) {
     next_wave.sort_unstable_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
     next_wave.dedup();
 
     debug!(
       "Wave {} completed. Processed {} modules, discovered {} new modules for next wave",
-      wave_number,
-      all_modules.len(),
+      self.wave_number,
+      self.all_modules.len(),
       next_wave.len()
     );
 
-    current_wave = next_wave;
-    wave_number += 1;
+    self.current_wave = next_wave;
+    self.wave_number += 1;
   }
 
-  debug!("Module discovery completed. Total modules processed: {}", all_modules.len());
+  fn into_result(self) -> ModuleDiscoveryResult {
+    ModuleDiscoveryResult { modules: self.all_modules, dependency_graph: self.graph }
+  }
+}
 
-  ModuleDiscoveryResult { modules: all_modules, dependency_graph: graph }
+struct WaveResult {
+  module: LexedModule,
+  discovered_modules: Vec<ModuleId>,
+}
+
+struct ParseResult {
+  module: LexedModule,
+  discover_queue: Vec<(PathBuf, Span)>,
 }
 
 fn extract_external_dependencies(ast: &Ast) -> Vec<Vec<Identifier>> {
-  let mut external_deps = Vec::new();
-
-  for item in &ast.items {
-    if let ItemKind::Import(ImportKind::ExternalModule(parts), _) = &item.kind {
-      external_deps.push(parts.clone());
-    }
-  }
-
-  external_deps
+  ast
+    .items
+    .iter()
+    .filter_map(|item| {
+      if let ItemKind::Import(ImportKind::ExternalModule(parts), _) = &item.kind {
+        Some(parts.clone())
+      } else {
+        None
+      }
+    })
+    .collect()
 }
