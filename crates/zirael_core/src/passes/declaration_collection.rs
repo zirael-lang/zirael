@@ -165,7 +165,7 @@ impl<'reports> DeclarationCollection<'reports> {
       let conflict_report = base_report
         .clone()
         .message(&conflict_message)
-        .label(&conflict_details, existing_symbol.source_location.unwrap_or(0..0));
+        .label(&conflict_details, existing_symbol.source_location.unwrap_or_default());
 
       self.reports.add(file_id, conflict_report);
     }
@@ -199,7 +199,7 @@ impl<'reports> DeclarationCollection<'reports> {
             .label(&format!("redeclared here as a {}", symbol_type.dimmed().bold()), span)
             .label(
               &format!("first declared here as a {}", existing_symbol.kind.name().dimmed().bold()),
-              existing_symbol.source_location.unwrap_or(0..0),
+              existing_symbol.source_location.unwrap_or_default(),
             ),
           );
         }

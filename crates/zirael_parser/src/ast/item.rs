@@ -66,7 +66,7 @@ pub struct FunctionSignature {
 impl FunctionSignature {
   pub fn is_static(&self) -> bool {
     if let Some(first) = self.parameters.first() {
-      first.name != get_or_intern("self")
+      first.name != get_or_intern("self", None)
     } else {
       true
     }

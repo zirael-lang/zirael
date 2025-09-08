@@ -28,7 +28,7 @@ pub struct Parser<'a> {
   pub reports: Vec<ReportBuilder<'a>>,
   source: SourceFile,
   sync_tokens: Vec<TokenKind>,
-  pub discover_queue: Vec<(PathBuf, Range<usize>)>,
+  pub discover_queue: Vec<(PathBuf, Span)>,
   ast_id_arena: Arena<()>,
 }
 
@@ -63,7 +63,7 @@ impl<'a> Parser<'a> {
     self.tokens.get(self.position)
   }
 
-  pub fn peek_span(&self) -> Range<usize> {
+  pub fn peek_span(&self) -> Span {
     self.peek().map(|token| token.span.clone()).unwrap_or_default()
   }
 
@@ -75,7 +75,7 @@ impl<'a> Parser<'a> {
     self.tokens.get(self.position - 1)
   }
 
-  pub fn prev_span(&self) -> Range<usize> {
+  pub fn prev_span(&self) -> Span {
     self.prev().map(|token| token.span.clone()).unwrap_or_default()
   }
 
@@ -146,7 +146,7 @@ impl<'a> Parser<'a> {
     self.reports.push(error);
   }
 
-  pub fn error_at(&mut self, message: impl Into<String>, span: Range<usize>) {
+  pub fn error_at(&mut self, message: impl Into<String>, span: Span) {
     let message = message.into();
     self.add_report(
       ReportBuilder::builder(message.clone(), ReportKind::Error).label(message.as_str(), span),
@@ -161,9 +161,9 @@ impl<'a> Parser<'a> {
     self.error_at(message, self.peek_span());
   }
 
-  fn eof_span(&self) -> Range<usize> {
+  fn eof_span(&self) -> Span {
     let end = self.source.content().len();
-    end..end
+    Span::new(end, end)
   }
 
   pub fn save_state(&self) -> ParserState {
@@ -295,8 +295,9 @@ impl<'a> Parser<'a> {
       }
 
       let ident = ident.clone();
+      let span = token.span.clone();
       self.advance();
-      return Some(get_or_intern(&ident));
+      return Some(get_or_intern(&ident, Some(span)));
     }
 
     self.error_at_peek(format!("expected an identifier, found {:?}", self.peek()));

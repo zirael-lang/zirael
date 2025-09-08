@@ -1,7 +1,7 @@
 use crate::TypeInference;
 use std::collections::HashMap;
 use zirael_parser::{FunctionSignature, MonomorphizationId, StructField, SymbolId, Type};
-use zirael_utils::prelude::Identifier;
+use zirael_utils::prelude::{Identifier, SourceFileId};
 
 #[derive(Debug, Clone)]
 pub struct MonomorphizationEntry {

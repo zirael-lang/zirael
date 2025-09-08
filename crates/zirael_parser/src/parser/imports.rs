@@ -1,6 +1,5 @@
 use crate::parser::Parser;
-use crate::span::SpanUtils;
-use crate::{ImportKind, ItemKind};
+use crate::{ImportKind, ItemKind, TokenKind};
 use std::path::{Component, Path, PathBuf};
 use zirael_utils::ident_table::{Identifier, default_ident, get_or_intern};
 use zirael_utils::prelude::Span;
@@ -15,6 +14,8 @@ impl<'reports> Parser<'reports> {
     } else {
       self.handle_external_module_import(string)
     };
+
+    self.match_token(TokenKind::Semicolon);
 
     let final_span = span.to(self.prev_span());
     (ItemKind::Import(kind, final_span), default_ident())
@@ -50,7 +51,7 @@ impl<'reports> Parser<'reports> {
 
   fn handle_external_module_import(&mut self, string: String) -> ImportKind {
     println!("external module import: {}", string);
-    let parts = string.split('/').map(get_or_intern).collect::<Vec<_>>();
+    let parts = string.split('/').map(|x| get_or_intern(x, None)).collect::<Vec<_>>();
     ImportKind::ExternalModule(parts)
   }
 

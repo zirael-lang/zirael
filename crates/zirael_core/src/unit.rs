@@ -22,7 +22,7 @@ impl<'ctx> CompilationUnit<'ctx> {
   }
 
   fn find_main_function(&self, symbols: &SymbolTable, reports: &Reports<'_>) -> Option<SymbolId> {
-    let main_ident = get_or_intern("main");
+    let main_ident = get_or_intern("main", None);
 
     symbols.read(|table| {
       let entry_scope = table
@@ -60,7 +60,7 @@ impl<'ctx> CompilationUnit<'ctx> {
       reports.add(
         self.entry_point,
         ReportBuilder::builder("binary package must have a main function", ReportKind::Error)
-          .label("add a main function to this module", 0..0),
+          .label("add a main function to this module", Span::default()),
       );
       None
     })

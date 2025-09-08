@@ -231,7 +231,7 @@ impl SymbolTable {
       table
         .scopes_arena
         .get(scope_id)
-        .map(|scope| scope.symbols.iter().map(|(&name, &id)| (name, id)).collect())
+        .map(|scope| scope.symbols.iter().map(|(name, id)| (name.clone(), id.clone())).collect())
         .unwrap_or_default()
     })
   }

@@ -6,7 +6,6 @@ use crate::{
     FunctionSignature, ImportKind, Item, ItemKind, Keyword, Parameter, ParameterKind,
   },
   parser::Parser,
-  span::SpanUtils as _,
 };
 use colored::Colorize as _;
 use convert_case::{Case, Casing as _};
@@ -561,7 +560,7 @@ impl<'a> Parser<'a> {
   pub fn validate_self(&mut self, params: &[Parameter], _span: Span) {
     let mut seen_self = false;
     for param in params {
-      if param.name == get_or_intern("self") {
+      if param.name == get_or_intern("self", None) {
         if seen_self {
           self.error_at("self parameter can only be used once", param.span.clone());
         } else {
@@ -595,7 +594,7 @@ impl<'a> Parser<'a> {
 
     let is_ref = self.match_token(TokenKind::BitwiseAnd);
     let name = self.expect_identifier()?;
-    let ty = if name == get_or_intern("self") {
+    let ty = if name == get_or_intern("self", None) {
       if is_ref { Type::Reference(Box::new(Type::Inferred)) } else { Type::Inferred }
     } else {
       self.expect_message(TokenKind::Colon, "every parameter requires a type");

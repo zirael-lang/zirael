@@ -399,20 +399,6 @@ impl<'reports> AstWalker<'reports> for NameResolution<'reports> {
     self.walk_expr(base);
   }
 
-  fn visit_type(&mut self, _ty: &mut Type) {
-    if let Type::Named { name, .. } = _ty {
-      if let Some(sym) = self.symbol_table.lookup_symbol(name) {
-        if let SymbolKind::Struct { .. } | SymbolKind::Enum { .. } = sym.kind {
-          self.symbol_table.new_relation(
-            SymbolRelationNode::Symbol(self.current_item.unwrap()),
-            SymbolRelationNode::Symbol(sym.id),
-          );
-          self.symbol_table.mark_used(sym.id).expect("invalid symbol id");
-        }
-      }
-    }
-  }
-
   fn visit_method_call(
     &mut self,
     _chain: &mut Vec<Expr>,

@@ -1,9 +1,10 @@
 use crate::{
   BinaryOp::Ge,
   GenericCall, Keyword, TokenKind, Type,
-  ast::{BinaryOp, Expr, ExprKind, Literal, MatchArm, Pattern, PatternField, UnaryOp, Path, PathSegment},
+  ast::{
+    BinaryOp, Expr, ExprKind, Literal, MatchArm, Path, PathSegment, Pattern, PatternField, UnaryOp,
+  },
   parser::Parser,
-  span::SpanUtils as _,
 };
 use std::collections::HashMap;
 use zirael_utils::{
@@ -405,14 +406,17 @@ impl<'a> Parser<'a> {
           let name = name.clone();
           self.advance();
           let identifier_span = self.prev_span();
-          let identifier = get_or_intern(&name);
+          let identifier = get_or_intern(&name, Some(identifier_span));
 
           if self.check(&TokenKind::DoubleColon) {
             return self.parse_path_from_identifier(identifier, identifier_span);
           }
 
           if self.check(&TokenKind::BraceOpen) {
-            return self.parse_struct_initializer_from_path(Path::from_identifier(identifier, identifier_span.clone()));
+            return self.parse_struct_initializer_from_path(Path::from_identifier(
+              identifier,
+              identifier_span.clone(),
+            ));
           }
 
           self.new_expr(ExprKind::Identifier(identifier, None), identifier_span)
@@ -528,7 +532,7 @@ impl<'a> Parser<'a> {
         TokenKind::Identifier(name) => {
           let name = name.clone();
           self.advance();
-          let identifier = get_or_intern(&name);
+          let identifier = get_or_intern(&name, Some(self.prev_span()));
           let identifier_span = self.prev_span();
 
           if self.check(&TokenKind::DoubleColon) {
@@ -584,7 +588,11 @@ impl<'a> Parser<'a> {
     }
   }
 
-  fn parse_path_from_identifier_in_pattern(&mut self, first_identifier: Identifier, first_span: Span) -> Path {
+  fn parse_path_from_identifier_in_pattern(
+    &mut self,
+    first_identifier: Identifier,
+    first_span: Span,
+  ) -> Path {
     let start_span = first_span.clone();
     let mut segments = vec![PathSegment::new(first_identifier, first_span)];
 
@@ -605,14 +613,12 @@ impl<'a> Parser<'a> {
 
   fn parse_path_continuation(&mut self, expr: Expr) -> Expr {
     let start_span = expr.span.clone();
-    
+
     let mut segments = match &expr.kind {
       ExprKind::Identifier(ident, _) => {
         vec![PathSegment::new(*ident, expr.span.clone())]
       }
-      ExprKind::Path(path) => {
-        path.segments.clone()
-      }
+      ExprKind::Path(path) => path.segments.clone(),
       _ => {
         return self.parse_static_call_from_expr(expr);
       }
@@ -719,7 +725,7 @@ impl<'a> Parser<'a> {
         if let TokenKind::Identifier(field_name) = &token.kind {
           let field_name = field_name.clone();
           self.advance();
-          let identifier = get_or_intern(&field_name);
+          let identifier = get_or_intern(&field_name, Some(self.prev_span()));
           let end_span = self.prev_span();
 
           let pattern = if self.match_token(TokenKind::Colon) {
@@ -756,13 +762,10 @@ impl<'a> Parser<'a> {
     fields
   }
 
-  /// Helper method to determine if a '<' token starts a function call with generics
-  /// by looking ahead to find matching '>' followed by '('
   fn is_function_call_with_generics(&mut self) -> bool {
     let mut depth = 0;
     let mut position = 0;
 
-    // Start from current position (which should be '<')
     while let Some(token) = self.peek_ahead(position) {
       match &token.kind {
         TokenKind::LessThan => {
@@ -771,7 +774,6 @@ impl<'a> Parser<'a> {
         TokenKind::GreaterThan => {
           depth -= 1;
           if depth == 0 {
-            // Found matching '>', now check if followed by '('
             if let Some(next_token) = self.peek_ahead(position + 1) {
               return next_token.kind == TokenKind::ParenOpen;
             }
@@ -779,11 +781,9 @@ impl<'a> Parser<'a> {
           }
         }
         TokenKind::RightShift => {
-          // '>>' counts as two '>' tokens
           depth -= 2;
           if depth <= 0 {
             if depth == 0 {
-              // Check if followed by '('
               if let Some(next_token) = self.peek_ahead(position + 1) {
                 return next_token.kind == TokenKind::ParenOpen;
               }
@@ -791,8 +791,6 @@ impl<'a> Parser<'a> {
             return false;
           }
         }
-        // If we encounter certain tokens that would never appear in type annotations,
-        // this is probably not a function call
         TokenKind::Semicolon
         | TokenKind::BraceOpen
         | TokenKind::BraceClose
@@ -801,13 +799,11 @@ impl<'a> Parser<'a> {
           return false;
         }
         _ => {
-          // Continue looking ahead
         }
       }
 
       position += 1;
 
-      // Safety limit to avoid infinite loops
       if position > 50 {
         return false;
       }
@@ -902,11 +898,7 @@ impl<'a> Parser<'a> {
     let expr_id = self.fresh_id();
     self.new_expr(
       ExprKind::StructInit {
-        name: Box::new(Expr::new(
-          ExprKind::Path(path),
-          start_span.clone(),
-          expr_id,
-        )),
+        name: Box::new(Expr::new(ExprKind::Path(path), start_span.clone(), expr_id)),
         call_info: None,
         fields,
       },

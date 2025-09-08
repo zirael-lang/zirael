@@ -14,7 +14,7 @@ impl<'a> Parser<'a> {
 
       let name = if let Some(token) = self.advance() {
         if let TokenKind::Identifier(name_str) = token.kind {
-          get_or_intern(&name_str)
+          get_or_intern(&name_str, Some(token.span))
         } else {
           self.error_at("expected attribute name after '@'", token.span);
           continue;

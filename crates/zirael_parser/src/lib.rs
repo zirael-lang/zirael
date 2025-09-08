@@ -3,7 +3,6 @@ mod discover;
 mod lexer;
 mod module;
 mod parser;
-mod span;
 pub mod symbols;
 mod walker;
 

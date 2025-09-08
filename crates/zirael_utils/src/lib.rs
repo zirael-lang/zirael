@@ -12,12 +12,13 @@ mod project_config;
 mod project_type;
 mod reports;
 pub mod sources;
+mod span;
 pub mod style;
 
 pub mod prelude {
   pub use crate::{
     article::*, cli::*, comp_info::*, ident_table::*, lib_type::*, logger::*, mode::*, path::*,
-    project_type::*, reports::*, sources::*, style::*, project_config::*
+    project_config::*, project_type::*, reports::*, sources::*, style::*, span::*
   };
   pub use anyhow::{Result, anyhow, bail};
   pub use ariadne::{Color, Label, Report, ReportKind, Source};
@@ -31,6 +32,4 @@ pub mod prelude {
     collections::{HashMap, HashSet},
     path::PathBuf,
   };
-
-  pub type Span = Range<usize>;
 }

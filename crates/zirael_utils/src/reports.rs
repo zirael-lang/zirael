@@ -1,4 +1,4 @@
-use crate::prelude::{SourceFileId, Sources};
+use crate::prelude::{SourceFileId, Sources, Span};
 use ariadne::{CharSet, Color, Config, IndexType, Label, LabelAttach, ReportKind, sources};
 use log::error;
 use parking_lot::RwLock;
@@ -72,7 +72,7 @@ impl<'a> Reports<'a> {
 #[derive(Debug, Clone)]
 pub struct LocalLabel {
   msg: String,
-  span: Range<usize>,
+  span: Span,
   color: Color,
   custom_file: Option<PathBuf>,
 }
@@ -99,14 +99,14 @@ impl<'a> ReportBuilder<'a> {
     }
   }
 
-  pub fn label(mut self, msg: &str, span: Range<usize>) -> Self {
+  pub fn label(mut self, msg: &str, span: Span) -> Self {
     let label =
       LocalLabel { msg: msg.to_owned(), span, color: self.label_color(), custom_file: None };
     self.labels.push(label);
     self
   }
 
-  pub fn label_color_custom(mut self, msg: &str, span: Range<usize>, color: Color) -> Self {
+  pub fn label_color_custom(mut self, msg: &str, span: Span, color: Color) -> Self {
     let label = LocalLabel { msg: msg.to_owned(), span, color, custom_file: None };
     self.labels.push(label);
     self
@@ -115,7 +115,7 @@ impl<'a> ReportBuilder<'a> {
   pub fn label_custom(
     mut self,
     msg: &str,
-    span: Range<usize>,
+    span: Span,
     file: &PathBuf,
     color: Color,
   ) -> Self {
@@ -154,7 +154,7 @@ impl<'a> ReportBuilder<'a> {
         let path =
           l.custom_file.map(|p| p.display().to_string()).unwrap_or_else(|| path.to_owned());
 
-        Label::new((path, l.span)).with_message(l.msg).with_color(l.color)
+        Label::new((path, l.span.into())).with_message(l.msg).with_color(l.color)
       })
       .collect::<Vec<_>>();
 

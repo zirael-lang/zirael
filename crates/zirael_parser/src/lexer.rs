@@ -6,6 +6,7 @@ use std::{
   fmt::{Display, Formatter},
   ops::Range,
 };
+use zirael_utils::prelude::Span;
 
 #[derive(Debug, Logos, Clone, PartialEq)]
 #[logos(skip r"[ \t\r\n\f]+")]
@@ -314,7 +315,7 @@ pub fn get_tokens(input: &str) -> Vec<Token> {
 
   while let Some(token) = lexer.next() {
     if let Ok(token) = token {
-      tokens.push(Token { kind: token, span: lexer.span() });
+      tokens.push(Token { kind: token, span: lexer.span().into() });
     }
   }
 
@@ -324,7 +325,7 @@ pub fn get_tokens(input: &str) -> Vec<Token> {
 #[derive(Debug, Clone)]
 pub struct Token {
   pub kind: TokenKind,
-  pub span: Range<usize>,
+  pub span: Span,
 }
 
 impl Display for Token {

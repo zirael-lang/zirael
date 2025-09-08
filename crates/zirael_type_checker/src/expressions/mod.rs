@@ -740,12 +740,12 @@ impl<'reports> TypeInference<'reports> {
           )
           .label_color_custom(
             &format!("this arm returns {}", self.format_type(&unified_type)),
-            arms[0].span.start..arms[0].span.end,
+            Span::new(arms[0].span.start, arms[0].span.end),
             Color::BrightGreen,
           )
           .label_color_custom(
             &format!("this arm returns {}", self.format_type(arm_ty)),
-            arms[i].span.start..arms[i].span.end,
+            Span::new(arms[i].span.start, arms[i].span.end),
             Color::BrightRed,
           )
           .note("all match arms must return the same type");

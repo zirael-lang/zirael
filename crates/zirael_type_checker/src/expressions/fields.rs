@@ -283,7 +283,7 @@ impl<'reports> TypeInference<'reports> {
     for method in methods {
       let sym = self.symbol_table.get_symbol_unchecked(&method);
 
-      if sym.name == get_or_intern(method_name) {
+      if sym.name == get_or_intern(method_name, None) {
         found = Some(method);
         break;
       }
@@ -565,19 +565,17 @@ impl<'reports> TypeInference<'reports> {
                     vec![],
                   );
                 }
-                
+
                 // Try to infer generic parameters from expected type
                 if let Some(expected) = expected_type {
-                  if let Type::Named { name: expected_name, generics: expected_generics } = expected {
+                  if let Type::Named { name: expected_name, generics: expected_generics } = expected
+                  {
                     if *expected_name == sym.name && !expected_generics.is_empty() {
-                      return Type::Named { 
-                        name: sym.name, 
-                        generics: expected_generics.clone() 
-                      };
+                      return Type::Named { name: sym.name, generics: expected_generics.clone() };
                     }
                   }
                 }
-                
+
                 Type::Named { name: sym.name, generics: vec![] }
               }
               EnumVariantData::Struct(variant_fields) => {

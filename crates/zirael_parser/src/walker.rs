@@ -1,5 +1,6 @@
 use crate::{
-  AstId, CallInfo, LexedModule, ModuleId, Path, PathSegment, Return, ScopeType, SymbolTable, TypeExtension,
+  AstId, CallInfo, LexedModule, ModuleId, Path, PathSegment, Return, ScopeType, SymbolTable,
+  TypeExtension,
   ast::{
     Abi, Ast, Attribute, BinaryOp, ElseBranch, EnumDeclaration, EnumVariant, EnumVariantData, Expr,
     ExprKind, Function, FunctionModifiers, FunctionSignature, GenericArg, GenericParameter, If,
@@ -451,7 +452,7 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
     }
   }
 
-  fn error(&mut self, message: &str, labels: Vec<(String, Range<usize>)>, notes: Vec<String>) {
+  fn error(&mut self, message: &str, labels: Vec<(String, Span)>, notes: Vec<String>) {
     if let Some(file_id) = self.processed_file() {
       let mut report = ReportBuilder::builder(message, ReportKind::Error);
       for note in notes {

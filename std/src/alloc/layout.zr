@@ -1,10 +1,12 @@
+import "./alignment.zr"
+
 /// Describes the memory layout requirements for a type or allocation.
 ///
 /// A `Layout` specifies both the size and alignment constraints needed
 /// to properly allocate memory for a particular type. This ensures that
 /// allocated memory satisfies both space requirements and hardware
 /// alignment constraints for optimal performance and correctness.
-
+///
 /// # Invariants
 ///
 /// - `size` must be non-negative

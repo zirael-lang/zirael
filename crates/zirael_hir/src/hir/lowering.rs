@@ -666,7 +666,7 @@ impl<'reports> AstLowering<'reports> {
     }
   }
 
-  pub fn error(&mut self, message: &str, labels: Vec<(String, Range<usize>)>, notes: Vec<String>) {
+  pub fn error(&mut self, message: &str, labels: Vec<(String, Span)>, notes: Vec<String>) {
     if let Some(file_id) = self.processed_file {
       let mut report = ReportBuilder::builder(message, ReportKind::Error);
       for note in notes {
@@ -681,7 +681,7 @@ impl<'reports> AstLowering<'reports> {
     }
   }
 
-  pub fn warn(&mut self, message: &str, labels: Vec<(String, Range<usize>)>, notes: Vec<String>) {
+  pub fn warn(&mut self, message: &str, labels: Vec<(String, Span)>, notes: Vec<String>) {
     if let Some(file_id) = self.processed_file {
       let mut report = ReportBuilder::builder(message, ReportKind::Warning);
       for note in notes {

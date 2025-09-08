@@ -394,7 +394,7 @@ impl SymbolTable {
         .iter()
         .filter(|(_, s)| matches!(s.kind, SymbolKind::Temporary { .. }))
         .count();
-      get_or_intern(&format!("__temp_{temp_count}"))
+      get_or_intern(&format!("__temp_{temp_count}"), None)
     });
 
     let kind = SymbolKind::Temporary { ty, lifetime };
@@ -450,7 +450,7 @@ impl SymbolTable {
     if referrer == referred {
       return;
     }
-    
+
     self.write(|table| {
       table.symbol_relations.entry(referrer, referred);
     });

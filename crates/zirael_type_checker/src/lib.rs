@@ -362,4 +362,23 @@ impl<'reports> AstWalker<'reports> for TypeInference<'reports> {
       self.walk_attribute(attr);
     }
   }
+
+  fn visit_type(&mut self, ty: &mut Type) {
+    match ty {
+      Type::Named { name, .. } => {
+        if self.symbol_table.lookup_symbol(name).is_none() {
+          if !self.ctx.is_generic_parameter(*name) {
+            let report = ReportBuilder::builder(
+              &format!("couldn't find struct or enum named {}", resolve(name).dimmed().bold()),
+              ReportKind::Error,
+            )
+            .label("not found", name.span().clone());
+
+            self.reports.add(self.processed_file.unwrap(), report);
+          }
+        }
+      }
+      _ => {}
+    }
+  }
 }

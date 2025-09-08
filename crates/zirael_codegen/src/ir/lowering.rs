@@ -105,8 +105,25 @@ impl<'reports> HirLowering<'reports> {
           } else {
             mangled
           };
-          Type::Named { name: get_or_intern(&string), generics }
+          Type::Named { name: get_or_intern(&string, None), generics }
         } else {
+          if let ScopeType::Module(mod_id) = self
+            .symbol_table
+            .get_scope_unchecked(
+              self
+                .symbol_table
+                .get_scope_unchecked(self.symbol_table.current_scope())
+                .parent
+                .unwrap(),
+            )
+            .scope_type
+          {
+            println!(
+              "\n\nIn module {mod_id:?}, could not find symbol for named type: {:?}\n\n\n",
+              self.sources.get(mod_id)
+            );
+          }
+
           Type::Named { name, generics }
         }
       }
@@ -172,7 +189,6 @@ impl<'reports> HirLowering<'reports> {
     {
       *main_function_id = Some(MainFunction::Mangled(self.mangle_symbol(*main_symbol_id)));
     }
-
     self.pop_scope();
 
     if !self.mono_table.entries.is_empty() {
@@ -580,7 +596,7 @@ impl<'reports> HirLowering<'reports> {
               if original_symbol.name == *struct_name {
                 let mono_name = self.get_monomorphized_name(*mono_id);
                 let new_type = Type::Named {
-                  name: get_or_intern(&format!("struct {mono_name}")),
+                  name: get_or_intern(&format!("struct {mono_name}"), None),
                   generics: vec![],
                 };
                 expr_type = new_type;

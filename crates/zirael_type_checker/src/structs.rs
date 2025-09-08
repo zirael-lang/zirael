@@ -30,7 +30,6 @@ impl<'reports> TypeInference<'reports> {
       Ok(info) => info,
       Err(ty) => return ty,
     };
-    println!("{:?}", struct_info);
 
     self.validate_required_fields(&struct_info.fields, fields, name_expr);
 
@@ -210,9 +209,7 @@ impl<'reports> TypeInference<'reports> {
     }
 
     for (_, field_type) in field_types.iter_mut() {
-      println!("{:?}", field_type);
       self.try_monomorphize_named_type(field_type);
-      println!("->> {:?}", field_type);
     }
 
     (field_types, generic_mapping)

@@ -177,7 +177,7 @@ impl<'reports> HirLowering<'reports> {
       .iter()
       .map(|field| {
         let substituted_ty = self.substitute_type(&field.ty, type_map);
-        IrField { name: field.name.clone(), ty: substituted_ty }
+        IrField { name: field.name.clone(), ty: self.lower_type(substituted_ty) }
       })
       .collect_vec();
     IrStruct { name, fields, id: struct_def.id }
@@ -415,18 +415,18 @@ impl<'reports> HirLowering<'reports> {
 
     if let SymbolKind::Struct { .. } = &original_symbol.kind {
       Type::Named {
-        name: get_or_intern(&if add_struct { format!("struct {name}") } else { name }),
+        name: get_or_intern(&if add_struct { format!("struct {name}") } else { name }, None),
         generics: vec![],
       }
     } else if let SymbolKind::EnumVariant { parent_enum, .. } = &original_symbol.kind {
-      Type::Named { name: get_or_intern(&self.mangle_symbol(*parent_enum)), generics: vec![] }
+      Type::Named { name: get_or_intern(&self.mangle_symbol(*parent_enum), None), generics: vec![] }
     } else if let SymbolKind::Enum { .. } = &original_symbol.kind {
       Type::Named {
-        name: get_or_intern(&self.mangle_symbol(original_symbol.canonical_symbol)),
+        name: get_or_intern(&self.mangle_symbol(original_symbol.canonical_symbol), None),
         generics: vec![],
       }
     } else {
-      Type::Named { name: get_or_intern(&name), generics: vec![] }
+      Type::Named { name: get_or_intern(&name, None), generics: vec![] }
     }
   }
 

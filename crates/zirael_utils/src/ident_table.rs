@@ -1,18 +1,50 @@
+use crate::prelude::Span;
 use lasso::{Spur, ThreadedRodeo};
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 use std::fmt::{Debug, Display, Formatter};
+use std::hash::{Hash, Hasher};
 
 pub struct IdentTable {
   interner: ThreadedRodeo,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Identifier(Spur);
+#[derive(Clone, Copy, Eq)]
+pub struct Identifier(Spur, Span);
+
+impl PartialEq for Identifier {
+  fn eq(&self, other: &Self) -> bool {
+    self.0 == other.0
+  }
+}
+
+impl Hash for Identifier {
+  fn hash<H: Hasher>(&self, state: &mut H) {
+    self.0.hash(state);
+  }
+}
+
+impl PartialOrd for Identifier {
+  fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    Some(self.0.cmp(&other.0))
+  }
+}
+
+impl Ord for Identifier {
+  fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+    self.0.cmp(&other.0)
+  }
+}
 
 impl Default for IdentTable {
   fn default() -> Self {
     Self::new()
+  }
+}
+
+impl Identifier {
+  pub fn span(&self) -> &Span {
+    &self.1
   }
 }
 
@@ -45,8 +77,8 @@ impl Display for Identifier {
 pub static GLOBAL_TABLE: Lazy<Mutex<IdentTable>> = Lazy::new(|| Mutex::new(IdentTable::new()));
 
 #[inline]
-pub fn get_or_intern(name: &str) -> Identifier {
-  Identifier(GLOBAL_TABLE.lock().intern(name))
+pub fn get_or_intern(name: &str, span: Option<Span>) -> Identifier {
+  Identifier(GLOBAL_TABLE.lock().intern(name), span.unwrap_or_default())
 }
 
 #[inline]
@@ -56,5 +88,5 @@ pub fn resolve(sym: &Identifier) -> String {
 
 #[inline]
 pub fn default_ident() -> Identifier {
-  get_or_intern("__default_identifier__")
+  get_or_intern("__default_identifier__", None)
 }

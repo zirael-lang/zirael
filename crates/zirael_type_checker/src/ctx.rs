@@ -31,7 +31,7 @@ impl TypeInferenceContext {
     let id = self.next_type_var_id;
     self.next_type_var_id += 1;
 
-    let name = name.unwrap_or_else(|| get_or_intern(&format!("T{}", id)));
+    let name = name.unwrap_or_else(|| get_or_intern(&format!("T{}", id), None));
 
     self.generic_params.insert(name, id);
 
