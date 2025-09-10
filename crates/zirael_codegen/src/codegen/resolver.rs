@@ -13,13 +13,14 @@ impl OrderResolver {
       let module_items: Vec<_> = modules.iter().flat_map(|m| &m.items).collect();
       order = module_items.iter().map(|i| SymbolRelationNode::Symbol(i.sym_id)).collect();
     }
+    
     order
   }
 
   pub fn process_enum_monomorphization(modules: &mut [IrModule]) {
     let mono_items: Vec<_> = modules.iter().flat_map(|m| &m.mono_items).cloned().collect();
 
-    for module in modules {
+    for module in modules.iter_mut() {
       for item in &mut module.items {
         if let IrItemKind::Enum(ref mut enum_data) = item.kind {
           Self::merge_enum_variants(enum_data, &mono_items);
@@ -37,7 +38,11 @@ impl OrderResolver {
         .iter()
         .filter_map(|m| {
           if let IrItemKind::EnumVariant(ref ir_variant) = m.kind {
-            if variant.symbol_id == ir_variant.symbol_id { Some(ir_variant.clone()) } else { None }
+            if variant.symbol_id == ir_variant.symbol_id { 
+              Some(ir_variant.clone()) 
+            } else { 
+              None 
+            }
           } else {
             None
           }

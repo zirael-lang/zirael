@@ -483,7 +483,7 @@ impl<'a> Parser<'a> {
     let start_span = self.peek_span();
     self.advance();
 
-    let scrutinee = Box::new(self.parse_expr());
+    let scrutinee = Box::new(self.parse_match_scrutinee());
 
     if !self.match_token(TokenKind::BraceOpen) {
       self.error_at_current("expected '{' after match expression");
@@ -506,6 +506,74 @@ impl<'a> Parser<'a> {
 
     let end_span = self.prev_span();
     self.new_expr(ExprKind::Match { scrutinee, arms }, start_span.to(end_span))
+  }
+
+  fn parse_match_scrutinee(&mut self) -> Expr {
+    if let Some(token) = self.peek() {
+      match &token.kind {
+        TokenKind::Identifier(_) => {
+          let checkpoint = self.position;
+          let expr = self.parse_primary_for_match_scrutinee();
+          
+          if self.check(&TokenKind::DoubleColon) {
+            self.position = checkpoint;
+            return self.parse_path_expression_for_match_scrutinee();
+          }
+          
+          expr
+        }
+        _ => {
+          self.parse_primary()
+        }
+      }
+    } else {
+      self.error_at_current("unexpected end of input");
+      let span = self.prev_span();
+      self.new_expr(ExprKind::couldnt_parse(), span)
+    }
+  }
+
+  fn parse_primary_for_match_scrutinee(&mut self) -> Expr {
+    if let Some(token) = self.peek() {
+      match &token.kind {
+        TokenKind::Identifier(name) => {
+          let name = name.clone();
+          self.advance();
+          let identifier_span = self.prev_span();
+          let identifier = get_or_intern(&name, Some(identifier_span));
+
+          self.new_expr(ExprKind::Identifier(identifier, None), identifier_span)
+        }
+        _ => {
+          self.parse_primary()
+        }
+      }
+    } else {
+      self.error_at_current("unexpected end of input");
+      let span = self.prev_span();
+      self.new_expr(ExprKind::couldnt_parse(), span)
+    }
+  }
+
+  fn parse_path_expression_for_match_scrutinee(&mut self) -> Expr {
+    if let Some(token) = self.peek() {
+      if let TokenKind::Identifier(name) = &token.kind {
+        let name = name.clone();
+        self.advance();
+        let identifier_span = self.prev_span();
+        let identifier = get_or_intern(&name, Some(identifier_span));
+
+        if self.check(&TokenKind::DoubleColon) {
+          return self.parse_path_from_identifier(identifier, identifier_span);
+        } else {
+          return self.new_expr(ExprKind::Identifier(identifier, None), identifier_span);
+        }
+      }
+    }
+
+    self.error_at_current("unexpected token in match scrutinee");
+    let span = self.prev_span();
+    self.new_expr(ExprKind::couldnt_parse(), span)
   }
 
   fn parse_match_arm(&mut self) -> MatchArm {
@@ -798,8 +866,7 @@ impl<'a> Parser<'a> {
         | TokenKind::BracketClose => {
           return false;
         }
-        _ => {
-        }
+        _ => {}
       }
 
       position += 1;

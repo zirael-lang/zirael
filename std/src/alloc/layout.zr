@@ -1,4 +1,5 @@
 import "./alignment.zr"
+import "../option.zr"
 
 /// Describes the memory layout requirements for a type or allocation.
 ///
@@ -20,5 +21,26 @@ struct Layout {
     /// The required memory alignment for this allocation.
     ///
     /// Specifies the alignment boundary that allocated memory must satisfy.
-    align: Alignment
+    align: Alignment,
+
+    fn new<T>(size: int, align: int) {
+        var alignment = Alignment::new(align);
+
+        match alignment {
+            Option::Some { value } => {
+                //assert(size >= 0, "Size must be non-negative");
+
+                //var end = size + value.value - 1;
+                //assert(end >= size, "Size and alignment cause overflow");
+
+                Layout {
+                    size: size,
+                    align: value
+                };
+            },
+            Option::None => {
+
+            }
+        }
+    }
 }

@@ -154,7 +154,7 @@ impl Gen for IrEnum {
 
     cg.writeln("typedef struct {");
     cg.indent();
-    cg.writeln(&format!("enum {base_name}_tags tag;"));
+    cg.writeln(&format!("{base_name}_tags tag;"));
     cg.writeln("union {");
     cg.indent();
 

@@ -1,21 +1,23 @@
-use crate::ir::{
-  HirLowering, IrBlock, IrExpr, IrExprKind, IrField, IrFunction, IrItem, IrItemKind, IrModule,
-  IrParam, IrStmt, IrStruct, IrVariant, IrVariantData,
-};
+use crate::ir::{HirLowering, IrBlock, IrExpr, IrExprKind, IrField, IrFunction, IrItem, IrItemKind, IrMatchArm, IrModule, IrParam, IrPattern, IrStmt, IrStruct, IrVariant, IrVariantData};
 use itertools::Itertools as _;
 use std::{
   collections::{HashMap, HashSet},
   hash::{DefaultHasher, Hash as _},
 };
 use zirael_parser::{
-  FunctionSignature, GenericParameter, MonomorphizationId, ScopeType, Symbol, SymbolKind,
+  FunctionSignature, GenericParameter, MonomorphizationId, ScopeType, SymbolId, SymbolKind,
   SymbolRelationNode, Type, monomorphized_symbol::MonomorphizedSymbol,
 };
 use zirael_type_checker::monomorphization::{MonomorphizationData, MonomorphizationEntry};
 use zirael_utils::prelude::{Identifier, debug, get_or_intern, resolve};
 
 impl<'reports> HirLowering<'reports> {
-  pub fn process_monomorphization_entries(&mut self, module: &mut IrModule) {
+  pub fn process_monomorphization_entries(
+    &mut self,
+    module: &mut IrModule,
+    all_modules: &[IrModule],
+    processed_monos: &mut std::collections::HashSet<MonomorphizationId>,
+  ) {
     // TODO: find a way to do that without cloning the entries
     let entries: Vec<_> = self.mono_table.entries.clone().into_iter().collect();
 
@@ -30,17 +32,104 @@ impl<'reports> HirLowering<'reports> {
 
     self.push_scope(ScopeType::Module(module.id));
     for (id, entry) in struct_entries {
-      if let Some(monomorphized_item) = self.create_monomorphized_item(&id, &entry, module) {
-        module.mono_items.push(monomorphized_item);
+      let accessible = self.are_concrete_types_accessible_in_module(&entry, module);
+      debug!(
+        "Monomorphization entry {:?} in module {:?}: accessible = {}",
+        id, module.id, accessible
+      );
+      if accessible && !processed_monos.contains(&id) {
+        if let Some(monomorphized_item) =
+          self.create_monomorphized_item(&id, &entry, module, all_modules)
+        {
+          module.mono_items.push(monomorphized_item);
+          processed_monos.insert(id);
+        }
       }
     }
 
     for (id, entry) in func_entries {
-      if let Some(monomorphized_item) = self.create_monomorphized_item(&id, &entry, module) {
-        module.mono_items.push(monomorphized_item);
+      if self.are_concrete_types_accessible_in_module(&entry, module)
+        && !processed_monos.contains(&id)
+      {
+        if let Some(monomorphized_item) =
+          self.create_monomorphized_item(&id, &entry, module, all_modules)
+        {
+          module.mono_items.push(monomorphized_item);
+          processed_monos.insert(id);
+        }
       }
     }
     self.pop_scope();
+  }
+
+  fn are_concrete_types_accessible_in_module(
+    &mut self,
+    entry: &MonomorphizationEntry,
+    module: &IrModule,
+  ) -> bool {
+    for (name, ty) in &entry.concrete_types {
+      if !self.is_type_accessible_in_module(ty, module) {
+        return false;
+      }
+    }
+    true
+  }
+
+  fn is_type_accessible_in_module(&mut self, ty: &Type, module: &IrModule) -> bool {
+    match ty {
+      Type::Named { name, generics } => {
+        let Some(module_scope) = self.symbol_table.find_module_by_source(module.id) else {
+          debug!("Could not find scope for module {:?}", module.id);
+          return false;
+        };
+
+        let current_scope = self.symbol_table.current_scope();
+        let _ = self.symbol_table.navigate_to_scope(module_scope);
+
+        let symbol = self.symbol_table.lookup_symbol(name);
+        let is_accessible = symbol.is_some();
+
+        debug!(
+          "Looking up type {:?} in module {:?} (scope {:?}): found = {}",
+          resolve(name),
+          module.id,
+          module_scope,
+          is_accessible
+        );
+
+        let _ = self.symbol_table.navigate_to_scope(current_scope);
+
+        if is_accessible {
+          for generic in generics {
+            if !self.is_type_accessible_in_module(generic, module) {
+              return false;
+            }
+          }
+        }
+
+        is_accessible
+      }
+      Type::Pointer(inner) | Type::Reference(inner) => {
+        self.is_type_accessible_in_module(inner, module)
+      }
+      Type::Array(inner, _) => self.is_type_accessible_in_module(inner, module),
+      Type::Function { params, return_type } => {
+        for param in params {
+          if !self.is_type_accessible_in_module(param, module) {
+            return false;
+          }
+        }
+        self.is_type_accessible_in_module(return_type, module)
+      }
+      Type::Int
+      | Type::Uint
+      | Type::Float
+      | Type::Bool
+      | Type::Char
+      | Type::String
+      | Type::Void => true,
+      _ => true,
+    }
   }
 
   fn get_type_arguments(
@@ -64,12 +153,14 @@ impl<'reports> HirLowering<'reports> {
     &mut self,
     id: &MonomorphizationId,
     entry: &MonomorphizationEntry,
-    module: &IrModule,
+    _module: &IrModule,
+    all_modules: &[IrModule],
   ) -> Option<IrItem> {
     let original_id = entry.original_id;
     let concrete_types = &entry.concrete_types;
 
-    let original_item = module.items.iter().find(|item| item.sym_id == original_id)?;
+    let original_item =
+      all_modules.iter().flat_map(|m| &m.items).find(|item| item.sym_id == original_id)?;
     let original_symbol = self.symbol_table.get_symbol_unchecked(&original_id);
 
     self.current_mono_id = Some(*id);
@@ -107,17 +198,21 @@ impl<'reports> HirLowering<'reports> {
           self.monomorphize_struct(mangled_name.clone(), struct_def, concrete_types);
 
         self.pop_scope();
-        Some(IrItem {
+
+        let mono_item = IrItem {
           name: mangled_name,
           kind: IrItemKind::Struct(monomorphized_struct),
           sym_id: original_id,
           mono_id: Some(*id),
-        })
+        };
+
+        self.add_monomorphization_dependencies(*id, &entry, concrete_types);
+
+        Some(mono_item)
       }
       (SymbolKind::EnumVariant { parent_enum, data: _ }, IrItemKind::EnumVariant(variant)) => {
         let parent_enum = self.symbol_table.get_symbol_unchecked(parent_enum);
         let SymbolKind::Enum { generics, id, .. } = &parent_enum.kind else { unreachable!() };
-        self.push_scope(ScopeType::Enum(*id));
 
         let Some(type_arguments) = self.get_type_arguments(generics, concrete_types) else {
           return None;
@@ -125,14 +220,17 @@ impl<'reports> HirLowering<'reports> {
 
         let mangled_name = self.mangle_monomorphized_symbol(original_id, *id, &type_arguments);
         let mono_enum = self.monomorphize_enum(mangled_name.clone(), variant, concrete_types);
-        self.pop_scope();
 
-        Some(IrItem {
+        let mono_item = IrItem {
           name: mangled_name,
           kind: IrItemKind::EnumVariant(mono_enum),
           sym_id: original_id,
           mono_id: Some(*id),
-        })
+        };
+
+        self.add_monomorphization_dependencies(*id, &entry, concrete_types);
+
+        Some(mono_item)
       }
       _ => {
         debug!(
@@ -140,6 +238,40 @@ impl<'reports> HirLowering<'reports> {
         );
         None
       }
+    }
+  }
+
+  fn add_monomorphization_dependencies(
+    &self,
+    mono_id: MonomorphizationId,
+    entry: &MonomorphizationEntry,
+    concrete_types: &HashMap<Identifier, Type>,
+  ) {
+    let original_symbol = self.symbol_table.get_symbol_unchecked(&entry.original_id);
+
+    let relation_source = match &original_symbol.kind {
+      SymbolKind::EnumVariant { parent_enum, .. } => SymbolRelationNode::Symbol(*parent_enum),
+      _ => SymbolRelationNode::Monomorphization(mono_id),
+    };
+
+    for concrete_type in concrete_types.values() {
+      if let Some(dep_symbol_id) = self.extract_symbol_id_from_type(concrete_type) {
+        self.symbol_table.new_relation(relation_source, SymbolRelationNode::Symbol(dep_symbol_id));
+        debug!(
+          "Added dependency: {:?} -> Symbol({:?}) (name: {:?})",
+          relation_source,
+          dep_symbol_id,
+          self.symbol_table.get_symbol_unchecked(&dep_symbol_id).name
+        );
+      }
+    }
+  }
+
+  fn extract_symbol_id_from_type(&self, ty: &Type) -> Option<SymbolId> {
+    match ty {
+      Type::Named { name, .. } => self.symbol_table.lookup_symbol(name).map(|symbol| symbol.id),
+      Type::Reference(inner_ty) => self.extract_symbol_id_from_type(inner_ty),
+      _ => None,
     }
   }
 
@@ -318,7 +450,7 @@ impl<'reports> HirLowering<'reports> {
         scrutinee: Box::new(self.monomorphize_expr(scrutinee, type_map)),
         arms: arms
           .iter()
-          .map(|arm| crate::ir::IrMatchArm {
+          .map(|arm| IrMatchArm {
             pattern: arm.pattern.clone(),
             body: self.monomorphize_expr(&arm.body, type_map),
           })

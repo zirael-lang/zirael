@@ -3,7 +3,11 @@ use crate::ir::{
   IrMatchArm, IrModule, IrParam, IrPattern, IrStmt, IrStruct, IrVariant, IrVariantData,
 };
 use itertools::Itertools as _;
-use std::{collections::HashMap, path::PathBuf, vec};
+use std::{
+  collections::{HashMap, HashSet},
+  path::PathBuf,
+  vec,
+};
 use zirael_hir::hir::{
   HirBody, HirEnum, HirFunction, HirItem, HirItemKind, HirModule, HirStruct, HirTypeExtension,
   expr::{FieldSymbol, HirExpr, HirExprKind, HirMatchArm, HirPattern, HirStmt},
@@ -73,10 +77,21 @@ impl<'reports> HirLowering<'reports> {
     lexed_modules: &mut Vec<HirModule>,
     main_function_id: &mut Option<MainFunction>,
   ) -> Vec<IrModule> {
-    lexed_modules
+    let mut ir_modules = lexed_modules
       .iter_mut()
       .map(|module| self.lower_module(module, main_function_id))
-      .collect::<Vec<_>>()
+      .collect::<Vec<_>>();
+
+    if !self.mono_table.entries.is_empty() {
+      let all_modules = ir_modules.clone();
+      let mut processed_monos = HashSet::new();
+
+      for module in &mut ir_modules {
+        self.process_monomorphization_entries(module, &all_modules, &mut processed_monos);
+      }
+    }
+
+    ir_modules
   }
 
   pub fn push_scope(&mut self, scope_type: ScopeType) {
@@ -190,10 +205,6 @@ impl<'reports> HirLowering<'reports> {
       *main_function_id = Some(MainFunction::Mangled(self.mangle_symbol(*main_symbol_id)));
     }
     self.pop_scope();
-
-    if !self.mono_table.entries.is_empty() {
-      self.process_monomorphization_entries(&mut ir_module);
-    }
 
     ir_module
   }
