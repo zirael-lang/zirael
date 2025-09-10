@@ -1,10 +1,16 @@
+mod block_inference;
+mod call_inference;
+mod call_validation;
 mod ctx;
 mod enums;
 mod errors;
 mod expressions;
+mod generic_inference;
+mod method_utils;
 pub mod monomorphization;
 mod structs;
 mod substitution;
+mod type_operations;
 pub mod unification;
 
 use crate::{ctx::TypeInferenceContext, monomorphization::MonomorphizationTable};
@@ -54,7 +60,7 @@ impl<'reports> TypeInference<'reports> {
   }
 
   pub fn eq(&self, left: &Type, right: &Type) -> bool {
-    self.structural_eq(left, right)
+    self.types_equal(left, right)
   }
 
   fn structural_eq(&self, left: &Type, right: &Type) -> bool {
@@ -137,107 +143,11 @@ impl<'reports> TypeInference<'reports> {
     }
   }
 
-  fn get_self_type_for_method(&mut self, func: &Function) -> Option<Type> {
-    if let Some(func_symbol) = self.symbol_table.lookup_symbol(&func.name) {
-      if let Some(struct_symbol_id) = self.symbol_table.is_a_child_of_symbol(func_symbol.id) {
-        let struct_symbol = self.symbol_table.get_symbol_unchecked(&struct_symbol_id);
-
-        return match &struct_symbol.kind {
-          SymbolKind::Struct { generics, .. } | SymbolKind::Enum { generics, .. } => {
-            let generic_names = generics
-              .iter()
-              .map(|g| Type::Named { name: g.name.clone(), generics: vec![] })
-              .collect::<Vec<_>>();
-
-            Some(Type::Named { name: struct_symbol.name, generics: generic_names })
-          }
-          SymbolKind::TypeExtension { ty, .. } => {
-            if ty.is_primitive() {
-              Some(ty.clone())
-            } else {
-              self.error(
-                "right now type extensions can only be used on primitive types",
-                vec![("type extension here".to_string(), func.span.clone())],
-                vec![],
-              );
-              None
-            }
-          }
-          _ => {
-            warn!("expected struct symbol, got {:?}", struct_symbol.kind);
-            None
-          }
-        };
-      }
-    }
-    None
-  }
-
   fn get_generic_type_vars(
     &mut self,
     generics: &Vec<GenericParameter>,
   ) -> HashMap<Identifier, Type> {
-    if !generics.is_empty() {
-      generics
-        .iter()
-        .map(|g| (g.name.clone(), self.ctx.fresh_type_var(Some(g.name.clone()))))
-        .collect::<HashMap<_, _>>()
-    } else {
-      HashMap::new()
-    }
-  }
-
-  fn get_generics_for_method(&mut self, func: &Function) -> Option<HashMap<Identifier, Type>> {
-    if let Some(func_symbol) = self.symbol_table.lookup_symbol(&func.name) {
-      if let Some(struct_symbol_id) = self.symbol_table.is_a_child_of_symbol(func_symbol.id) {
-        let struct_symbol = self.symbol_table.get_symbol_unchecked(&struct_symbol_id);
-
-        if let SymbolKind::Struct { generics, .. } | SymbolKind::Enum { generics, .. } =
-          &struct_symbol.kind
-        {
-          if !generics.is_empty() {
-            return Some(
-              generics
-                .iter()
-                .map(|g| (g.name.clone(), self.ctx.fresh_type_var(Some(g.name.clone()))))
-                .collect(),
-            );
-          }
-        } else {
-          warn!("expected struct symbol, got {:?}", struct_symbol.kind);
-        }
-      }
-    }
-    None
-  }
-
-  fn merge_generic_maps(
-    &self,
-    struct_generics: &HashMap<Identifier, Type>,
-    method_generics: &HashMap<Identifier, Type>,
-  ) -> HashMap<Identifier, Type> {
-    let mut merged = struct_generics.clone();
-    merged.extend(method_generics.clone());
-    merged
-  }
-
-  fn resolve_self_parameter_type_with_generics(
-    &mut self,
-    param: &Parameter,
-    struct_type: &mut Option<Type>,
-    struct_generics: &HashMap<Identifier, Type>,
-  ) -> Type {
-    match struct_type {
-      Some(struct_ty) => {
-        self.substitute_type_with_map(struct_ty, struct_generics);
-
-        match &param.ty {
-          Type::Reference(_inner) => Type::Reference(Box::new(struct_ty.clone())),
-          _ => struct_ty.clone(),
-        }
-      }
-      None => param.ty.clone(),
-    }
+    self.create_generic_mapping(generics)
   }
 }
 

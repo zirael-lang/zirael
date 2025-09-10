@@ -260,7 +260,7 @@ impl<'reports> TypeInference<'reports> {
   ) -> Type {
     let concrete_generics = self.resolve_concrete_generics(&struct_info.generics, &generic_mapping);
 
-    if self.all_generics_concrete(&concrete_generics) {
+    if self.struct_all_generics_concrete(&concrete_generics) {
       self.create_monomorphized_type(
         struct_info,
         field_types,
@@ -287,7 +287,7 @@ impl<'reports> TypeInference<'reports> {
       .collect()
   }
 
-  fn all_generics_concrete(&self, concrete_generics: &[Type]) -> bool {
+  fn struct_all_generics_concrete(&self, concrete_generics: &[Type]) -> bool {
     concrete_generics.iter().all(|ty| !matches!(ty, Type::Variable { .. }))
   }
 

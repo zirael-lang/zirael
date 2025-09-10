@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use zirael_parser::{
-  AstId, AstWalker, BinaryOp, CallInfo, ElseBranch, EnumVariantData, Expr, ExprKind, If, Literal,
-  MatchArm, Path, Pattern, PatternField, ScopeType, Stmt, StmtKind, SymbolId, SymbolKind, Type,
+  EnumVariantData, Expr, ExprKind, Literal, MatchArm, Path, Pattern, PatternField, SymbolId, SymbolKind, Type,
   UnaryOp, VarDecl, WalkerContext,
 };
 use zirael_utils::prelude::{
@@ -9,7 +8,7 @@ use zirael_utils::prelude::{
 };
 
 use crate::{
-  TypeInference, monomorphization::MonomorphizationData, unification::UnificationResult,
+  TypeInference, unification::UnificationResult,
 };
 
 mod binary;
@@ -24,16 +23,7 @@ impl<'reports> TypeInference<'reports> {
     context: &str,
   ) -> bool {
     if !self.eq(expected, actual) {
-      self.error(
-        &format!(
-          "type mismatch in {}: expected {}, found {}",
-          context,
-          self.format_type(expected),
-          self.format_type(actual)
-        ),
-        vec![(format!("in this {}", context), span.clone())],
-        vec![],
-      );
+      self.type_mismatch_with_context(expected, actual, span.clone(), context);
       false
     } else {
       true
@@ -75,11 +65,7 @@ impl<'reports> TypeInference<'reports> {
         if let Some(sym_id) = symbol_id {
           self.infer_identifier(*sym_id, &expr.span)
         } else {
-          self.error(
-            "unresolved identifier",
-            vec![("here".to_string(), expr.span.clone())],
-            vec![],
-          );
+          self.simple_error("unresolved identifier", "here", expr.span.clone());
           Type::Error
         }
       }
@@ -222,92 +208,6 @@ impl<'reports> TypeInference<'reports> {
     Type::Void
   }
 
-  fn infer_block(&mut self, stmts: &mut [Stmt], id: AstId) -> Type {
-    self.push_scope(ScopeType::Block(id));
-    if stmts.is_empty() {
-      self.pop_scope();
-      return Type::Void;
-    }
-
-    let mut block_type = Type::Void;
-
-    for stmt in stmts.iter_mut() {
-      match &mut stmt.0 {
-        StmtKind::Expr(expr) => {
-          self.infer_expr(expr);
-        }
-        StmtKind::Return(ret) => {
-          if let Some(expr) = ret.value.as_mut() {
-            // Use function return type as expected type for return statements
-            let expected_return_type = self.ctx.get_function_return_type().cloned();
-            block_type = self.infer_expr_with_expected(expr, expected_return_type.as_ref());
-          } else {
-            block_type = Type::Void;
-          }
-          break;
-        }
-        StmtKind::Var(var) => {
-          self.infer_variable(var);
-        }
-        StmtKind::If(if_stmt) => {
-          self.infer_if_stmt(if_stmt);
-        }
-      }
-    }
-    self.pop_scope();
-
-    block_type
-  }
-
-  fn infer_block_with_expected(
-    &mut self,
-    stmts: &mut [Stmt],
-    id: AstId,
-    expected_type: Option<&Type>,
-  ) -> Type {
-    self.push_scope(ScopeType::Block(id));
-    if stmts.is_empty() {
-      self.pop_scope();
-      return Type::Void;
-    }
-
-    let mut block_type = Type::Void;
-
-    for stmt in stmts.iter_mut() {
-      match &mut stmt.0 {
-        StmtKind::Expr(expr) => {
-          block_type = self.infer_expr_with_expected(expr, expected_type);
-          if block_type.is_never() {
-            self.pop_scope();
-            return Type::Never;
-          }
-        }
-        StmtKind::Return(ret) => {
-          if let Some(expr) = ret.value.as_mut() {
-            let expected_return_type = self.ctx.get_function_return_type().cloned();
-            block_type = self.infer_expr_with_expected(expr, expected_return_type.as_ref());
-          } else {
-            block_type = Type::Void;
-          }
-          break;
-        }
-        StmtKind::Var(var) => {
-          self.infer_variable(var);
-        }
-        StmtKind::If(if_stmt) => {
-          block_type = self.infer_if_stmt(if_stmt);
-          if block_type.is_never() {
-            self.pop_scope();
-            return Type::Never;
-          }
-        }
-      }
-    }
-    self.pop_scope();
-
-    block_type
-  }
-
   fn infer_ternary_with_expected(
     &mut self,
     condition: &mut Expr,
@@ -335,268 +235,6 @@ impl<'reports> TypeInference<'reports> {
         Type::Error
       }
     }
-  }
-
-  pub fn infer_call(
-    &mut self,
-    callee: &mut Expr,
-    args: &mut Vec<Expr>,
-    call_info: &mut Option<CallInfo>,
-    type_annotations: &mut Vec<Type>,
-  ) -> Type {
-    let sym_id = if let Some((_, Some(sym_id))) = callee.as_identifier_mut() {
-      sym_id.clone()
-    } else if let ExprKind::Path(Path { segments, .. }) = &callee.kind {
-      if let Some(sym_id) = segments.last().and_then(|seg| seg.symbol_id) {
-        sym_id
-      } else {
-        panic!()
-      }
-    } else {
-      panic!()
-    };
-
-    let sym = self.symbol_table().get_symbol_unchecked(&sym_id);
-    if let SymbolKind::Function { signature, .. } = &sym.kind {
-      let signature = &mut signature.clone();
-
-      let expected_arg_count = if signature.is_static() {
-        signature.parameters.len()
-      } else {
-        signature.parameters.len() - 1
-      };
-
-      if args.len() != expected_arg_count {
-        self.error(
-          &format!(
-            "wrong number of arguments: expected {}, found {}",
-            expected_arg_count,
-            args.len()
-          ),
-          vec![("in this call".to_string(), callee.span.clone())],
-          vec![],
-        );
-        return Type::Error;
-      }
-
-      if !type_annotations.is_empty() && type_annotations.len() != signature.generics.len() {
-        self.error(
-          &format!(
-            "wrong number of type annotations: expected {}, found {}",
-            signature.generics.len(),
-            type_annotations.len()
-          ),
-          vec![("in this call".to_string(), callee.span.clone())],
-          vec![],
-        );
-        return Type::Error;
-      }
-
-      for arg in args.iter_mut() {
-        self.infer_expr(arg);
-        self.try_monomorphize_named_type(&mut arg.ty);
-      }
-
-      let mut generic_mapping = HashMap::new();
-
-      if !type_annotations.is_empty() {
-        for (generic, annotation) in signature.generics.iter().zip(type_annotations.iter()) {
-          let mut resolved_annotation = annotation.clone();
-          self.try_monomorphize_named_type(&mut resolved_annotation);
-          generic_mapping.insert(generic.name, resolved_annotation);
-        }
-      } else if !signature.generics.is_empty() {
-        for generic in signature.generics.iter() {
-          if !self.ctx.is_generic_parameter(generic.name) {
-            let _type_var = self.ctx.fresh_type_var(Some(generic.name));
-          }
-        }
-      }
-
-      let params_to_check = if signature.is_static() {
-        &mut signature.parameters[..]
-      } else {
-        &mut signature.parameters[1..]
-      };
-
-      let mut valid = true;
-
-      if type_annotations.is_empty() {
-        for (arg, param) in args.iter().zip(params_to_check.iter()) {
-          self.infer_generic_types(&param.ty, &arg.ty, &mut generic_mapping);
-        }
-      }
-
-      let mut concrete_params = params_to_check.to_vec();
-      for param in concrete_params.iter_mut() {
-        self.substitute_type_with_map(&mut param.ty, &generic_mapping);
-      }
-
-      for (i, (arg, param)) in args.iter().zip(concrete_params.iter()).enumerate() {
-        if !self.expect_type(&param.ty, &arg.ty, &arg.span, &format!("argument {}", i + 1)) {
-          valid = false;
-        }
-      }
-      signature.parameters = concrete_params.clone();
-
-      if !valid {
-        return Type::Error;
-      }
-
-      let mut return_type = signature.return_type.clone();
-      self.substitute_type_with_map(&mut return_type, &generic_mapping);
-      signature.return_type = return_type.clone();
-
-      let monomorphized_id = if !signature.generics.is_empty() && valid {
-        let unresolved_generics: Vec<_> =
-          signature.generics.iter().filter(|g| !generic_mapping.contains_key(&g.name)).collect();
-
-        if unresolved_generics.is_empty() {
-          Some(self.record_monomorphization_with_id(
-            sym_id,
-            &generic_mapping,
-            Some(MonomorphizationData::Signature(signature.clone())),
-          ))
-        } else {
-          let function_name = resolve(&sym.name);
-          let generics_list =
-            unresolved_generics.iter().map(|g| resolve(&g.name)).collect::<Vec<_>>().join(", ");
-
-          let suggestion = if type_annotations.is_empty() {
-            format!(
-              "consider providing explicit type annotations, e.g., '{}<{}>({})'",
-              function_name,
-              signature.generics.iter().map(|g| resolve(&g.name)).collect::<Vec<_>>().join(", "),
-              args.iter().map(|_| "_").collect::<Vec<_>>().join(", ")
-            )
-          } else {
-            "the provided type annotations are insufficient to resolve all generic parameters"
-              .to_string()
-          };
-
-          self.error(
-            &format!(
-              "cannot infer type parameter{} {} for function {}",
-              if unresolved_generics.len() > 1 { "s" } else { "" },
-              generics_list.dimmed().bold(),
-              function_name.dimmed().bold()
-            ),
-            vec![("in this call".to_string(), callee.span.clone())],
-            vec![suggestion],
-          );
-          return Type::Error;
-        }
-      } else {
-        None
-      };
-
-      *call_info = Some(CallInfo {
-        original_symbol: sym_id,
-        monomorphized_id,
-        concrete_types: generic_mapping.clone(),
-      });
-
-      return return_type;
-    } else {
-      self.error(
-        &format!("cannot call non-function type: {}", sym.kind.name()),
-        vec![("in this call".to_string(), callee.span.clone())],
-        vec![],
-      );
-      return Type::Error;
-    }
-  }
-
-  fn infer_if_stmt(&mut self, if_stmt: &mut If) -> Type {
-    let condition_type = self.infer_expr(&mut if_stmt.condition);
-    if !self.eq(&condition_type, &Type::Bool) {
-      self.error(
-        &format!("if condition must be boolean, found {}", self.format_type(&condition_type)),
-        vec![("condition here".to_string(), if_stmt.condition.span.clone())],
-        vec![],
-      );
-    }
-
-    let then_type = self.infer_block_type(&mut if_stmt.then_branch);
-
-    let else_type = if let Some(else_branch) = &mut if_stmt.else_branch {
-      Some(self.infer_else_branch(else_branch))
-    } else {
-      None
-    };
-
-    match else_type {
-      Some(else_t) => match (&then_type, &else_t) {
-        (Type::Never, Type::Never) => Type::Never,
-        (Type::Never, other) => other.clone(),
-        (other, Type::Never) => other.clone(),
-        (then_ty, else_ty) => {
-          if self.eq(then_ty, else_ty) {
-            then_ty.clone()
-          } else {
-            self.error(
-              &format!(
-                "if-else branches have incompatible types: {} and {}",
-                self.format_type(then_ty),
-                self.format_type(else_ty)
-              ),
-              vec![],
-              vec![],
-            );
-            Type::Void
-          }
-        }
-      },
-      None => {
-        if then_type.is_never() {
-          Type::Void
-        } else {
-          Type::Void
-        }
-      }
-    }
-  }
-
-  fn infer_else_branch(&mut self, else_branch: &mut ElseBranch) -> Type {
-    match else_branch {
-      ElseBranch::Block(statements, _else_branch_id) => self.infer_block_type(statements),
-      ElseBranch::If(nested_if) => self.infer_if_stmt(nested_if),
-    }
-  }
-
-  fn infer_block_type(&mut self, statements: &mut [Stmt]) -> Type {
-    let mut last_type = Type::Void;
-
-    for stmt in statements {
-      match &mut stmt.0 {
-        StmtKind::Expr(expr) => {
-          last_type = self.infer_expr(expr);
-          if last_type.is_never() {
-            return Type::Never;
-          }
-        }
-        StmtKind::Return(ret) => {
-          if let Some(expr) = ret.value.as_mut() {
-            let expected_return_type = self.ctx.get_function_return_type().cloned();
-            let return_type = self.infer_expr_with_expected(expr, expected_return_type.as_ref());
-            return return_type;
-          }
-          return Type::Void;
-        }
-        StmtKind::Var(var) => {
-          self.infer_variable(var);
-          last_type = Type::Void;
-        }
-        StmtKind::If(nested_if) => {
-          last_type = self.infer_if_stmt(nested_if);
-          if last_type.is_never() {
-            return Type::Never;
-          }
-        }
-      }
-    }
-
-    last_type
   }
 
   pub fn infer_variable(&mut self, decl: &mut VarDecl) -> Type {

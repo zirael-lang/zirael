@@ -9,6 +9,43 @@ impl<'reports> TypeInference<'reports> {
     self.processed_file.unwrap()
   }
 
+  pub fn simple_error(&mut self, message: &str, label: &str, span: Span) {
+    let report = ReportBuilder::builder(message, ReportKind::Error)
+      .label(label, span);
+    self.reports.add(self.file_id(), report);
+  }
+
+  pub fn multi_label_error(&mut self, message: &str, labels: Vec<(String, Span)>) {
+    let mut report = ReportBuilder::builder(message, ReportKind::Error);
+    for (label_text, span) in labels {
+      report = report.label(&label_text, span);
+    }
+    self.reports.add(self.file_id(), report);
+  }
+
+  pub fn error_with_suggestions(&mut self, message: &str, labels: Vec<(String, Span)>, suggestions: Vec<String>) {
+    let mut report = ReportBuilder::builder(message, ReportKind::Error);
+    for (label_text, span) in labels {
+      report = report.label(&label_text, span);
+    }
+    let _ = suggestions; 
+    self.reports.add(self.file_id(), report);
+  }
+
+  pub fn error(&mut self, message: &str, labels: Vec<(String, Span)>, suggestions: Vec<String>) {
+    self.error_with_suggestions(message, labels, suggestions);
+  }
+
+  pub fn type_mismatch_with_context(&mut self, expected: &Type, found: &Type, span: Span, context: &str) {
+    let message = format!(
+      "type mismatch in {}: expected {}, found {}",
+      context,
+      self.format_type(expected),
+      self.format_type(found)
+    );
+    self.simple_error(&message, &format!("in this {}", context), span);
+  }
+
   pub fn format_type(&self, ty: &Type) -> String {
     match ty {
       Type::Int => "int".to_string(),
