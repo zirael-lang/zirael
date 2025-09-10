@@ -3,8 +3,7 @@ use crate::dependency::Dependency;
 use crate::lib_type::LibType;
 use crate::mode::Mode;
 use crate::prelude::PackageType;
-use clap::{Parser, builder::Styles};
-use std::env::current_dir;
+use clap::Parser;
 use std::path::PathBuf;
 
 #[derive(Parser)]

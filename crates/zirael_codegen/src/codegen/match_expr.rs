@@ -1,4 +1,4 @@
-use crate::codegen::{Codegen, Gen};
+use crate::codegen::{Codegen, Gen as _};
 use crate::ir::{IrExpr, IrExprKind, IrMatchArm, IrPattern, IrStmt};
 use zirael_parser::{Literal, Type};
 

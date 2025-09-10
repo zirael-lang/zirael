@@ -96,7 +96,7 @@ pub struct Attribute {
   pub args: Option<Vec<Expr>>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExpectedAttribute {
   String,
   Int,
@@ -113,7 +113,7 @@ pub enum AttributeValue {
 impl AttributeValue {
   pub fn as_string(&self) -> Option<&String> {
     match self {
-      AttributeValue::String(s) => Some(s),
+      Self::String(s) => Some(s),
       _ => None,
     }
   }

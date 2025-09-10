@@ -1,12 +1,10 @@
 use crate::context::Context;
-use crate::prelude::{Colorize, CompilationUnit, FILE_EXTENSION, error};
+use crate::prelude::{Colorize as _, CompilationUnit, FILE_EXTENSION, error};
 use anyhow::Result;
 use anyhow::bail;
 use std::path::PathBuf;
-use zirael_c_compiler::CBuild;
 use zirael_utils::prelude::{
-  CheckConfig, CompilationInfo, PackageType, ProjectConfig, canonicalize_with_strip,
-  create_dir_all, info,
+  CheckConfig, CompilationInfo, PackageType, info,
 };
 
 pub fn check_project(config: &CheckConfig) -> Result<()> {

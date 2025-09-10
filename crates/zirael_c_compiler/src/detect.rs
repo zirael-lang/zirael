@@ -1,6 +1,6 @@
 use crate::compiler::{Compiler, CompilerKind};
-use anyhow::{Context, Result, anyhow};
-use log::{debug, warn};
+use anyhow::{Context as _, Result, anyhow};
+use log::debug;
 use std::{
   collections::HashMap,
   env,
@@ -17,7 +17,7 @@ pub fn detect_compiler() -> Result<Compiler> {
       return Ok(compiler);
     }
     Err(e) => {
-      debug!("Clang detection failed: {}", e);
+      debug!("Clang detection failed: {e}");
     }
   }
 
@@ -135,10 +135,10 @@ fn setup_msvc_environment(vcvars_path: &Path) -> Result<HashMap<String, String>>
   let arch = if vcvars_path.to_string_lossy().contains("vcvars64") { "x64" } else { "x86" };
 
   let cmd_line = format!("\"{}\" {} && set", vcvars_path.display(), arch);
-  debug!("Executing MSVC setup command: {}", cmd_line);
+  debug!("Executing MSVC setup command: {cmd_line}");
 
   let output = Command::new("cmd")
-      .args(&["/C", &cmd_line])
+      .args(["/C", &cmd_line])
       .stdout(Stdio::piped())
       .stderr(Stdio::piped())
       .output()
@@ -157,8 +157,8 @@ fn setup_msvc_environment(vcvars_path: &Path) -> Result<HashMap<String, String>>
 
   for line in output_str.lines() {
     if let Some((key, value)) = line.split_once('=') {
-      if !value.is_empty() && !key.starts_with("PS1") && !key.starts_with("_") {
-        env_vars.insert(key.to_string(), value.to_string());
+      if !value.is_empty() && !key.starts_with("PS1") && !key.starts_with('_') {
+        env_vars.insert(key.to_owned(), value.to_owned());
       }
     }
   }
@@ -173,14 +173,14 @@ fn setup_msvc_environment(vcvars_path: &Path) -> Result<HashMap<String, String>>
 
 fn apply_env_vars(env_vars: &HashMap<String, String>) {
   for (key, value) in env_vars {
-    #[allow(unsafe_code)]
+    #[expect(unsafe_code)]
     unsafe { env::set_var(key, value) };
   }
   debug!("Applied {} environment variables", env_vars.len());
 }
 
 pub fn resolve_from_kind(kind: CompilerKind) -> Result<Compiler> {
-  debug!("Resolving compiler of kind: {:?}", kind);
+  debug!("Resolving compiler of kind: {kind:?}");
 
   match kind {
     CompilerKind::Clang => detect_clang(),

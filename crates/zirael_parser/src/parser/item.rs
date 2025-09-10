@@ -3,7 +3,7 @@ use crate::{
   TypeExtension,
   ast::{
     Abi, EnumDeclaration, EnumVariant, EnumVariantData, Function, FunctionModifiers,
-    FunctionSignature, ImportKind, Item, ItemKind, Keyword, Parameter, ParameterKind,
+    FunctionSignature, Item, ItemKind, Keyword, Parameter, ParameterKind,
   },
   parser::Parser,
 };
@@ -23,9 +23,9 @@ impl<'a> Parser<'a> {
 
     let id = self.fresh_id();
     let (kind, name) = if self.match_keyword(Keyword::Fn) {
-      self.parse_fn(id, &attrs, span.clone())
+      self.parse_fn(id, &attrs, span)
     } else if self.match_keyword(Keyword::Struct) {
-      self.parse_struct(id, span.clone())
+      self.parse_struct(id, span)
     } else if self.match_keyword(Keyword::Enum) {
       self.parse_enum(id)
     } else if self.match_keyword(Keyword::Import) {
@@ -97,17 +97,17 @@ impl<'a> Parser<'a> {
               found_any = true;
 
               if path.is_file() && path.extension().is_some_and(|ext| ext == "zr") {
-                self.discover_queue.push((path, span.clone()));
+                self.discover_queue.push((path, span));
               } else if path.is_dir() {
                 let index_file = path.join("index.zr");
 
                 if index_file.exists() {
-                  self.discover_queue.push((index_file, span.clone()));
+                  self.discover_queue.push((index_file, span));
                 }
               }
             }
             Err(e) => {
-              self.error_at(format!("error reading glob entry: {e}"), span.clone());
+              self.error_at(format!("error reading glob entry: {e}"), span);
             }
           }
         }
@@ -146,7 +146,7 @@ impl<'a> Parser<'a> {
         self.error_at(format!("couldn't find index.zr in directory: {}", path.display()), span);
       }
     } else {
-      let path_with_ext = self.canonicalize_path(&path.with_extension("zr"), span.clone());
+      let path_with_ext = self.canonicalize_path(&path.with_extension("zr"), span);
       if path_with_ext.is_file() {
         self.discover_queue.push((path_with_ext, span));
       } else {
@@ -546,14 +546,14 @@ impl<'a> Parser<'a> {
       for (i, param) in duplicate_params.iter().enumerate() {
         report = report.label(
           &format!("{} parameter found here", (i + 1).to_ordinal_string()),
-          param.span.clone(),
+          param.span,
         );
       }
 
       self.add_report(report);
     }
 
-    self.validate_variadic(params, span.clone());
+    self.validate_variadic(params, span);
     self.validate_self(params, span);
   }
 
@@ -562,7 +562,7 @@ impl<'a> Parser<'a> {
     for param in params {
       if param.name == get_or_intern("self", None) {
         if seen_self {
-          self.error_at("self parameter can only be used once", param.span.clone());
+          self.error_at("self parameter can only be used once", param.span);
         } else {
           seen_self = true;
         }
@@ -579,7 +579,7 @@ impl<'a> Parser<'a> {
       1 => {
         let (index, param) = variadic_params[0];
         if index != params.len() - 1 {
-          self.error_at("variadic parameter must be last.", param.span.clone());
+          self.error_at("variadic parameter must be last.", param.span);
         }
       }
       _ => {

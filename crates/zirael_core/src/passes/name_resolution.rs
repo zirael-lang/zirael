@@ -1,7 +1,7 @@
 use crate::prelude::{WalkerContext, warn};
 use zirael_parser::{
   AstWalker, CallInfo, Expr, ExprKind, MatchArm, Path, PathSegment, Pattern, ScopeType, Symbol,
-  SymbolId, SymbolKind, SymbolRelationNode, SymbolTable, Type, impl_ast_walker, item::Item,
+  SymbolId, SymbolKind, SymbolRelationNode, SymbolTable, impl_ast_walker, item::Item,
 };
 use zirael_utils::prelude::*;
 
@@ -132,7 +132,7 @@ impl<'reports> NameResolution<'reports> {
     if let ScopeType::Module(file_id) = scope.scope_type {
       let path = self.sources.get_unchecked(file_id).path();
       let path_string = path.display().to_string();
-      let span = symbol.source_location.clone().unwrap_or_default();
+      let span = symbol.source_location.unwrap_or_default();
       report = report.label_custom(
         &format!(
           "did you mean {} from {}?",
@@ -153,7 +153,7 @@ impl<'reports> NameResolution<'reports> {
     }
 
     let final_id = self.resolve_path_segments(path)?;
-    self.validate_expected_symbol(final_id, expected, path.span.clone())
+    self.validate_expected_symbol(final_id, expected, path.span)
   }
 
   fn resolve_path_for_construction(&mut self, path: &mut Path) -> Option<SymbolId> {
@@ -172,7 +172,7 @@ impl<'reports> NameResolution<'reports> {
     let first_segment = &mut path.segments[0];
     let first_id = self.resolve_identifier(
       &first_segment.identifier,
-      first_segment.span.clone(),
+      first_segment.span,
       ExpectedSymbol::Any,
     )?;
     first_segment.symbol_id = Some(first_id);
@@ -189,7 +189,7 @@ impl<'reports> NameResolution<'reports> {
     let first_segment = &mut path.segments[0];
     let first_id = self.resolve_identifier(
       &first_segment.identifier,
-      first_segment.span.clone(),
+      first_segment.span,
       ExpectedSymbol::Type,
     )?;
     first_segment.symbol_id = Some(first_id);
@@ -228,7 +228,7 @@ impl<'reports> NameResolution<'reports> {
       segment.symbol_id = Some(id);
       Some(id)
     } else {
-      self.report_unknown_symbol(&segment.identifier, segment.span.clone(), &ExpectedSymbol::Any);
+      self.report_unknown_symbol(&segment.identifier, segment.span, &ExpectedSymbol::Any);
       None
     }
   }
@@ -290,7 +290,7 @@ impl<'reports> NameResolution<'reports> {
     let enum_segment = &mut path.segments[0];
     let enum_id = self.resolve_identifier(
       &enum_segment.identifier,
-      enum_segment.span.clone(),
+      enum_segment.span,
       ExpectedSymbol::Enum,
     )?;
     enum_segment.symbol_id = Some(enum_id);
@@ -317,7 +317,7 @@ impl<'reports> NameResolution<'reports> {
     };
 
     let base = &mut fields[0];
-    let span = base.span.clone();
+    let span = base.span;
     let Some((ident, ident_sym_id)) = base.as_identifier_mut() else {
       self.error("expected identifier in field access", vec![], vec![]);
       return;
@@ -342,7 +342,7 @@ impl<'reports> AstWalker<'reports> for NameResolution<'reports> {
   fn visit_function_call(&mut self, callee: &mut Expr, _args: &mut [Expr]) {
     match &mut callee.kind {
       ExprKind::Identifier(ident, ident_sym_id) => {
-        let span = callee.span.clone();
+        let span = callee.span;
         if let Some(id) = self.resolve_identifier(ident, span, ExpectedSymbol::Function) {
           *ident_sym_id = Some(id);
 
@@ -386,7 +386,7 @@ impl<'reports> AstWalker<'reports> for NameResolution<'reports> {
   fn visit_struct_init(&mut self, name: &mut Expr, _fields: &mut HashMap<Identifier, Expr>) {
     match &mut name.kind {
       ExprKind::Identifier(ident, ident_sym_id) => {
-        let span = name.span.clone();
+        let span = name.span;
         if let Some(id) = self.resolve_identifier(ident, span, ExpectedSymbol::Struct) {
           *ident_sym_id = Some(id);
 
@@ -452,23 +452,20 @@ impl<'reports> AstWalker<'reports> for NameResolution<'reports> {
   }
 
   fn visit_match_arm(&mut self, _arm: &mut MatchArm) {
-    match &mut _arm.pattern {
-      Pattern::EnumVariant { path, .. } => {
-        if let Some(id) = self.resolve_path_for_construction(path) {
-          let symbol = match self.symbol_table.get_symbol(id) {
-            Ok(symbol) => symbol,
-            Err(_) => return,
-          };
-          if !matches!(symbol.kind, SymbolKind::EnumVariant { .. }) {
-            self.error(
-              "expected enum variant in pattern",
-              vec![("not an enum variant".to_string(), path.span.clone())],
-              vec![],
-            );
-          }
+    if let Pattern::EnumVariant { path, .. } = &mut _arm.pattern {
+      if let Some(id) = self.resolve_path_for_construction(path) {
+        let symbol = match self.symbol_table.get_symbol(id) {
+          Ok(symbol) => symbol,
+          Err(_) => return,
+        };
+        if !matches!(symbol.kind, SymbolKind::EnumVariant { .. }) {
+          self.error(
+            "expected enum variant in pattern",
+            vec![("not an enum variant".to_owned(), path.span)],
+            vec![],
+          );
         }
       }
-      _ => {}
     }
   }
 }

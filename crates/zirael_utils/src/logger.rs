@@ -31,7 +31,7 @@ pub fn setup_logger(verbose: bool, test_logger: bool) {
         if verbose {
           format!(" \x1b[90m{}\x1b[0m", record.module_path().unwrap_or("unknown"))
         } else {
-          "".to_string()
+          String::new()
         },
         record.args()
       )

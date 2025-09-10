@@ -4,7 +4,6 @@ use logos::Logos;
 use std::{
   fmt,
   fmt::{Display, Formatter},
-  ops::Range,
 };
 use zirael_utils::prelude::Span;
 

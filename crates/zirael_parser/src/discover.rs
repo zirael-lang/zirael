@@ -176,7 +176,7 @@ impl ModuleDiscovery {
         ),
         ReportKind::Error,
       )
-      .label("failed while resolving this file", span.clone()),
+      .label("failed while resolving this file", *span),
     );
   }
 

@@ -3,7 +3,7 @@ use crate::hir::{
   lowering::AstLowering,
 };
 use zirael_parser::Symbol;
-use zirael_utils::prelude::{Colorize, resolve};
+use zirael_utils::prelude::{Colorize as _, resolve};
 
 impl<'reports> AstLowering<'reports> {
   /// Checks if an expression statement has no side effects and its result is unused.
@@ -38,7 +38,7 @@ impl<'reports> AstLowering<'reports> {
   pub fn result_not_used_error(&mut self, expr: &HirExpr) {
     self.warn(
       "expression result is not used",
-      vec![("here".to_owned(), expr.span.clone())],
+      vec![("here".to_owned(), expr.span)],
       vec![],
     );
   }
@@ -46,7 +46,7 @@ impl<'reports> AstLowering<'reports> {
   pub fn try_unused_symbol(&mut self, symbol: &Symbol) -> bool {
     let name = resolve(&symbol.name);
 
-    if name == "main" || name.starts_with("_") {
+    if name == "main" || name.starts_with('_') {
       return false;
     }
 
@@ -63,8 +63,8 @@ impl<'reports> AstLowering<'reports> {
     if is_unused {
       self.warn(
         &format!("symbol {} is never used", name.dimmed().bold()),
-        vec![("declared here".to_string(), symbol.source_location.clone().unwrap())],
-        vec!["prefix it with _ to remove this warning".to_string()],
+        vec![("declared here".to_owned(), symbol.source_location.unwrap())],
+        vec!["prefix it with _ to remove this warning".to_owned()],
       );
       return true;
     }

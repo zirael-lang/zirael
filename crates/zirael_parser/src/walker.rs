@@ -9,7 +9,6 @@ use crate::{
   },
   symbols::SymbolId,
 };
-use std::ops::Range;
 use zirael_utils::prelude::*;
 
 pub trait WalkerContext<'reports> {
@@ -232,7 +231,7 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
   fn walk_expr_kind(&mut self, expr: &mut Expr) {
     match &mut expr.kind {
       ExprKind::Literal(lit) => self.walk_literal(lit),
-      ExprKind::Identifier(id, sym_id) => self.walk_identifier(id, sym_id, expr.span.clone()),
+      ExprKind::Identifier(id, sym_id) => self.walk_identifier(id, sym_id, expr.span),
       ExprKind::Path(path) => self.walk_path(path),
       ExprKind::Binary { left, op, right } => {
         self.walk_expr(left);

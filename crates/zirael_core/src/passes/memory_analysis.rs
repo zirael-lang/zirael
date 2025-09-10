@@ -45,7 +45,7 @@ impl<'reports> MemoryAnalysis<'reports> {
     if !expr.kind.can_be_borrowed() {
       self.error(
         &format!("cannot borrow {}", article(expr.kind.name())),
-        vec![("attempted to borrow here".to_owned(), expr.span.clone())],
+        vec![("attempted to borrow here".to_owned(), expr.span)],
         vec![
           "you can only borrow: variables, fields, array elements, and function parameters"
             .to_owned(),
@@ -65,7 +65,7 @@ impl<'reports> MemoryAnalysis<'reports> {
   fn handle_invalid_box_operation(&mut self, expr: &Expr) {
     self.error(
             "can only use box on variable declarations",
-            vec![("attempted to box here".to_owned(), expr.span.clone())],
+            vec![("attempted to box here".to_owned(), expr.span)],
             vec![
                 "box expressions create heap-allocated values and can only be used when declaring variables".to_owned(),
                 "try assigning this to a variable first".to_owned(),
@@ -82,7 +82,7 @@ impl<'reports> MemoryAnalysis<'reports> {
         }
 
         if let Some(existing_move) = is_moved {
-          self.report_use_of_moved_value(expr.span.clone(), existing_move);
+          self.report_use_of_moved_value(expr.span, existing_move);
           return false;
         }
 
@@ -103,8 +103,8 @@ impl<'reports> MemoryAnalysis<'reports> {
 
   fn report_move_of_borrowed_value(&mut self, expr: &Expr, borrow_span: &Span) {
     let report = ReportBuilder::builder("cannot move a borrowed value", ReportKind::Error)
-      .label("attempted to move here", expr.span.clone())
-      .label_color_custom("borrowed here", borrow_span.clone(), Color::BrightCyan)
+      .label("attempted to move here", expr.span)
+      .label_color_custom("borrowed here", *borrow_span, Color::BrightCyan)
       .note("values cannot be moved while they are borrowed")
       .note("the borrow must end before the value can be moved");
 
@@ -114,7 +114,7 @@ impl<'reports> MemoryAnalysis<'reports> {
   fn mark_variable_as_moved(&self, symbol: &mut zirael_parser::Symbol, expr: &Expr) {
     if let SymbolKind::Variable { ref mut is_moved, .. } = symbol.kind {
       *is_moved =
-        Some(VariableMove { from: symbol.source_location.clone().unwrap(), to: expr.span.clone() });
+        Some(VariableMove { from: symbol.source_location.unwrap(), to: expr.span });
     }
   }
 
@@ -142,11 +142,11 @@ impl<'reports> MemoryAnalysis<'reports> {
         )
             .label(
                 "returns a reference to data that will be dropped at the end of this function",
-                value.span.clone()
+                value.span
             )
             .label_color_custom(
                 "declared here",
-                symbol.source_location.clone().unwrap(),
+                symbol.source_location.unwrap(),
                 Color::BrightCyan
             )
             .note("Local variables, temporary values, and function parameters are dropped when the function ends")
@@ -158,8 +158,8 @@ impl<'reports> MemoryAnalysis<'reports> {
   fn report_use_of_moved_value(&mut self, span: Span, moved: &VariableMove) {
     let report = ReportBuilder::builder("cannot use moved values", ReportKind::Error)
       .label("attempted to use moved value here", span)
-      .label_color_custom("declared here", moved.from.clone(), Color::BrightCyan)
-      .label_color_custom("moved here", moved.to.clone(), Color::BrightCyan)
+      .label_color_custom("declared here", moved.from, Color::BrightCyan)
+      .label_color_custom("moved here", moved.to, Color::BrightCyan)
       .note("values cannot be used after they have been moved")
       .note("consider cloning the value before moving, or use a reference instead");
 
@@ -168,8 +168,8 @@ impl<'reports> MemoryAnalysis<'reports> {
 
   fn report_assignment_to_borrowed_value(&mut self, lhs: &Expr, borrow_span: &Span) {
     let report = ReportBuilder::builder("cannot assign to a borrowed value", ReportKind::Error)
-      .label("attempted to assign here", lhs.span.clone())
-      .label_color_custom("borrowed here", borrow_span.clone(), Color::BrightCyan)
+      .label("attempted to assign here", lhs.span)
+      .label_color_custom("borrowed here", *borrow_span, Color::BrightCyan)
       .note("borrowed values cannot be modified")
       .note("the borrow must end before the value can be assigned to");
 
@@ -188,7 +188,7 @@ impl<'reports> AstWalker<'reports> for MemoryAnalysis<'reports> {
       if *is_heap {
         let sym_id = var.symbol_id.unwrap();
         self.symbol_table.mark_heap_variable(sym_id).unwrap();
-        self.symbol_table.mark_drop(sym_id, expr.span.clone());
+        self.symbol_table.mark_drop(sym_id, expr.span);
       }
     } else if !self.handle_move_semantics(&mut var.value) {
       self.walk_expr(&mut var.value);

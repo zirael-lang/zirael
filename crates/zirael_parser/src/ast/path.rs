@@ -1,13 +1,13 @@
 use crate::{symbols::SymbolId, Type};
 use zirael_utils::prelude::*;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Path {
   pub segments: Vec<PathSegment>,
   pub span: Span,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PathSegment {
   pub identifier: Identifier,
   pub type_args: Vec<Type>,
@@ -26,7 +26,7 @@ impl Path {
         identifier,
         type_args: vec![],
         symbol_id: None,
-        span: span.clone(),
+        span,
       }],
       span,
     }

@@ -228,7 +228,7 @@ impl SymbolTable {
   pub fn get_scope_unchecked(&self, id: ScopeId) -> Scope {
     match self.get_scope(id) {
       Ok(scope) => scope,
-      Err(_) => panic!("Scope with ID {:?} not found in symbol table", id),
+      Err(_) => panic!("Scope with ID {id:?} not found in symbol table"),
     }
   }
 
@@ -241,7 +241,7 @@ impl SymbolTable {
       table
         .scopes_arena
         .get(scope_id)
-        .map(|scope| scope.symbols.iter().map(|(name, id)| (name.clone(), id.clone())).collect())
+        .map(|scope| scope.symbols.iter().map(|(name, id)| (*name, *id)).collect())
         .unwrap_or_default()
     })
   }
@@ -343,12 +343,9 @@ impl SymbolTable {
     let extensions = self.collect_ty_extensions();
 
     for ext in extensions {
-      let symbol = match self.get_symbol(ext) {
-        Ok(symbol) => symbol,
-        Err(_) => {
-          debug!("Could not retrieve extension symbol {ext:?}");
-          return HashMap::new();
-        }
+      let symbol = if let Ok(symbol) = self.get_symbol(ext) { symbol } else {
+        debug!("Could not retrieve extension symbol {ext:?}");
+        return HashMap::new();
       };
 
       if let SymbolKind::TypeExtension { ty, methods } = symbol.kind {

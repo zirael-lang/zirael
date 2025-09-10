@@ -48,7 +48,7 @@ impl<'ctx> CompilationUnit<'ctx> {
                     "main function must not take any parameters",
                     ReportKind::Error,
                   )
-                  .label("invalid main function signature", span.clone()),
+                  .label("invalid main function signature", *span),
                 );
               }
               return None;

@@ -25,35 +25,35 @@ impl Span {
     index >= self.start && index < self.end
   }
 
-  pub fn intersect(&self, other: &Span) -> Option<Span> {
+  pub fn intersect(&self, other: &Self) -> Option<Self> {
     let start = self.start.max(other.start);
     let end = self.end.min(other.end);
 
-    if start < end { Some(Span { start, end }) } else { None }
+    if start < end { Some(Self { start, end }) } else { None }
   }
 
-  pub fn overlaps(&self, other: &Span) -> bool {
+  pub fn overlaps(&self, other: &Self) -> bool {
     self.start < other.end && other.start < self.end
   }
 
-  pub fn to_start(&self) -> Span {
-    Span::new(self.start, self.start + 1)
+  pub fn to_start(&self) -> Self {
+    Self::new(self.start, self.start + 1)
   }
 
-  pub fn to_end(&self) -> Span {
-    if self.end > 0 { Span::new(self.end - 1, self.end) } else { Span::new(self.end, self.end) }
+  pub fn to_end(&self) -> Self {
+    if self.end > 0 { Self::new(self.end - 1, self.end) } else { Self::new(self.end, self.end) }
   }
 
-  pub fn move_by(&self, offset: usize) -> Span {
-    Span::new(self.start + offset, self.end + offset)
+  pub fn move_by(&self, offset: usize) -> Self {
+    Self::new(self.start + offset, self.end + offset)
   }
 
-  pub fn move_back_by(&self, offset: usize) -> Span {
-    Span::new(self.start - offset, self.end - offset)
+  pub fn move_back_by(&self, offset: usize) -> Self {
+    Self::new(self.start - offset, self.end - offset)
   }
 
-  pub fn to(&self, other: Self) -> Span {
-    Span::new(self.start, other.end)
+  pub fn to(&self, other: Self) -> Self {
+    Self::new(self.start, other.end)
   }
 }
 
@@ -63,9 +63,9 @@ impl From<std::ops::Range<usize>> for Span {
   }
 }
 
-impl Into<std::ops::Range<usize>> for Span {
-  fn into(self) -> std::ops::Range<usize> {
-    self.start..self.end
+impl From<Span> for std::ops::Range<usize> {
+  fn from(val: Span) -> Self {
+    val.start..val.end
   }
 }
 

@@ -1,6 +1,6 @@
 use crate::parser::Parser;
 use crate::{ImportKind, ItemKind, TokenKind};
-use std::path::{Component, Path, PathBuf};
+use std::path::{Component, Path};
 use zirael_utils::ident_table::{Identifier, default_ident, get_or_intern};
 use zirael_utils::prelude::Span;
 
@@ -37,20 +37,20 @@ impl<'reports> Parser<'reports> {
   fn handle_path_import(&mut self, string: String, span: &Span) -> ImportKind {
     let current_file = self.source.path();
     let base_dir = current_file.parent().unwrap_or(Path::new(""));
-    let path = self.canonicalize_path(&base_dir.join(&string), span.clone());
+    let path = self.canonicalize_path(&base_dir.join(&string), *span);
 
     if self.is_valid_zr_file(&path) {
-      self.discover_queue.push((path.clone(), span.clone()));
+      self.discover_queue.push((path.clone(), *span));
       ImportKind::Path(path)
     } else {
       let error_msg = self.get_path_error_message(&path);
-      self.error_at(error_msg, span.clone());
+      self.error_at(error_msg, *span);
       ImportKind::Path(path)
     }
   }
 
   fn handle_external_module_import(&mut self, string: String) -> ImportKind {
-    println!("external module import: {}", string);
+    println!("external module import: {string}");
     let parts = string.split('/').map(|x| get_or_intern(x, None)).collect::<Vec<_>>();
     ImportKind::ExternalModule(parts)
   }

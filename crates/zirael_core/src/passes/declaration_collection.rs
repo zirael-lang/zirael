@@ -85,7 +85,7 @@ impl<'reports> DeclarationCollection<'reports> {
         } else {
           self.error(
             &format!("couldn't find package: {}", name.dimmed().bold()),
-            vec![("in this import statement".to_owned(), span.clone())],
+            vec![("in this import statement".to_owned(), *span)],
             vec![],
           );
         }
@@ -99,7 +99,7 @@ impl<'reports> DeclarationCollection<'reports> {
     let Some(source_module) = source_module else {
       self.error(
         &format!("couldn't find module: {}", path.display().to_string().dimmed().bold()),
-        vec![("in this import statement".to_owned(), span.clone())],
+        vec![("in this import statement".to_owned(), *span)],
         vec!["if the file exists, make sure it was discovered by the compiler".to_owned()],
       );
       return;
@@ -128,7 +128,7 @@ impl<'reports> DeclarationCollection<'reports> {
       format!("failed to import symbols from module: {error:?}"),
       ReportKind::Error,
     )
-    .label("while processing this import", span.clone());
+    .label("while processing this import", *span);
 
     match error {
       SymbolTableError::ImportConflict(conflicts) => {
@@ -192,7 +192,7 @@ impl<'reports> DeclarationCollection<'reports> {
     let symbol_name = resolve(&name);
     let symbol_type = kind.name();
 
-    match self.symbol_table.insert(name, kind.clone(), Some(span.clone())) {
+    match self.symbol_table.insert(name, kind.clone(), Some(span)) {
       Ok(id) => Some(id),
       Err(SymbolTableError::SymbolAlreadyExists { existing_id, .. }) => {
         if let Ok(existing_symbol) = self.symbol_table.get_symbol(existing_id) {
@@ -249,7 +249,7 @@ impl<'reports> AstWalker<'reports> for DeclarationCollection<'reports> {
             signature: func.signature.clone(),
             modifiers: func.modifiers.clone(),
           },
-          func.span.clone(),
+          func.span,
         );
 
         self.symbol_table.create_scope(ScopeType::Function(func.id));
@@ -284,7 +284,7 @@ impl<'reports> AstWalker<'reports> for DeclarationCollection<'reports> {
             fields: struct_def.fields.clone(),
             methods: vec![],
           },
-          struct_def.span.clone(),
+          struct_def.span,
         );
         let mut methods = vec![];
 
@@ -318,7 +318,7 @@ impl<'reports> AstWalker<'reports> for DeclarationCollection<'reports> {
             methods: vec![],
             id: enum_def.id,
           },
-          enum_def.span.clone(),
+          enum_def.span,
         );
 
         let mut variants = vec![];
@@ -326,7 +326,7 @@ impl<'reports> AstWalker<'reports> for DeclarationCollection<'reports> {
           let variant_sym = self.register_symbol(
             variant.name,
             &SymbolKind::EnumVariant { parent_enum: sym.unwrap(), data: variant.data.clone() },
-            variant.span.clone(),
+            variant.span,
           );
           variant.symbol_id = variant_sym;
           variants.push(variant_sym.unwrap());
@@ -361,7 +361,7 @@ impl<'reports> AstWalker<'reports> for DeclarationCollection<'reports> {
         let sym = self.register_symbol(
           default_ident(),
           &SymbolKind::TypeExtension { ty: ty_ext.ty.clone(), methods: vec![] },
-          ty_ext.span.clone(),
+          ty_ext.span,
         );
         let mut methods = vec![];
 
@@ -456,21 +456,18 @@ impl<'reports> AstWalker<'reports> for DeclarationCollection<'reports> {
   }
 
   fn visit_match_arm(&mut self, _arm: &mut MatchArm) {
-    match &mut _arm.pattern {
-      Pattern::EnumVariant { fields, .. } => {
-        if let Some(fields) = fields {
-          for field in fields {
-            let sym_id = self.register_symbol(
-              field.name,
-              &SymbolKind::MatchBinding { ty: Type::Inferred },
-              field.span.clone(),
-            );
+    if let Pattern::EnumVariant { fields, .. } = &mut _arm.pattern {
+      if let Some(fields) = fields {
+        for field in fields {
+          let sym_id = self.register_symbol(
+            field.name,
+            &SymbolKind::MatchBinding { ty: Type::Inferred },
+            field.span,
+          );
 
-            field.sym_id = sym_id;
-          }
+          field.sym_id = sym_id;
         }
       }
-      _ => {}
     }
   }
 }

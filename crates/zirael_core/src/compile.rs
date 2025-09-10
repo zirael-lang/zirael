@@ -1,5 +1,5 @@
 use crate::context::Context;
-use crate::prelude::{Colorize, CompilationUnit, FILE_EXTENSION, error};
+use crate::prelude::{Colorize as _, CompilationUnit, FILE_EXTENSION, error};
 use anyhow::Result;
 use anyhow::bail;
 use zirael_c_compiler::CBuild;

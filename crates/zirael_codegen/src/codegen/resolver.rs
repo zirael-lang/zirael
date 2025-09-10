@@ -1,6 +1,6 @@
-use crate::codegen::{Codegen, Gen};
-use crate::ir::{IrEnum, IrItem, IrItemKind, IrModule, IrVariant};
-use zirael_parser::{EnumVariantData, SymbolRelationNode};
+use crate::codegen::{Codegen, Gen as _};
+use crate::ir::{IrEnum, IrItem, IrItemKind, IrModule};
+use zirael_parser::SymbolRelationNode;
 
 pub struct OrderResolver;
 

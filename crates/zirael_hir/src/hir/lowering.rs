@@ -7,7 +7,7 @@ use crate::hir::{
   },
 };
 use id_arena::Arena;
-use std::{collections::HashMap, ops::Range};
+use std::collections::HashMap;
 use zirael_parser::{ast::item::Item, *};
 use zirael_type_checker::monomorphization::MonomorphizationTable;
 use zirael_utils::prelude::*;
@@ -158,14 +158,14 @@ impl<'reports> AstLowering<'reports> {
         Some(HirItem {
           symbol_id,
           kind: HirItemKind::Function(hir_function),
-          span: item.span.clone(),
+          span: item.span,
         })
       }
       ItemKind::Struct(struct_def) => {
         self.push_scope(ScopeType::Struct(struct_def.id));
         let hir_struct = self.lower_struct(struct_def, symbol_id);
         self.pop_scope();
-        Some(HirItem { symbol_id, kind: HirItemKind::Struct(hir_struct), span: item.span.clone() })
+        Some(HirItem { symbol_id, kind: HirItemKind::Struct(hir_struct), span: item.span })
       }
       ItemKind::TypeExtension(ty_ext) => {
         self.push_scope(ScopeType::TypeExtension(ty_ext.id));
@@ -175,7 +175,7 @@ impl<'reports> AstLowering<'reports> {
         Some(HirItem {
           symbol_id,
           kind: HirItemKind::TypeExtension(ty_ext),
-          span: item.span.clone(),
+          span: item.span,
         })
       }
       ItemKind::Enum(enum_def) => {
@@ -183,7 +183,7 @@ impl<'reports> AstLowering<'reports> {
         let hir_enum = self.lower_enum(enum_def, symbol_id);
         self.pop_scope();
 
-        Some(HirItem { symbol_id, kind: HirItemKind::Enum(hir_enum), span: item.span.clone() })
+        Some(HirItem { symbol_id, kind: HirItemKind::Enum(hir_enum), span: item.span })
       }
       ItemKind::Import(..) => None,
     }
@@ -328,7 +328,7 @@ impl<'reports> AstLowering<'reports> {
     HirExpr {
       kind: hir_kind,
       ty: ast_expr.ty.clone(),
-      span: ast_expr.span.clone(),
+      span: ast_expr.span,
       id: ast_expr.id,
     }
   }
@@ -373,7 +373,7 @@ impl<'reports> AstLowering<'reports> {
           rhs: Box::new(HirExpr {
             kind: HirExprKind::Binary { left: lhs_expr, op: op.clone(), right: rhs_expr },
             ty: ast_expr.ty.clone(),
-            span: ast_expr.span.clone(),
+            span: ast_expr.span,
             id: ast_expr.id,
           }),
         }
@@ -383,7 +383,7 @@ impl<'reports> AstLowering<'reports> {
         return HirExpr {
           kind: self.lower_expr_impl(ast_expr, context).kind,
           ty: ast_expr.ty.clone(),
-          span: ast_expr.span.clone(),
+          span: ast_expr.span,
           id: ast_expr.id,
         };
       }
@@ -392,7 +392,7 @@ impl<'reports> AstLowering<'reports> {
     HirExpr {
       kind: hir_kind,
       ty: ast_expr.ty.clone(),
-      span: ast_expr.span.clone(),
+      span: ast_expr.span,
       id: ast_expr.id,
     }
   }
@@ -468,7 +468,7 @@ impl<'reports> AstLowering<'reports> {
           rhs: Box::new(HirExpr {
             kind: HirExprKind::Binary { left: lhs_expr, op: op.clone(), right: rhs_expr },
             ty: ast_expr.ty.clone(),
-            span: ast_expr.span.clone(),
+            span: ast_expr.span,
             id: ast_expr.id,
           }),
         }
@@ -500,7 +500,7 @@ impl<'reports> AstLowering<'reports> {
           return HirExpr {
             kind: HirExprKind::Error,
             ty: ast_expr.ty.clone(),
-            span: ast_expr.span.clone(),
+            span: ast_expr.span,
             id: ast_expr.id,
           };
         }
@@ -661,7 +661,7 @@ impl<'reports> AstLowering<'reports> {
         self.try_to_constant_fold(hir_kind)
       },
       ty: ast_expr.ty.clone(),
-      span: ast_expr.span.clone(),
+      span: ast_expr.span,
       id: ast_expr.id,
     }
   }
@@ -697,7 +697,7 @@ impl<'reports> AstLowering<'reports> {
   fn lower_match_arm(&mut self, arm: &mut MatchArm) -> HirMatchArm {
     let pattern = self.lower_pattern(&mut arm.pattern);
     let body = self.lower_expr(&mut arm.body);
-    HirMatchArm { pattern, body, span: arm.span.clone() }
+    HirMatchArm { pattern, body, span: arm.span }
   }
 
   fn lower_pattern(&mut self, pattern: &mut Pattern) -> HirPattern {
@@ -713,11 +713,7 @@ impl<'reports> AstLowering<'reports> {
       }
       Pattern::Literal(lit) => HirPattern::Literal(lit.clone()),
       Pattern::EnumVariant { path, fields, resolved_variant } => {
-        let hir_fields = if let Some(fields) = fields {
-          Some(fields.iter_mut().map(|field| self.lower_pattern_field(field)).collect())
-        } else {
-          None
-        };
+        let hir_fields = fields.as_mut().map(|fields| fields.iter_mut().map(|field| self.lower_pattern_field(field)).collect());
 
         HirPattern::EnumVariant { symbol_id: resolved_variant.unwrap(), fields: hir_fields }
       }
@@ -735,17 +731,13 @@ impl<'reports> AstLowering<'reports> {
 
   fn lower_pattern_field(&mut self, field: &mut PatternField) -> HirPatternField {
     let symbol_id = self.symbol_table.lookup_symbol(&field.name).map(|s| s.id);
-    let pattern = if let Some(ref mut pat) = field.pattern {
-      Some(Box::new(self.lower_pattern(pat)))
-    } else {
-      None
-    };
+    let pattern = field.pattern.as_mut().map(|pat| Box::new(self.lower_pattern(pat)));
 
     HirPatternField {
       name: field.name,
       symbol_id,
       pattern,
-      span: field.span.clone(),
+      span: field.span,
       ty: field.ty.clone().unwrap(),
     }
   }
@@ -785,7 +777,7 @@ impl<'reports> AstLowering<'reports> {
     let then_branch = Box::new(HirExpr {
       kind: HirExprKind::Block(then_branch_stmts),
       ty: Type::Void,
-      span: if_stmt.span.clone(),
+      span: if_stmt.span,
       id: if_stmt.then_branch_id,
     });
 
@@ -823,7 +815,7 @@ impl<'reports> AstLowering<'reports> {
           Some(Box::new(HirExpr {
             kind: HirExprKind::Block(else_stmts),
             ty: Type::Void,
-            span: if_stmt.span.clone(),
+            span: if_stmt.span,
             id: *block_id,
           }))
         }
@@ -836,7 +828,7 @@ impl<'reports> AstLowering<'reports> {
     HirExpr {
       kind: HirExprKind::If { condition, then_branch, else_branch },
       ty: Type::Void,
-      span: if_stmt.span.clone(),
+      span: if_stmt.span,
       id: if_stmt.then_branch_id,
     }
   }

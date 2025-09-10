@@ -32,8 +32,8 @@ pub enum CompilerKind {
 impl CompilerKind {
   pub fn default_extension(&self) -> &str {
     match self {
-      CompilerKind::Msvc => "exe",
-      CompilerKind::Gcc | CompilerKind::Clang => {
+      Self::Msvc => "exe",
+      Self::Gcc | Self::Clang => {
         if cfg!(windows) {
           "exe"
         } else {
@@ -44,22 +44,22 @@ impl CompilerKind {
   }
 
   pub fn is_unix_style(&self) -> bool {
-    matches!(self, CompilerKind::Gcc | CompilerKind::Clang)
+    matches!(self, Self::Gcc | Self::Clang)
   }
 
   pub fn name(&self) -> &str {
     match self {
-      CompilerKind::Msvc => "MSVC",
-      CompilerKind::Gcc => "GCC",
-      CompilerKind::Clang => "Clang",
+      Self::Msvc => "MSVC",
+      Self::Gcc => "GCC",
+      Self::Clang => "Clang",
     }
   }
 
   pub fn executable_names(&self) -> &[&str] {
     match self {
-      CompilerKind::Msvc => &["cl.exe", "cl"],
-      CompilerKind::Gcc => &["gcc.exe", "gcc"],
-      CompilerKind::Clang => &["clang.exe", "clang"],
+      Self::Msvc => &["cl.exe", "cl"],
+      Self::Gcc => &["gcc.exe", "gcc"],
+      Self::Clang => &["clang.exe", "clang"],
     }
   }
 }
@@ -70,7 +70,7 @@ impl Display for CompilerKind {
   }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompilerVersion {
   pub major: u32,
   pub minor: u32,
@@ -114,7 +114,7 @@ impl Compiler {
     let mut compiler = Self { path, kind, version: None, validated: false };
 
     if let Err(e) = compiler.detect_version() {
-      warn!("Failed to detect compiler version: {}", e);
+      warn!("Failed to detect compiler version: {e}");
     }
 
     compiler.validate()?;
@@ -160,7 +160,7 @@ impl Compiler {
     self.version = self.parse_version(&output_str);
 
     if let Some(ref version) = self.version {
-      debug!("Detected compiler version: {}", version);
+      debug!("Detected compiler version: {version}");
     }
 
     Ok(())
@@ -203,7 +203,7 @@ impl Compiler {
       let minor = parts[1].parse().ok()?;
       let patch = parts.get(2).and_then(|p| p.parse().ok());
 
-      Some(CompilerVersion { major, minor, patch, raw: raw_output.to_string() })
+      Some(CompilerVersion { major, minor, patch, raw: raw_output.to_owned() })
     } else {
       None
     }
@@ -224,10 +224,10 @@ int main() {
 
     match self.kind {
       CompilerKind::Msvc => {
-        cmd.args(&["/EP", "/TC"]);
+        cmd.args(["/EP", "/TC"]);
       }
       _ => {
-        cmd.args(&["-E", "-x", "c", "-"]);
+        cmd.args(["-E", "-x", "c", "-"]);
       }
     }
 
@@ -239,7 +239,7 @@ int main() {
       .map_err(|e| CompilerError::ValidationFailed(e.to_string()))?;
 
     if let Some(stdin) = child.stdin.as_mut() {
-      use std::io::Write;
+      use std::io::Write as _;
       stdin
         .write_all(test_code.as_bytes())
         .map_err(|e| CompilerError::ValidationFailed(e.to_string()))?;
@@ -251,8 +251,7 @@ int main() {
     if !output.status.success() {
       let stderr = String::from_utf8_lossy(&output.stderr);
       return Err(CompilerError::ValidationFailed(format!(
-        "Compiler validation failed: {}",
-        stderr
+        "Compiler validation failed: {stderr}"
       )));
     }
 
@@ -268,22 +267,19 @@ int main() {
   pub fn create_c_command(&self) -> Command {
     let mut cmd = self.create_basic_command();
 
-    match self.kind {
-      CompilerKind::Msvc => {
-        cmd.arg("/nologo");
-        cmd.arg("/TC");
-        cmd.arg("/std:c17");
-      }
-      _ => {
-        cmd.arg("-std=c17");
-        cmd.arg("-Wall");
-        cmd.arg("-Wextra");
+    if self.kind == CompilerKind::Msvc {
+      cmd.arg("/nologo");
+      cmd.arg("/TC");
+      cmd.arg("/std:c17");
+    } else {
+      cmd.arg("-std=c17");
+      cmd.arg("-Wall");
+      cmd.arg("-Wextra");
 
-        if self.kind == CompilerKind::Gcc {
-          cmd.arg("-Wformat=2");
-          cmd.arg("-Wformat-security");
-          cmd.arg("-Wnull-dereference");
-        }
+      if self.kind == CompilerKind::Gcc {
+        cmd.arg("-Wformat=2");
+        cmd.arg("-Wformat-security");
+        cmd.arg("-Wnull-dereference");
       }
     }
 

@@ -2,12 +2,11 @@ use crate::codegen::c_functions::is_standard_c_function;
 use crate::codegen::match_expr::generate_match;
 use crate::codegen::resolver::OrderResolver;
 use crate::codegen::writer::CodegenWriter;
-use crate::ir::IrMatchArm;
 use crate::{
   codegen::{Codegen, Gen},
   ir::{
     IrBlock, IrEnum, IrExpr, IrExprKind, IrField, IrFunction, IrItem, IrItemKind, IrModule,
-    IrParam, IrPattern, IrStmt, IrStruct, IrTypeExtension, IrVariantData,
+    IrParam, IrStmt, IrStruct, IrTypeExtension, IrVariantData,
   },
 };
 use anyhow::Result;
@@ -305,18 +304,16 @@ impl Gen for IrFunction {
       p.dedent();
       p.write("}; ");
       p.newline();
-    } else {
-      if let Some(body) = &self.body {
-        if body.stmts.is_empty() {
-          p.writeln(" {};");
-          return;
-        }
-
-        p.write(" ");
-        body.generate(p);
-      } else {
-        p.writeln(";");
+    } else if let Some(body) = &self.body {
+      if body.stmts.is_empty() {
+        p.writeln(" {};");
+        return;
       }
+
+      p.write(" ");
+      body.generate(p);
+    } else {
+      p.writeln(";");
     }
     p.newline();
   }
@@ -514,7 +511,7 @@ impl Gen for IrExpr {
         false_expr.generate(p);
       }
       IrExprKind::If { condition, then_branch, else_branch } => {
-        generate_if(p, condition, then_branch, else_branch)
+        generate_if(p, condition, then_branch, else_branch);
       }
       IrExprKind::Match { scrutinee, arms } => generate_match(p, scrutinee, arms),
     }
@@ -531,25 +528,22 @@ fn generate_if(
   condition.generate(p);
   p.write(")");
 
-  match &then_branch.kind {
-    IrExprKind::Block(block) => {
-      p.write(" {\n");
-      p.indent();
-      for stmt in &block.stmts {
-        stmt.generate(p);
-      }
-      p.dedent();
-      p.write_indented("}");
+  if let IrExprKind::Block(block) = &then_branch.kind {
+    p.write(" {\n");
+    p.indent();
+    for stmt in &block.stmts {
+      stmt.generate(p);
     }
-    _ => {
-      p.write(" {\n");
-      p.indent();
-      p.write_indented("");
-      then_branch.generate(p);
-      p.writeln(";");
-      p.dedent();
-      p.write_indented("}");
-    }
+    p.dedent();
+    p.write_indented("}");
+  } else {
+    p.write(" {\n");
+    p.indent();
+    p.write_indented("");
+    then_branch.generate(p);
+    p.writeln(";");
+    p.dedent();
+    p.write_indented("}");
   }
 
   if let Some(else_branch) = else_branch {

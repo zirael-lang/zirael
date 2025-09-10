@@ -1,5 +1,5 @@
 use crate::{MonomorphizationId, SymbolId};
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::HashSet;
 use std::fmt;
 use std::hash::RandomState;
 
@@ -20,8 +20,8 @@ pub enum SymbolRelationNode {
 impl fmt::Display for SymbolRelationNode {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     match self {
-      SymbolRelationNode::Symbol(id) => write!(f, "Symbol({:?})", id),
-      SymbolRelationNode::Monomorphization(id) => write!(f, "Mono({:?})", id),
+      Self::Symbol(id) => write!(f, "Symbol({id:?})"),
+      Self::Monomorphization(id) => write!(f, "Mono({id:?})"),
     }
   }
 }
@@ -63,7 +63,7 @@ impl CycleInfo {
       let arrow = if i == self.cycle_nodes.len() - 1 { "╰──→" } else { "├──→" };
       let connector = if i == 0 { "" } else { "│   " };
 
-      println!("  {}{}  {}", connector, arrow, node);
+      println!("  {connector}{arrow}  {node}");
     }
 
     if !self.cycle_nodes.is_empty() {

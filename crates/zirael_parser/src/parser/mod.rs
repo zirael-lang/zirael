@@ -12,7 +12,7 @@ use crate::{
   get_tokens,
 };
 use id_arena::Arena;
-use std::{ops::Range, path::PathBuf};
+use std::path::PathBuf;
 use zirael_utils::prelude::*;
 
 pub type ParseResult<'report, T> = Result<T, ReportBuilder<'report>>;
@@ -64,7 +64,7 @@ impl<'a> Parser<'a> {
   }
 
   pub fn peek_span(&self) -> Span {
-    self.peek().map(|token| token.span.clone()).unwrap_or_default()
+    self.peek().map(|token| token.span).unwrap_or_default()
   }
 
   pub fn prev(&self) -> Option<&Token> {
@@ -76,7 +76,7 @@ impl<'a> Parser<'a> {
   }
 
   pub fn prev_span(&self) -> Span {
-    self.prev().map(|token| token.span.clone()).unwrap_or_default()
+    self.prev().map(|token| token.span).unwrap_or_default()
   }
 
   pub fn peek_ahead(&self, offset: usize) -> Option<&Token> {
@@ -214,7 +214,7 @@ impl<'a> Parser<'a> {
           },
           ReportKind::Error,
         )
-        .label("here", token.span.clone());
+        .label("here", token.span);
         self.add_report(error);
         None
       }
@@ -241,7 +241,7 @@ impl<'a> Parser<'a> {
             format!("Expected one of {:?}, found {:?}", expected, token.kind),
             ReportKind::Error,
           )
-          .label("here", token.span.clone()),
+          .label("here", token.span),
         );
         None
       }
@@ -295,7 +295,7 @@ impl<'a> Parser<'a> {
       }
 
       let ident = ident.clone();
-      let span = token.span.clone();
+      let span = token.span;
       self.advance();
       return Some(get_or_intern(&ident, Some(span)));
     }

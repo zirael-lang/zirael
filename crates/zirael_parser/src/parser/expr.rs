@@ -1,5 +1,4 @@
 use crate::{
-  BinaryOp::Ge,
   GenericCall, Keyword, TokenKind, Type,
   ast::{
     BinaryOp, Expr, ExprKind, Literal, MatchArm, Path, PathSegment, Pattern, PatternField, UnaryOp,
@@ -56,7 +55,7 @@ impl<'a> Parser<'a> {
     let condition = self.parse_logical_or();
 
     if self.match_token(TokenKind::Question) {
-      let start_span = condition.span.clone();
+      let start_span = condition.span;
       let true_expr = self.parse_ternary();
 
       if !self.match_token(TokenKind::Colon) {
@@ -65,7 +64,7 @@ impl<'a> Parser<'a> {
       }
 
       let false_expr = self.parse_ternary();
-      let end_span = false_expr.span.clone();
+      let end_span = false_expr.span;
 
       return self.new_expr(
         ExprKind::Ternary {
@@ -121,10 +120,10 @@ impl<'a> Parser<'a> {
         _ => break,
       };
 
-      let start_span = left.span.clone();
+      let start_span = left.span;
       self.advance();
       let right = self.parse_binary_expr(precedence + 1);
-      let end_span = right.span.clone();
+      let end_span = right.span;
       left = self.new_expr(
         ExprKind::Binary { left: Box::new(left), op, right: Box::new(right) },
         start_span.to(end_span),
@@ -150,7 +149,7 @@ impl<'a> Parser<'a> {
       if let Some(op) = unary_op {
         self.advance();
         let expr = self.parse_unary();
-        let end_span = expr.span.clone();
+        let end_span = expr.span;
         return self
           .new_expr(ExprKind::Unary(Box::new(op), Box::new(expr)), start_span.to(end_span));
       }
@@ -191,7 +190,7 @@ impl<'a> Parser<'a> {
   }
 
   fn parse_function_call(&mut self, callee: Expr) -> Expr {
-    let start_span = callee.span.clone();
+    let start_span = callee.span;
     let type_annotations = self.parse_type_annotations();
 
     if !self.match_token(TokenKind::ParenOpen) {
@@ -235,7 +234,7 @@ impl<'a> Parser<'a> {
   }
 
   fn parse_method_call(&mut self, base: Expr) -> Expr {
-    let start_span = base.span.clone();
+    let start_span = base.span;
 
     let mut chain = vec![base];
 
@@ -279,7 +278,7 @@ impl<'a> Parser<'a> {
   }
 
   fn parse_field_access(&mut self, base: Expr) -> Expr {
-    let start_span = base.span.clone();
+    let start_span = base.span;
     let mut field_chain = vec![base];
 
     while self.check(&TokenKind::Dot) {
@@ -299,7 +298,7 @@ impl<'a> Parser<'a> {
     }
 
     if field_chain.len() > 1 {
-      let end_span = field_chain.last().unwrap().span.clone();
+      let end_span = field_chain.last().unwrap().span;
       self.new_expr(ExprKind::FieldAccess(field_chain), start_span.to(end_span))
     } else {
       field_chain.into_iter().next().unwrap()
@@ -307,7 +306,7 @@ impl<'a> Parser<'a> {
   }
 
   fn parse_index_access(&mut self, base: Expr) -> Expr {
-    let start_span = base.span.clone();
+    let start_span = base.span;
     self.advance();
 
     let index = self.parse_expr();
@@ -415,7 +414,7 @@ impl<'a> Parser<'a> {
           if self.check(&TokenKind::BraceOpen) {
             return self.parse_struct_initializer_from_path(Path::from_identifier(
               identifier,
-              identifier_span.clone(),
+              identifier_span,
             ));
           }
 
@@ -661,7 +660,7 @@ impl<'a> Parser<'a> {
     first_identifier: Identifier,
     first_span: Span,
   ) -> Path {
-    let start_span = first_span.clone();
+    let start_span = first_span;
     let mut segments = vec![PathSegment::new(first_identifier, first_span)];
 
     while self.match_token(TokenKind::DoubleColon) {
@@ -675,16 +674,16 @@ impl<'a> Parser<'a> {
       }
     }
 
-    let end_span = segments.last().map(|s| s.span.clone()).unwrap_or(start_span.clone());
+    let end_span = segments.last().map(|s| s.span).unwrap_or(start_span);
     Path::new(segments, start_span.to(end_span))
   }
 
   fn parse_path_continuation(&mut self, expr: Expr) -> Expr {
-    let start_span = expr.span.clone();
+    let start_span = expr.span;
 
     let mut segments = match &expr.kind {
       ExprKind::Identifier(ident, _) => {
-        vec![PathSegment::new(*ident, expr.span.clone())]
+        vec![PathSegment::new(*ident, expr.span)]
       }
       ExprKind::Path(path) => path.segments.clone(),
       _ => {
@@ -708,8 +707,8 @@ impl<'a> Parser<'a> {
       }
     }
 
-    let end_span = segments.last().map(|s| s.span.clone()).unwrap_or(start_span.clone());
-    let path = Path::new(segments, start_span.clone().to(end_span.clone()));
+    let end_span = segments.last().map(|s| s.span).unwrap_or(start_span);
+    let path = Path::new(segments, start_span.clone().to(end_span));
 
     if self.check(&TokenKind::BraceOpen) {
       return self.parse_struct_initializer_from_path(path);
@@ -719,7 +718,7 @@ impl<'a> Parser<'a> {
   }
 
   fn parse_static_call_from_expr(&mut self, expr: Expr) -> Expr {
-    let start_span = expr.span.clone();
+    let start_span = expr.span;
 
     self.advance();
 
@@ -733,7 +732,7 @@ impl<'a> Parser<'a> {
     };
 
     let callee = {
-      let combined_span = start_span.clone().to(method_name.span.clone());
+      let combined_span = start_span.clone().to(method_name.span);
       self.new_expr(ExprKind::FieldAccess(vec![expr, method_name]), combined_span)
     };
 
@@ -880,7 +879,7 @@ impl<'a> Parser<'a> {
   }
 
   fn parse_path_from_identifier(&mut self, first_identifier: Identifier, first_span: Span) -> Expr {
-    let start_span = first_span.clone();
+    let start_span = first_span;
     let mut segments = vec![PathSegment::new(first_identifier, first_span)];
 
     while self.match_token(TokenKind::DoubleColon) {
@@ -899,8 +898,8 @@ impl<'a> Parser<'a> {
       }
     }
 
-    let end_span = segments.last().map(|s| s.span.clone()).unwrap_or(start_span.clone());
-    let path = Path::new(segments, start_span.clone().to(end_span.clone()));
+    let end_span = segments.last().map(|s| s.span).unwrap_or(start_span);
+    let path = Path::new(segments, start_span.clone().to(end_span));
 
     if self.check(&TokenKind::BraceOpen) {
       return self.parse_struct_initializer_from_path(path);
@@ -910,7 +909,7 @@ impl<'a> Parser<'a> {
   }
 
   fn parse_struct_initializer_from_path(&mut self, path: Path) -> Expr {
-    let start_span = path.span.clone();
+    let start_span = path.span;
     self.expect(TokenKind::BraceOpen);
 
     let mut fields = HashMap::new();
@@ -965,7 +964,7 @@ impl<'a> Parser<'a> {
     let expr_id = self.fresh_id();
     self.new_expr(
       ExprKind::StructInit {
-        name: Box::new(Expr::new(ExprKind::Path(path), start_span.clone(), expr_id)),
+        name: Box::new(Expr::new(ExprKind::Path(path), start_span, expr_id)),
         call_info: None,
         fields,
       },

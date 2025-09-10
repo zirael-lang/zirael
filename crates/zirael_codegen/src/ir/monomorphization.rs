@@ -1,4 +1,4 @@
-use crate::ir::{HirLowering, IrBlock, IrExpr, IrExprKind, IrField, IrFunction, IrItem, IrItemKind, IrMatchArm, IrModule, IrParam, IrPattern, IrStmt, IrStruct, IrVariant, IrVariantData};
+use crate::ir::{HirLowering, IrBlock, IrExpr, IrExprKind, IrField, IrFunction, IrItem, IrItemKind, IrMatchArm, IrModule, IrParam, IrStmt, IrStruct, IrVariant, IrVariantData};
 use itertools::Itertools as _;
 use std::{
   collections::{HashMap, HashSet},
@@ -207,7 +207,7 @@ impl<'reports> HirLowering<'reports> {
           mono_id: Some(*id),
         };
 
-        self.add_monomorphization_dependencies(*id, &entry, concrete_types);
+        self.add_monomorphization_dependencies(*id, entry, concrete_types);
 
         Some(mono_item)
       }
@@ -229,7 +229,7 @@ impl<'reports> HirLowering<'reports> {
           mono_id: Some(*id),
         };
 
-        self.add_monomorphization_dependencies(*id, &entry, concrete_types);
+        self.add_monomorphization_dependencies(*id, entry, concrete_types);
 
         Some(mono_item)
       }

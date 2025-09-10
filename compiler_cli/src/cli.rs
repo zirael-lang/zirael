@@ -1,6 +1,4 @@
-use clap::{Parser, builder::Styles};
-use std::env::current_dir;
-use zirael_c_compiler::CBuild;
+use clap::Parser as _;
 use zirael_core::prelude::*;
 
 pub fn try_cli() -> Result<()> {

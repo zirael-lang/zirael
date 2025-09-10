@@ -2,7 +2,7 @@ use crate::{
   compiler::{Compiler, CompilerKind},
   detect::{detect_compiler, resolve_from_kind},
 };
-use anyhow::{Context, Result, bail, ensure};
+use anyhow::{Context as _, Result, bail, ensure};
 use indicatif::{ProgressBar, ProgressStyle};
 use log::{debug, warn};
 use std::{
@@ -151,12 +151,12 @@ impl CBuild {
 
       let obj_name =
         Path::new(source_file).file_stem().unwrap_or_else(|| OsStr::new("obj")).to_string_lossy();
-      let obj_file = format!("{}.o", obj_name);
+      let obj_file = format!("{obj_name}.o");
 
       let mut command = Command::new(self.compiler.path());
       self.configure_compile_command(&mut command, source_file, &obj_file)?;
 
-      debug!("Executing compilation command: {:?}", command);
+      debug!("Executing compilation command: {command:?}");
 
       let output =
         command.current_dir(&*self.build_dir).output().context("Failed to execute compiler")?;
@@ -212,7 +212,7 @@ impl CBuild {
     let mut command = Command::new(self.compiler.path());
     self.configure_command(&mut command, output_name)?;
 
-    debug!("Executing compilation command: {:?}", command);
+    debug!("Executing compilation command: {command:?}");
 
     pb.set_message(format!("Running {} compiler...", self.compiler.kind().name()));
 
@@ -278,7 +278,7 @@ impl CBuild {
     // Compile only (don't link)
     if self.compiler.kind() == &CompilerKind::Msvc {
       command.arg("/c");
-      command.arg(format!("/Fo:{}", obj_file));
+      command.arg(format!("/Fo:{obj_file}"));
     } else {
       command.arg("-c");
       command.arg("-o").arg(obj_file);
@@ -309,7 +309,7 @@ impl CBuild {
       command.arg(obj_file);
     }
 
-    debug!("Executing library creation command: {:?}", command);
+    debug!("Executing library creation command: {command:?}");
 
     let output = command
       .current_dir(&*self.build_dir)
@@ -390,9 +390,9 @@ impl CBuild {
     }
 
     let flag = if self.compiler.kind() == &CompilerKind::Msvc {
-      format!("/std:{}", std_version)
+      format!("/std:{std_version}")
     } else {
-      format!("-std={}", std_version)
+      format!("-std={std_version}")
     };
 
     command.arg(flag);
@@ -459,7 +459,7 @@ impl CBuild {
             if name.starts_with("lib") {
               base_path.with_extension("a")
             } else {
-              self.build_dir.join(format!("lib{}.a", name))
+              self.build_dir.join(format!("lib{name}.a"))
             }
           }
         }

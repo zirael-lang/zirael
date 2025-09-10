@@ -161,7 +161,7 @@ impl Expr {
   pub fn as_path_or_simple(&self) -> Option<Path> {
     match &self.kind {
       ExprKind::Path(path) => Some(path.clone()),
-      ExprKind::Identifier(ident, _) => Some(Path::from_identifier(*ident, self.span.clone())),
+      ExprKind::Identifier(ident, _) => Some(Path::from_identifier(*ident, self.span)),
       _ => None,
     }
   }

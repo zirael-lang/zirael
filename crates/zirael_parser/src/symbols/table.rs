@@ -274,7 +274,7 @@ impl SymbolTable {
   pub fn get_symbol_unchecked(&self, id: &SymbolId) -> Symbol {
     match self.get_symbol(*id) {
       Ok(symbol) => symbol,
-      Err(_) => panic!("Symbol with ID {:?} not found in symbol table", id),
+      Err(_) => panic!("Symbol with ID {id:?} not found in symbol table"),
     }
   }
 
