@@ -201,7 +201,10 @@ impl<'reports> AstWalker<'reports> for MemoryAnalysis<'reports> {
 
   fn visit_identifier(&mut self, _id: &mut Identifier, sym_id: &mut Option<SymbolId>, span: Span) {
     let sym_id = sym_id.unwrap();
-    let symbol = self.symbol_table.get_symbol_unchecked(&sym_id);
+    let symbol = match self.symbol_table.get_symbol(sym_id) {
+      Ok(symbol) => symbol,
+      Err(_) => return,
+    };
 
     if let SymbolKind::Variable { is_moved, .. } = symbol.kind
       && let Some(moved) = is_moved
@@ -215,7 +218,7 @@ impl<'reports> AstWalker<'reports> for MemoryAnalysis<'reports> {
       let sym_id = self.extract_symbol_from_return_value(value);
 
       if let Some(sym_id) = sym_id
-        && let Some(symbol) = self.symbol_table.get_symbol(sym_id)
+        && let Ok(symbol) = self.symbol_table.get_symbol(sym_id)
         && symbol.kind.is_value()
         && self.symbol_table.is_borrowed(sym_id).is_some()
       {

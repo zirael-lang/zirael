@@ -214,12 +214,22 @@ impl SymbolTable {
     self.read(|table| table.global_scope)
   }
 
-  pub fn get_scope(&self, id: ScopeId) -> Option<Scope> {
+  pub fn get_scope(&self, id: ScopeId) -> Result<Scope, SymbolTableError> {
+    self.read(|table| {
+      table.scopes_arena.get(id).cloned().ok_or(SymbolTableError::ScopeNotFound(id))
+    })
+  }
+
+  pub fn get_scope_opt(&self, id: ScopeId) -> Option<Scope> {
     self.read(|table| table.scopes_arena.get(id).cloned())
   }
 
+  #[deprecated(note = "Use get_scope for better error handling")]
   pub fn get_scope_unchecked(&self, id: ScopeId) -> Scope {
-    self.read(|table| table.scopes_arena.get(id).cloned().unwrap())
+    match self.get_scope(id) {
+      Ok(scope) => scope,
+      Err(_) => panic!("Scope with ID {:?} not found in symbol table", id),
+    }
   }
 
   pub fn lookup_in_scope(&self, name: Identifier, scope: ScopeId) -> Option<SymbolId> {
@@ -239,12 +249,9 @@ impl SymbolTable {
   pub fn mark_drop(&self, symbol_id: SymbolId, span: Span) {
     self.write(|table| {
       let current_scope = table.current_traversal_scope;
-      table
-        .scopes_arena
-        .get_mut(current_scope)
-        .unwrap()
-        .drop_stack
-        .push(DropStackEntry::new(symbol_id, span));
+      if let Some(scope) = table.scopes_arena.get_mut(current_scope) {
+        scope.drop_stack.push(DropStackEntry::new(symbol_id, span));
+      }
     });
   }
 
@@ -261,7 +268,10 @@ impl SymbolTable {
 
   pub fn symbol_from_expr(&self, expr: &Expr) -> Option<(Symbol, SymbolId)> {
     if let ExprKind::Identifier(_, sym_id) = expr.kind {
-      self.get_symbol(sym_id?).map(|sym| (sym, sym_id.unwrap()))
+      match self.get_symbol(sym_id?) {
+        Ok(sym) => Some((sym, sym_id.unwrap())),
+        Err(_) => None,
+      }
     } else {
       None
     }
@@ -333,7 +343,13 @@ impl SymbolTable {
     let extensions = self.collect_ty_extensions();
 
     for ext in extensions {
-      let symbol = self.get_symbol_unchecked(&ext);
+      let symbol = match self.get_symbol(ext) {
+        Ok(symbol) => symbol,
+        Err(_) => {
+          debug!("Could not retrieve extension symbol {ext:?}");
+          return HashMap::new();
+        }
+      };
 
       if let SymbolKind::TypeExtension { ty, methods } = symbol.kind {
         exts.entry(ty).or_insert_with(Vec::new).extend(methods);

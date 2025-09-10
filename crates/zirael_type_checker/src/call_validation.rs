@@ -1,8 +1,6 @@
 use crate::TypeInference;
-use zirael_parser::{Expr, FunctionSignature, Parameter, SymbolId, Type};
+use zirael_parser::{Expr, FunctionSignature, Parameter, SymbolKind, Type};
 use zirael_utils::prelude::Span;
-use std::collections::HashMap;
-use zirael_utils::prelude::Identifier;
 
 impl<'reports> TypeInference<'reports> {
   pub fn validate_argument_count(
@@ -82,11 +80,11 @@ impl<'reports> TypeInference<'reports> {
 
   pub fn validate_callable_symbol(
     &mut self,
-    symbol_kind: &zirael_parser::SymbolKind,
+    symbol_kind: &SymbolKind,
     call_span: &Span,
   ) -> bool {
     match symbol_kind {
-      zirael_parser::SymbolKind::Function { .. } => true,
+      SymbolKind::Function { .. } => true,
       _ => {
         self.simple_error(
           &format!("cannot call non-function type: {}", symbol_kind.name()),

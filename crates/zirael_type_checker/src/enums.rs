@@ -18,9 +18,15 @@ impl<'reports> TypeInference<'reports> {
     call_info: &mut Option<CallInfo>,
   ) -> Type {
     let (variant_fields, enum_generics, enum_name, _enum_sym_id) = {
-      let variant_symbol = self.symbol_table.get_symbol_unchecked(variant_id);
+      let variant_symbol = match self.symbol_table.get_symbol(*variant_id) {
+        Ok(symbol) => symbol,
+        Err(_) => return Type::Error,
+      };
       if let SymbolKind::EnumVariant { parent_enum, data, .. } = &variant_symbol.kind {
-        let enum_symbol = self.symbol_table.get_symbol_unchecked(parent_enum);
+        let enum_symbol = match self.symbol_table.get_symbol(*parent_enum) {
+          Ok(symbol) => symbol,
+          Err(_) => return Type::Error,
+        };
         if let SymbolKind::Enum { generics, .. } = &enum_symbol.kind {
           match data {
             EnumVariantData::Unit => {

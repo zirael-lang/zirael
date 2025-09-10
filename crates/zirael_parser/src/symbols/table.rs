@@ -220,11 +220,18 @@ impl SymbolTable {
   pub fn lookup(&self, name: &Identifier) -> Option<SymbolId> {
     self.read(|table| {
       let mut current_scope = Some(table.current_traversal_scope);
+      let mut visited_scopes = HashSet::new();
 
       while let Some(scope_id) = current_scope {
+        if visited_scopes.contains(&scope_id) {
+          return None;
+        }
+        visited_scopes.insert(scope_id);
+
         if let Some(&symbol_id) = table.name_lookup.get(&(*name, scope_id)) {
           return Some(symbol_id);
         }
+        
         current_scope = table.scopes_arena.get(scope_id)?.parent;
       }
 
@@ -232,23 +239,52 @@ impl SymbolTable {
     })
   }
 
-  pub fn lookup_symbol(&self, name: &Identifier) -> Option<Symbol> {
+  pub fn lookup_and_get_symbol(&self, name: &Identifier) -> Option<Symbol> {
     let symbol_id = self.lookup(name)?;
+    self.get_symbol_opt(symbol_id)
+  }
+
+  pub fn lookup_symbol_checked(&self, name: &Identifier) -> Result<Symbol, SymbolTableError> {
+    let symbol_id = self.lookup(name).ok_or_else(|| SymbolTableError::SymbolNotFound {
+      name: *name,
+      scope: self.read(|table| table.current_traversal_scope),
+    })?;
     self.get_symbol(symbol_id)
   }
 
-  pub fn get_symbol(&self, id: SymbolId) -> Option<Symbol> {
+  pub fn lookup_symbol(&self, name: &Identifier) -> Option<Symbol> {
+    let symbol_id = self.lookup(name)?;
+    self.get_symbol_opt(symbol_id)
+  }
+
+  pub fn get_symbol(&self, id: SymbolId) -> Result<Symbol, SymbolTableError> {
+    self.read(|table| {
+      table.symbols.get(id).cloned().ok_or(SymbolTableError::SymbolNotFound {
+        name: get_or_intern("__unknown__", None),
+        scope: table.current_traversal_scope,
+      })
+    })
+  }
+
+  pub fn get_symbol_opt(&self, id: SymbolId) -> Option<Symbol> {
     self.read(|table| table.symbols.get(id).cloned())
   }
 
+  #[deprecated(note = "Use get_symbol for proper error handling")]
   pub fn get_symbol_unchecked(&self, id: &SymbolId) -> Symbol {
-    self.read(|table| table.symbols.get(*id).cloned().unwrap())
+    match self.get_symbol(*id) {
+      Ok(symbol) => symbol,
+      Err(_) => panic!("Symbol with ID {:?} not found in symbol table", id),
+    }
   }
 
-  pub fn get_symbol_unchecked_mut<R>(&self, id: &SymbolId, f: impl FnOnce(&mut Symbol) -> R) -> R {
+  pub fn modify_symbol<R>(&self, id: SymbolId, f: impl FnOnce(&mut Symbol) -> R) -> Result<R, SymbolTableError> {
     self.write(|table| {
-      let symbol = table.symbols.get_mut(*id).unwrap();
-      f(symbol)
+      let symbol = table.symbols.get_mut(id).ok_or(SymbolTableError::SymbolNotFound {
+        name: get_or_intern("__unknown__", None),
+        scope: table.current_traversal_scope,
+      })?;
+      Ok(f(symbol))
     })
   }
 
@@ -314,12 +350,22 @@ impl SymbolTable {
   pub fn is_ancestor_scope(&self, ancestor: ScopeId, descendant: ScopeId) -> bool {
     self.read(|table| {
       let mut current = Some(descendant);
+      let mut visited = HashSet::new();
 
       while let Some(scope_id) = current {
         if scope_id == ancestor {
           return true;
         }
-        current = table.scopes_arena.get(scope_id).expect("missing").parent;
+        
+        if visited.contains(&scope_id) {
+          return false;
+        }
+        visited.insert(scope_id);
+
+        current = match table.scopes_arena.get(scope_id) {
+          Some(scope) => scope.parent,
+          None => return false,
+        };
       }
 
       false
@@ -413,7 +459,10 @@ impl SymbolTable {
         let symbols_in_scope = self.get_symbols_in_scope(scope_id);
 
         if let Some(symbol_id) = symbols_in_scope.iter().find_map(|(symbol_name, symbol_id)| {
-          let sym = self.get_symbol_unchecked(symbol_id);
+          let sym = match self.get_symbol(*symbol_id) {
+            Ok(symbol) => symbol,
+            Err(_) => return None,
+          };
 
           let is_similar =
             levenshtein(&resolve(name), &resolve(symbol_name)) <= 2 && predicate(&sym);
@@ -533,8 +582,10 @@ impl SymbolTable {
       }
 
       SymbolKind::EnumVariant { parent_enum, .. } => {
-        let parent_symbol = self.get_symbol_unchecked(parent_enum);
-        self.get_generics_for_symbol(&parent_symbol)
+        match self.get_symbol(*parent_enum) {
+          Ok(parent_symbol) => self.get_generics_for_symbol(&parent_symbol),
+          Err(_) => None,
+        }
       }
 
       _ => None,

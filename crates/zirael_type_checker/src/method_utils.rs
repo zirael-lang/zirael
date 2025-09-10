@@ -1,14 +1,20 @@
 use crate::TypeInference;
 use std::collections::HashMap;
 use zirael_parser::{Function, GenericParameter, Parameter, Type};
-use zirael_utils::prelude::{Identifier, warn};
+use zirael_utils::prelude::{Identifier, warn, resolve};
 
 impl<'reports> TypeInference<'reports> {
   /// Get the self type for a method based on its parent structure
   pub fn get_self_type_for_method(&mut self, func: &Function) -> Option<Type> {
     let func_symbol = self.symbol_table.lookup_symbol(&func.name)?;
     let struct_symbol_id = self.symbol_table.is_a_child_of_symbol(func_symbol.id)?;
-    let struct_symbol = self.symbol_table.get_symbol_unchecked(&struct_symbol_id);
+    let struct_symbol = match self.symbol_table.get_symbol(struct_symbol_id) {
+      Ok(symbol) => symbol,
+      Err(_) => {
+        warn!("Could not retrieve struct symbol for method {}", resolve(&func.name));
+        return None;
+      }
+    };
 
     match &struct_symbol.kind {
       zirael_parser::SymbolKind::Struct { generics, .. } | 
@@ -45,7 +51,13 @@ impl<'reports> TypeInference<'reports> {
   pub fn get_generics_for_method(&mut self, func: &Function) -> Option<HashMap<Identifier, Type>> {
     let func_symbol = self.symbol_table.lookup_symbol(&func.name)?;
     let struct_symbol_id = self.symbol_table.is_a_child_of_symbol(func_symbol.id)?;
-    let struct_symbol = self.symbol_table.get_symbol_unchecked(&struct_symbol_id);
+    let struct_symbol = match self.symbol_table.get_symbol(struct_symbol_id) {
+      Ok(symbol) => symbol,
+      Err(_) => {
+        warn!("Could not retrieve struct symbol for method {}", resolve(&func.name));
+        return None;
+      }
+    };
 
     match &struct_symbol.kind {
       zirael_parser::SymbolKind::Struct { generics, .. } | 

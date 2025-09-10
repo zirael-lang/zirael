@@ -68,7 +68,10 @@ impl<'reports> NameResolution<'reports> {
     expected: ExpectedSymbol,
   ) -> Option<SymbolId> {
     if let Some(id) = self.symbol_table.lookup(ident) {
-      let symbol = self.symbol_table.get_symbol_unchecked(&id);
+      let symbol = match self.symbol_table.get_symbol(id) {
+        Ok(symbol) => symbol,
+        Err(_) => return None,
+      };
 
       if !expected.matches(&symbol.kind) {
         let found_kind = article(symbol.kind.name()).dimmed().bold();
@@ -97,8 +100,9 @@ impl<'reports> NameResolution<'reports> {
     if let Some(sym_id) =
       self.symbol_table.find_similar_symbol(ident, |sym: &Symbol| expected.matches(&sym.kind))
     {
-      let symbol = self.symbol_table.get_symbol_unchecked(&sym_id);
-      report = self.add_suggestion_to_report(report, &symbol);
+      if let Ok(symbol) = self.symbol_table.get_symbol(sym_id) {
+        report = self.add_suggestion_to_report(report, &symbol);
+      }
     }
 
     if let Some(file_id) = self.processed_file {
@@ -114,9 +118,15 @@ impl<'reports> NameResolution<'reports> {
     symbol: &Symbol,
   ) -> ReportBuilder<'reports> {
     let scope = if let Some(imported_scope) = symbol.imported_from {
-      self.symbol_table.get_scope_unchecked(imported_scope)
+      match self.symbol_table.get_scope_opt(imported_scope) {
+        Some(scope) => scope,
+        None => return report,
+      }
     } else {
-      self.symbol_table.get_scope_unchecked(symbol.scope)
+      match self.symbol_table.get_scope_opt(symbol.scope) {
+        Some(scope) => scope,
+        None => return report,
+      }
     };
 
     if let ScopeType::Module(file_id) = scope.scope_type {
@@ -201,7 +211,10 @@ impl<'reports> NameResolution<'reports> {
     context_id: SymbolId,
     segment: &mut PathSegment,
   ) -> Option<SymbolId> {
-    let context_symbol = self.symbol_table.get_symbol_unchecked(&context_id);
+    let context_symbol = match self.symbol_table.get_symbol(context_id) {
+      Ok(symbol) => symbol,
+      Err(_) => return None,
+    };
 
     let found_id = match &context_symbol.kind {
       SymbolKind::Struct { methods, .. } => self.find_method_by_name(methods, &segment.identifier),
@@ -224,8 +237,10 @@ impl<'reports> NameResolution<'reports> {
     methods
       .iter()
       .find(|&&method_id| {
-        let method_symbol = self.symbol_table.get_symbol_unchecked(&method_id);
-        method_symbol.name == *name
+        match self.symbol_table.get_symbol(method_id) {
+          Ok(method_symbol) => method_symbol.name == *name,
+          Err(_) => false,
+        }
       })
       .copied()
   }
@@ -234,8 +249,10 @@ impl<'reports> NameResolution<'reports> {
     variants
       .iter()
       .find(|&&variant_id| {
-        let variant_symbol = self.symbol_table.get_symbol_unchecked(&variant_id);
-        variant_symbol.name == *name
+        match self.symbol_table.get_symbol(variant_id) {
+          Ok(variant_symbol) => variant_symbol.name == *name,
+          Err(_) => false,
+        }
       })
       .copied()
   }
@@ -246,7 +263,10 @@ impl<'reports> NameResolution<'reports> {
     expected: ExpectedSymbol,
     span: Span,
   ) -> Option<SymbolId> {
-    let symbol = self.symbol_table.get_symbol_unchecked(&symbol_id);
+    let symbol = match self.symbol_table.get_symbol(symbol_id) {
+      Ok(symbol) => symbol,
+      Err(_) => return None,
+    };
 
     if expected.matches(&symbol.kind) {
       Some(symbol_id)
@@ -275,7 +295,10 @@ impl<'reports> NameResolution<'reports> {
     )?;
     enum_segment.symbol_id = Some(enum_id);
 
-    let enum_symbol = self.symbol_table.get_symbol_unchecked(&enum_id);
+    let enum_symbol = match self.symbol_table.get_symbol(enum_id) {
+      Ok(symbol) => symbol,
+      Err(_) => return None,
+    };
     if let SymbolKind::Enum { variants, .. } = &enum_symbol.kind {
       let variant_segment = &mut path.segments[1];
       if let Some(variant_id) = self.find_variant_by_name(variants, &variant_segment.identifier) {
@@ -380,7 +403,10 @@ impl<'reports> AstWalker<'reports> for NameResolution<'reports> {
             SymbolRelationNode::Symbol(id),
           );
 
-          let symbol = self.symbol_table.get_symbol_unchecked(&id);
+          let symbol = match self.symbol_table.get_symbol(id) {
+            Ok(symbol) => symbol,
+            Err(_) => return,
+          };
           if let SymbolKind::EnumVariant { .. } = &symbol.kind {}
         }
       }
@@ -429,7 +455,10 @@ impl<'reports> AstWalker<'reports> for NameResolution<'reports> {
     match &mut _arm.pattern {
       Pattern::EnumVariant { path, .. } => {
         if let Some(id) = self.resolve_path_for_construction(path) {
-          let symbol = self.symbol_table.get_symbol_unchecked(&id);
+          let symbol = match self.symbol_table.get_symbol(id) {
+            Ok(symbol) => symbol,
+            Err(_) => return,
+          };
           if !matches!(symbol.kind, SymbolKind::EnumVariant { .. }) {
             self.error(
               "expected enum variant in pattern",

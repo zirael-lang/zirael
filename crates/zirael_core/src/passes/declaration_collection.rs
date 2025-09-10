@@ -148,8 +148,14 @@ impl<'reports> DeclarationCollection<'reports> {
     file_id: SourceFileId,
   ) {
     for conflict in conflicts {
-      let existing_symbol = self.symbol_table.get_symbol_unchecked(&conflict.existing_id);
-      let new_symbol = self.symbol_table.get_symbol_unchecked(&conflict.new_id);
+      let existing_symbol = match self.symbol_table.get_symbol(conflict.existing_id) {
+        Ok(symbol) => symbol,
+        Err(_) => continue, 
+      };
+      let new_symbol = match self.symbol_table.get_symbol(conflict.new_id) {
+        Ok(symbol) => symbol,
+        Err(_) => continue, 
+      };
 
       let conflict_message = format!(
         "import conflict while importing module {}",
@@ -189,7 +195,7 @@ impl<'reports> DeclarationCollection<'reports> {
     match self.symbol_table.insert(name, kind.clone(), Some(span.clone())) {
       Ok(id) => Some(id),
       Err(SymbolTableError::SymbolAlreadyExists { existing_id, .. }) => {
-        if let Some(existing_symbol) = self.symbol_table.get_symbol(existing_id) {
+        if let Ok(existing_symbol) = self.symbol_table.get_symbol(existing_id) {
           self.reports.add(
             file_id,
             ReportBuilder::builder(

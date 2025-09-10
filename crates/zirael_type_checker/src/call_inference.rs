@@ -19,7 +19,10 @@ impl<'reports> TypeInference<'reports> {
       None => return Type::Error,
     };
 
-    let sym = self.symbol_table().get_symbol_unchecked(&sym_id);
+    let sym = match self.symbol_table().get_symbol(sym_id) {
+      Ok(symbol) => symbol,
+      Err(_) => return Type::Error,
+    };
     let signature = match self.extract_function_signature(&sym.kind, &callee.span) {
       Some(sig) => sig,
       None => return Type::Error,
@@ -109,9 +112,14 @@ impl<'reports> TypeInference<'reports> {
 
     let unresolved = self.get_unresolved_generics(&signature.generics, &generic_mapping);
     if !unresolved.is_empty() {
-      let function_name = resolve(&self.symbol_table().get_symbol_unchecked(
-        &signature.parameters.first().unwrap().symbol_id.unwrap() // This needs fixing
-      ).name);
+      let function_name = if let Some(param) = signature.parameters.first()
+        && let Some(symbol_id) = param.symbol_id
+        && let Ok(symbol) = self.symbol_table().get_symbol(symbol_id)
+      {
+        resolve(&symbol.name)
+      } else {
+        "unknown".to_string()
+      };
       
       self.report_unresolved_generics(
         &unresolved,
