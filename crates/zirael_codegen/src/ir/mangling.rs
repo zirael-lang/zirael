@@ -164,6 +164,7 @@ impl<'reports> HirLowering<'reports> {
       Type::Float => "float".to_owned(),
       Type::Bool => "bool".to_owned(),
       Type::Void => "void".to_owned(),
+      Type::Never => "never".to_owned(),
       Type::Pointer(inner) => format!("ptr{}", self.mangle_type_for_name(inner)),
       Type::Reference(inner) => format!("ref{}", self.mangle_type_for_name(inner)),
       Type::Array(inner, Some(size)) => {
@@ -215,6 +216,7 @@ impl<'reports> HirLowering<'reports> {
       Type::Bool => result.push('b'),
       Type::Char => result.push('c'),
       Type::Void => result.push('v'),
+      Type::Never => result.push('n'),
       Type::String => {
         let name = "String";
         result.push_str(&format!("{}{}", name.len(), name));

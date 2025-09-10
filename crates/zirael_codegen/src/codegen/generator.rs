@@ -28,6 +28,7 @@ pub fn run_codegen(
   let header_file = PathBuf::from(info.name.clone()).with_extension("h");
 
   header.writeln("#include <stdlib.h>");
+  header.writeln("#include <stdio.h>");
   header.writeln("#include <uchar.h>");
   header.writeln("#include <stdint.h>");
   header.writeln("#include <stdbool.h>");
@@ -597,6 +598,7 @@ impl Gen for Type {
       Self::Char => p.write("char"),
       Self::String => p.write("char*"),
       Self::Bool => p.write("bool"),
+      Self::Never => p.write("void"),
       Self::Pointer(ty) | Self::Reference(ty) => {
         ty.generate(p);
         p.write("*");

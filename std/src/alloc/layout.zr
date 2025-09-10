@@ -1,5 +1,6 @@
 import "./alignment.zr"
 import "../option.zr"
+import "../panic.zr"
 
 /// Describes the memory layout requirements for a type or allocation.
 ///
@@ -23,7 +24,7 @@ struct Layout {
     /// Specifies the alignment boundary that allocated memory must satisfy.
     align: Alignment,
 
-    fn new<T>(size: int, align: int) {
+    fn new<T>(size: int, align: int): Layout {
         var alignment = Alignment::new(align);
 
         match alignment {
@@ -36,10 +37,10 @@ struct Layout {
                 Layout {
                     size: size,
                     align: value
-                };
+                }
             },
             Option::None => {
-
+                panic("Invalid alignment")
             }
         }
     }

@@ -1,0 +1,9 @@
+// TODO: this is temporary, until we implement stdlib features
+@extern fn exit(code: int);
+@extern fn puts(s: string): int;
+
+fn panic(message: string): ! {
+    puts("PANIC: ");
+    puts(message);
+    exit(1);
+}

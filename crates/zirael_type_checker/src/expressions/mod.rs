@@ -276,7 +276,11 @@ impl<'reports> TypeInference<'reports> {
     for stmt in stmts.iter_mut() {
       match &mut stmt.0 {
         StmtKind::Expr(expr) => {
-          self.infer_expr_with_expected(expr, expected_type);
+          block_type = self.infer_expr_with_expected(expr, expected_type);
+          if block_type.is_never() {
+            self.pop_scope();
+            return Type::Never;
+          }
         }
         StmtKind::Return(ret) => {
           if let Some(expr) = ret.value.as_mut() {
@@ -292,6 +296,10 @@ impl<'reports> TypeInference<'reports> {
         }
         StmtKind::If(if_stmt) => {
           block_type = self.infer_if_stmt(if_stmt);
+          if block_type.is_never() {
+            self.pop_scope();
+            return Type::Never;
+          }
         }
       }
     }
@@ -518,23 +526,34 @@ impl<'reports> TypeInference<'reports> {
     };
 
     match else_type {
-      Some(else_t) => {
-        if self.eq(&then_type, &else_t) {
-          then_type
+      Some(else_t) => match (&then_type, &else_t) {
+        (Type::Never, Type::Never) => Type::Never,
+        (Type::Never, other) => other.clone(),
+        (other, Type::Never) => other.clone(),
+        (then_ty, else_ty) => {
+          if self.eq(then_ty, else_ty) {
+            then_ty.clone()
+          } else {
+            self.error(
+              &format!(
+                "if-else branches have incompatible types: {} and {}",
+                self.format_type(then_ty),
+                self.format_type(else_ty)
+              ),
+              vec![],
+              vec![],
+            );
+            Type::Void
+          }
+        }
+      },
+      None => {
+        if then_type.is_never() {
+          Type::Void
         } else {
-          self.error(
-            &format!(
-              "if-else branches have incompatible types: {} and {}",
-              self.format_type(&then_type),
-              self.format_type(&else_t)
-            ),
-            vec![],
-            vec![],
-          );
           Type::Void
         }
       }
-      None => Type::Void,
     }
   }
 
@@ -552,6 +571,9 @@ impl<'reports> TypeInference<'reports> {
       match &mut stmt.0 {
         StmtKind::Expr(expr) => {
           last_type = self.infer_expr(expr);
+          if last_type.is_never() {
+            return Type::Never;
+          }
         }
         StmtKind::Return(ret) => {
           if let Some(expr) = ret.value.as_mut() {
@@ -567,6 +589,9 @@ impl<'reports> TypeInference<'reports> {
         }
         StmtKind::If(nested_if) => {
           last_type = self.infer_if_stmt(nested_if);
+          if last_type.is_never() {
+            return Type::Never;
+          }
         }
       }
     }

@@ -18,6 +18,7 @@ impl<'reports> TypeInference<'reports> {
       Type::String => "string".to_string(),
       Type::Float => "float".to_string(),
       Type::Void => "void".to_string(),
+      Type::Never => "!".to_string(),
       Type::Reference(reference) => format!("&{}", self.format_type(&reference)),
       Type::Pointer(pointer) => format!("*{}", self.format_type(&pointer)),
       Type::Array(ty, size) => format!("[{}, {}]", self.format_type(&ty), size.unwrap_or(0)),

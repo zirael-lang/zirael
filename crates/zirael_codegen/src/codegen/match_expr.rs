@@ -7,6 +7,7 @@ pub fn generate_match(p: &mut Codegen, scrutinee: &IrExpr, arms: &Vec<IrMatchArm
   p.indent();
 
   let is_void_match = arms[0].body.ty == Type::Void;
+  let is_never_match = arms.iter().any(|arm| arm.body.ty == Type::Never);
 
   if !is_void_match {
     p.write_indented("");
@@ -32,31 +33,35 @@ pub fn generate_match(p: &mut Codegen, scrutinee: &IrExpr, arms: &Vec<IrMatchArm
     p.writeln(") {");
     p.indent();
 
-    if !is_void_match {
-      match &arm.pattern {
-        IrPattern::Variable(var_name) => {
-          p.write_indented(&format!("auto {var_name} = scrutinee_value;\n"));
-        }
-        IrPattern::EnumVariant { tag_name, bindings } => {
-          for (ty, field_name, var_name) in bindings {
-            p.write_indented("");
-            ty.generate(p);
-            p.write(&format!(" {var_name} = scrutinee_value.data.{tag_name}.{field_name};\n"));
+      if !is_void_match {
+        match &arm.pattern {
+          IrPattern::Variable(var_name) => {
+            p.write_indented(&format!("auto {var_name} = scrutinee_value;\n"));
           }
+          IrPattern::EnumVariant { tag_name, bindings } => {
+            for (ty, field_name, var_name) in bindings {
+              p.write_indented("");
+              ty.generate(p);
+              p.write(&format!(" {var_name} = scrutinee_value.data.{tag_name}.{field_name};\n"));
+            }
+          }
+          _ => {}
         }
-        _ => {}
-      }
 
-      p.write_indented("match_result = ");
-      generate_arm_block(p, arm);
-      p.write(";\n");
-    } else {
-      p.write_indented("");
-      generate_arm_block(p, arm);
-      p.write(";\n");
-    }
-
-    p.dedent();
+        if arm.body.ty == Type::Never {
+          p.write_indented("");
+          generate_arm_block(p, arm);
+          p.write(";\n");
+        } else {
+          p.write_indented("match_result = ");
+          generate_arm_block(p, arm);
+          p.write(";\n");
+        }
+      } else {
+        p.write_indented("");
+        generate_arm_block(p, arm);
+        p.write(";\n");
+      }    p.dedent();
   }
 
   p.writeln("}");

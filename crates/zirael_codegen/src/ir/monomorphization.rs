@@ -127,7 +127,8 @@ impl<'reports> HirLowering<'reports> {
       | Type::Bool
       | Type::Char
       | Type::String
-      | Type::Void => true,
+      | Type::Void
+      | Type::Never => true,
       _ => true,
     }
   }
@@ -571,6 +572,7 @@ impl<'reports> HirLowering<'reports> {
       Type::Float => "float".hash(hasher),
       Type::Bool => "bool".hash(hasher),
       Type::Void => "void".hash(hasher),
+      Type::Never => "never".hash(hasher),
 
       Type::Pointer(inner) => {
         "ptr".hash(hasher);

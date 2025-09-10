@@ -592,6 +592,17 @@ impl<'a> Parser<'a> {
     let span = self.peek_span();
     let variadic = self.match_triple_dot();
 
+    if variadic && (self.check(&TokenKind::ParenClose) || self.check(&TokenKind::Comma)) {
+      return Some(Parameter {
+        name: get_or_intern("__variadic", None),
+        kind: ParameterKind::Variadic,
+        ty: Type::Void,
+        default_value: None,
+        span: span.to(self.prev_span()),
+        symbol_id: None,
+      });
+    }
+
     let is_ref = self.match_token(TokenKind::BitwiseAnd);
     let name = self.expect_identifier()?;
     let ty = if name == get_or_intern("self", None) {

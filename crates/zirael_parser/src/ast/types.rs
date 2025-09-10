@@ -13,6 +13,7 @@ pub enum Type {
   Float,
   Bool,
   Void,
+  Never,
   Pointer(Box<Type>),
   Reference(Box<Type>),
   Array(Box<Type>, Option<usize>),
@@ -51,6 +52,10 @@ impl Type {
   
   pub fn is_bool(&self) -> bool {
     matches!(self, Self::Bool)
+  }
+
+  pub fn is_never(&self) -> bool {
+    matches!(self, Self::Never)
   }
 }
 

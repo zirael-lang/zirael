@@ -24,7 +24,7 @@ impl MonomorphizationTable {
     self.entries.get_mut(&id)
   }
 
-  pub fn has_entries(&mut self, sym: SymbolId) -> bool {
+  pub fn has_entries(&self, sym: SymbolId) -> bool {
     self.entries.values().any(|entry| entry.original_id == sym)
   }
 }

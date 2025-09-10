@@ -13,8 +13,9 @@ use zirael_hir::hir::{
   expr::{FieldSymbol, HirExpr, HirExprKind, HirMatchArm, HirPattern, HirStmt},
 };
 use zirael_parser::{
-  AstId, DropStackEntry, EnumVariantData, MainFunction, MonomorphizationId, ScopeType, StructField,
-  SymbolId, SymbolKind, SymbolRelationNode, SymbolTable, Type, UnaryOp,
+  AstId, DropStackEntry, EnumVariantData, GenericParameter, MainFunction, MonomorphizationId,
+  ScopeType, StructField, Symbol, SymbolId, SymbolKind, SymbolRelationNode, SymbolTable, Type,
+  UnaryOp,
 };
 use zirael_type_checker::monomorphization::MonomorphizationTable;
 use zirael_utils::prelude::{
@@ -146,39 +147,78 @@ impl<'reports> HirLowering<'reports> {
     }
   }
 
-  fn get_monomorphized_variant_tag_name_from_scrutinee(
+  fn get_mono_variant_name(
     &mut self,
     variant_symbol_id: SymbolId,
     scrutinee_type: &Type,
   ) -> String {
     let variant_symbol = self.symbol_table.get_symbol_unchecked(&variant_symbol_id);
 
-    if let SymbolKind::EnumVariant { parent_enum, .. } = &variant_symbol.kind {
-      let enum_symbol = self.symbol_table.get_symbol_unchecked(parent_enum);
-
-      if let SymbolKind::Enum { generics, .. } = &enum_symbol.kind {
-        if !generics.is_empty() {
-          if let Type::Named { generics: concrete_generics, .. } = scrutinee_type {
-            if !concrete_generics.is_empty() {
-              let canonical_symbol =
-                self.symbol_table.get_symbol_unchecked(&variant_symbol.canonical_symbol);
-              let parent_name = self.mangle_symbol(enum_symbol.id);
-              let base_name = format!("zirael_{}", self.get_sym_name(&canonical_symbol, None));
-
-              let type_suffix = concrete_generics
-                .iter()
-                .map(|ty| self.mangle_type_for_name(ty))
-                .collect::<Vec<_>>()
-                .join("_");
-
-              return format!("{parent_name}_{base_name}__{type_suffix}");
-            }
-          }
-        }
-      }
+    match self.try_build_monomorphized_name(&variant_symbol, scrutinee_type) {
+      Some(name) => name,
+      None => self.mangle_symbol(variant_symbol_id),
     }
+  }
 
-    self.mangle_symbol(variant_symbol_id)
+  fn try_build_monomorphized_name(
+    &mut self,
+    variant_symbol: &Symbol,
+    scrutinee_type: &Type,
+  ) -> Option<String> {
+    let parent_enum_id = self.get_parent_enum_id(variant_symbol)?;
+    let enum_symbol = self.symbol_table.get_symbol_unchecked(&parent_enum_id);
+    let generics = self.get_enum_generics(&enum_symbol)?;
+
+    let base_name = self.build_base_variant_name(variant_symbol);
+    let parent_name = self.mangle_symbol(enum_symbol.id);
+
+    if self.should_use_monomorphized_name(variant_symbol.id, generics) {
+      let type_suffix = self.extract_type_suffix(scrutinee_type)?;
+      Some(format!("{parent_name}_{base_name}__{type_suffix}"))
+    } else {
+      Some(format!("{parent_name}_{base_name}"))
+    }
+  }
+
+  fn get_parent_enum_id(&self, variant_symbol: &Symbol) -> Option<SymbolId> {
+    match &variant_symbol.kind {
+      SymbolKind::EnumVariant { parent_enum, .. } => Some(*parent_enum),
+      _ => None,
+    }
+  }
+
+  fn get_enum_generics<'a>(&self, enum_symbol: &'a Symbol) -> Option<&'a [GenericParameter]> {
+    match &enum_symbol.kind {
+      SymbolKind::Enum { generics, .. } => Some(generics),
+      _ => None,
+    }
+  }
+
+  fn build_base_variant_name(&mut self, variant_symbol: &Symbol) -> String {
+    let canonical_symbol = self.symbol_table.get_symbol_unchecked(&variant_symbol.canonical_symbol);
+    format!("zirael_{}", self.get_sym_name(&canonical_symbol, None))
+  }
+
+  fn should_use_monomorphized_name(
+    &self,
+    variant_id: SymbolId,
+    generics: &[GenericParameter],
+  ) -> bool {
+    !generics.is_empty() && self.mono_table.has_entries(variant_id)
+  }
+
+  fn extract_type_suffix(&mut self, scrutinee_type: &Type) -> Option<String> {
+    match scrutinee_type {
+      Type::Named { generics: concrete_generics, .. } if !concrete_generics.is_empty() => {
+        let suffix = concrete_generics
+          .iter()
+          .map(|ty| self.mangle_type_for_name(ty))
+          .collect::<Vec<_>>()
+          .join("_");
+        Some(suffix)
+      }
+      _ => None,
+    }
   }
 
   fn lower_module(
@@ -640,8 +680,7 @@ impl<'reports> HirLowering<'reports> {
       }
       HirPattern::Literal(literal) => IrPattern::Literal(literal),
       HirPattern::EnumVariant { symbol_id, fields } => {
-        let tag_name =
-          self.get_monomorphized_variant_tag_name_from_scrutinee(symbol_id, scrutinee_type);
+        let tag_name = self.get_mono_variant_name(symbol_id, scrutinee_type);
 
         let bindings = if let Some(fields) = fields {
           fields

@@ -31,6 +31,10 @@ impl<'a> Parser<'a> {
       return Some(Type::Float);
     }
 
+    if self.match_token(TokenKind::LogicalNot) {
+      return Some(Type::Never);
+    }
+
     if self.match_token(TokenKind::BracketOpen) {
       if let Some(element_type) = self.parse_type() {
         if self.match_token(TokenKind::Semicolon) {

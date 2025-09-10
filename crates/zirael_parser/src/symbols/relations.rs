@@ -42,7 +42,7 @@ pub struct CycleInfo {
 
 impl CycleInfo {
   pub fn print_cycle_visualization(&self) {
-    println!("\n🔄 CYCLIC DEPENDENCY DETECTED 🔄");
+    println!("\nCYCLIC DEPENDENCY DETECTED");
     println!("=====================================");
 
     self.print_cycle_chain();
@@ -51,7 +51,7 @@ impl CycleInfo {
   }
 
   fn print_cycle_chain(&self) {
-    println!("\n📍 Cycle Chain:");
+    println!("\nCycle Chain:");
     println!("---------------");
 
     if self.cycle_nodes.is_empty() {
@@ -72,7 +72,7 @@ impl CycleInfo {
   }
 
   fn print_detailed_graph(&self) {
-    println!("\n🔗 All Dependencies in Cycle:");
+    println!("\nAll Dependencies in Cycle:");
     println!("-----------------------------");
 
     let cycle_set: HashSet<_> = self.cycle_nodes.iter().collect();
@@ -88,7 +88,7 @@ impl CycleInfo {
   }
 
   fn print_ascii_diagram(&self) {
-    println!("\n📊 ASCII Dependency Graph:");
+    println!("\nASCII Dependency Graph:");
     println!("---------------------------");
 
     if self.cycle_nodes.len() < 2 {
@@ -114,9 +114,9 @@ impl CycleInfo {
     let b = &self.cycle_nodes[1];
 
     println!("  ┌─────────────────┐");
-    println!("  │  {}  │", self.truncate_node_name(a));
+    println!("  │  {}  │", self.get_name(a));
     println!("  │       ↕         │");
-    println!("  │  {}  │", self.truncate_node_name(b));
+    println!("  │  {}  │", self.get_name(b));
     println!("  └─────────────────┘");
   }
 
@@ -125,7 +125,7 @@ impl CycleInfo {
       return;
     }
 
-    let nodes: Vec<_> = self.cycle_nodes.iter().map(|n| self.truncate_node_name(n)).collect();
+    let nodes: Vec<_> = self.cycle_nodes.iter().map(|n| self.get_name(n)).collect();
 
     println!("        {}      ", nodes[0]);
     println!("       ╱ ╲      ");
@@ -140,17 +140,15 @@ impl CycleInfo {
     println!("  Multi-node cycle detected:");
     for (i, node) in self.cycle_nodes.iter().enumerate() {
       let next_i = (i + 1) % self.cycle_nodes.len();
-      println!(
-        "    {} ──→ {}",
-        self.truncate_node_name(node),
-        self.truncate_node_name(&self.cycle_nodes[next_i])
-      );
+      println!("    {} ──→ {}", self.get_name(node), self.get_name(&self.cycle_nodes[next_i]));
     }
   }
 
-  fn truncate_node_name(&self, node: &SymbolRelationNode) -> String {
-    let full_name = node.to_string();
-    if full_name.len() > 12 { format!("{}...", &full_name[..9]) } else { full_name }
+  fn get_name(&self, node: &SymbolRelationNode) -> String {
+    match node {
+      SymbolRelationNode::Symbol(sym) => format!("S{:?}", sym.index()),
+      SymbolRelationNode::Monomorphization(mono) => format!("M{:?}", mono.index()),
+    }
   }
 }
 

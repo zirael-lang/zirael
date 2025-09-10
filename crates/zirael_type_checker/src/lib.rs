@@ -17,6 +17,7 @@ impl_ast_walker!(TypeInference, {
     mono_table: MonomorphizationTable,
     mono_arena: Arena<()>,
     current_struct_generics: HashMap<Identifier, Type>,
+    current_item: Option<SymbolId>,
 });
 
 impl<'reports> TypeInference<'reports> {
@@ -63,7 +64,10 @@ impl<'reports> TypeInference<'reports> {
       | (Type::Int, Type::Int)
       | (Type::Float, Type::Float)
       | (Type::Bool, Type::Bool)
-      | (Type::Void, Type::Void) => true,
+      | (Type::Void, Type::Void)
+      | (Type::Never, Type::Never) => true,
+
+      (Type::Never, _) | (_, Type::Never) => true,
 
       (Type::Pointer(a), Type::Pointer(b)) | (Type::Reference(a), Type::Reference(b)) => {
         self.structural_eq(a, b)
@@ -247,6 +251,15 @@ impl<'reports> AstWalker<'reports> for TypeInference<'reports> {
     self.infer_variable(_var_decl);
   }
 
+  fn visit_item(&mut self, _item: &mut Item) {
+    if let Some(id) = _item.symbol_id {
+      debug!("Setting current_item to {:?} for item: {:?}", id, _item.name);
+      self.current_item = Some(id);
+    } else {
+      debug!("Item has no symbol_id: {:?}", _item.name);
+    }
+  }
+
   fn walk_function(&mut self, func: &mut Function) {
     self.push_scope(ScopeType::Function(func.id));
 
@@ -366,7 +379,17 @@ impl<'reports> AstWalker<'reports> for TypeInference<'reports> {
   fn visit_type(&mut self, ty: &mut Type) {
     match ty {
       Type::Named { name, .. } => {
-        if self.symbol_table.lookup_symbol(name).is_none() {
+        if let Some(symbol) = self.symbol_table.lookup_symbol(name) {
+          if let Some(item) = self.current_item {
+            debug!("Adding relation: {:?} -> {:?} (name: {})", item, symbol.id, resolve(name));
+            self.symbol_table.new_relation(
+              SymbolRelationNode::Symbol(item),
+              SymbolRelationNode::Symbol(symbol.canonical_symbol),
+            )
+          } else {
+            debug!("No current_item set when visiting type: {}", resolve(name));
+          }
+        } else {
           if !self.ctx.is_generic_parameter(*name) {
             let report = ReportBuilder::builder(
               &format!("couldn't find struct or enum named {}", resolve(name).dimmed().bold()),
