@@ -123,23 +123,6 @@ impl<'reports> HirLowering<'reports> {
           };
           Type::Named { name: get_or_intern(&string, None), generics }
         } else {
-          if let ScopeType::Module(mod_id) = self
-            .symbol_table
-            .get_scope_unchecked(
-              self
-                .symbol_table
-                .get_scope_unchecked(self.symbol_table.current_scope())
-                .parent
-                .unwrap(),
-            )
-            .scope_type
-          {
-            println!(
-              "\n\nIn module {mod_id:?}, could not find symbol for named type: {:?}\n\n\n",
-              self.sources.get(mod_id)
-            );
-          }
-
           Type::Named { name, generics }
         }
       }
@@ -689,7 +672,7 @@ impl<'reports> HirLowering<'reports> {
               if let Some(symbol_id) = field.symbol_id {
                 let field_name = self.mangle_symbol(symbol_id);
 
-                Some((field.ty, resolve(&field.name), field_name))
+                Some((self.lower_type(field.ty), resolve(&field.name), field_name))
               } else {
                 debug!("invalid field pattern: {field:?}");
                 None
