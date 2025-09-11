@@ -40,7 +40,24 @@ pub struct IrTypeExtension {
 
 impl IrItemKind {
   pub fn is_type_def(&self) -> bool {
-    matches!(self, Self::Struct(_))
+    matches!(self, Self::Struct(_) | Self::Enum(_))
+  }
+
+  pub fn is_function(&self) -> bool {
+    matches!(self, Self::Function(_))
+  }
+
+  pub fn is_type_extension(&self) -> bool {
+    matches!(self, Self::TypeExtension(_))
+  }
+
+  pub fn name(&self) -> Option<&str> {
+    match self {
+      Self::Function(f) => Some(&f.name),
+      Self::Struct(s) => Some(&s.name),
+      Self::Enum(e) => Some(&e.name),
+      _ => None,
+    }
   }
 }
 
@@ -118,6 +135,20 @@ pub enum IrStmt {
   Expr(IrExpr),
 }
 
+impl IrStmt {
+  pub fn var(name: String, init: IrExpr) -> Self {
+    Self::Var(name, init)
+  }
+
+  pub fn ret(expr: Option<IrExpr>) -> Self {
+    Self::Return(expr)
+  }
+
+  pub fn expr(expr: IrExpr) -> Self {
+    Self::Expr(expr)
+  }
+}
+
 #[derive(Clone, Debug)]
 pub struct IrExpr {
   pub ty: Type,
@@ -131,6 +162,22 @@ impl IrExpr {
 
   pub fn sym(sym: String) -> Self {
     Self::new(Type::Inferred, IrExprKind::Symbol(sym))
+  }
+
+  pub fn literal(lit: Literal) -> Self {
+    Self::new(Type::Inferred, IrExprKind::Literal(lit))
+  }
+
+  pub fn call(name: String, args: Vec<IrExpr>) -> Self {
+    Self::new(Type::Inferred, IrExprKind::Call(name, args))
+  }
+
+  pub fn ccall(name: String, args: Vec<IrExpr>) -> Self {
+    Self::new(Type::Inferred, IrExprKind::CCall(name, args))
+  }
+
+  pub fn boxed(self) -> Box<Self> {
+    Box::new(self)
   }
 }
 

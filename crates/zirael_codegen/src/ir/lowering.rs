@@ -10,10 +10,10 @@ use std::{
 };
 use zirael_hir::hir::{
   HirBody, HirEnum, HirFunction, HirItem, HirItemKind, HirModule, HirStruct, HirTypeExtension,
-  expr::{FieldSymbol, HirExpr, HirExprKind, HirMatchArm, HirPattern, HirStmt},
+  expr::{AccessKind, FieldSymbol, HirExpr, HirExprKind, HirMatchArm, HirPattern, HirStmt},
 };
 use zirael_parser::{
-  AstId, DropStackEntry, EnumVariantData, GenericParameter, MainFunction, MonomorphizationId,
+  AstId, CallInfo, DropStackEntry, EnumVariantData, GenericParameter, MainFunction, MonomorphizationId,
   ScopeType, StructField, Symbol, SymbolId, SymbolKind, SymbolRelationNode, SymbolTable, Type,
   UnaryOp,
 };
@@ -506,145 +506,170 @@ impl<'reports> HirLowering<'reports> {
   }
 
   fn lower_expr(&mut self, expr: HirExpr) -> IrExpr {
-    let kind = match expr.kind {
-      HirExprKind::Block(stms) => IrExprKind::Block(self.lower_block(stms, expr.id)),
+    let kind = self.lower_expr_kind(expr.kind, expr.id);
+    let mut expr_type = self.lower_type(expr.ty.clone());
+    let fixed_kind = self.fix_struct_init_if_needed(kind, &expr_type, &expr.ty);
+    
+    if let (IrExprKind::StructInit(_, _), Some(new_type)) = (&fixed_kind.0, fixed_kind.1) {
+      expr_type = new_type;
+    }
+    
+    IrExpr { ty: expr_type, kind: fixed_kind.0 }
+  }
+
+  fn lower_expr_kind(&mut self, kind: HirExprKind, id: AstId) -> IrExprKind {
+    match kind {
+      HirExprKind::Block(stmts) => IrExprKind::Block(self.lower_block(stmts, id)),
       HirExprKind::Literal(literal) => IrExprKind::Literal(literal),
-      HirExprKind::Call { callee, args, call_info } => {
-        let (identifier, symbol_id) = if let Some(call_info) = call_info {
-          if let Some(mono_id) = call_info.monomorphized_id {
-            self.new_relation(SymbolRelationNode::Monomorphization(mono_id));
-            (self.get_monomorphized_name(mono_id), call_info.original_symbol)
-          } else {
-            self.new_relation(SymbolRelationNode::Symbol(call_info.original_symbol));
-            (self.mangle_symbol(call_info.original_symbol), call_info.original_symbol)
-          }
-        } else if let HirExprKind::Symbol(id) = callee.kind {
-          self.new_relation(SymbolRelationNode::Symbol(id));
-          (self.mangle_symbol(id), id)
-        } else {
-          unreachable!("Invalid call expression structure")
-        };
-        let args = args.iter().map(|arg| self.lower_expr(arg.clone())).collect::<Vec<_>>();
-
-        IrExprKind::Call(
-          if let SymbolKind::EnumVariant { .. } =
-            self.symbol_table.get_symbol_unchecked(&symbol_id).kind
-          {
-            format!("{identifier}_constructor")
-          } else {
-            identifier
-          },
-          args,
-        )
-      }
-      HirExprKind::StructInit { name, fields, call_info } => {
-        let constructor_identifier = if let Some(call_info) = &call_info {
-          if let Some(mono_id) = call_info.monomorphized_id {
-            self.get_monomorphized_name(mono_id)
-          } else {
-            self.mangle_symbol(call_info.original_symbol)
-          }
-        } else if let HirExprKind::Symbol(id) = name.kind {
-          self.mangle_symbol(id)
-        } else {
-          unreachable!("Invalid struct init expression structure")
-        };
-
-        let mut new_fields = HashMap::new();
-        for (ident, expr) in fields {
-          new_fields.insert(resolve(&ident), self.lower_expr(expr.clone()));
-        }
-
-        IrExprKind::StructInit(constructor_identifier, new_fields)
-      }
-      HirExprKind::Assign { lhs, rhs } => {
-        let lhs = self.lower_expr(*lhs);
-        let rhs = self.lower_expr(*rhs);
-
-        IrExprKind::Assign(Box::new(lhs), Box::new(rhs))
-      }
-      HirExprKind::Unary { op, operand } => {
-        IrExprKind::Unary(op, Box::new(self.lower_expr(*operand)))
-      }
+      HirExprKind::Call { callee, args, call_info } => self.lower_call_expr(callee, args, call_info),
+      HirExprKind::StructInit { name, fields, call_info } => self.lower_struct_init(name, fields, call_info),
+      HirExprKind::Assign { lhs, rhs } => self.lower_assign(*lhs, *rhs),
+      HirExprKind::Unary { op, operand } => IrExprKind::Unary(op, Box::new(self.lower_expr(*operand))),
       HirExprKind::Symbol(id) => IrExprKind::Symbol(self.mangle_symbol(id)),
-      HirExprKind::Binary { left, right, op } => {
-        IrExprKind::Binary(Box::new(self.lower_expr(*left)), op, Box::new(self.lower_expr(*right)))
-      }
-      HirExprKind::FieldAccess { base_field, main_access, fields } => {
-        let mut f = vec![
-          match base_field {
-            FieldSymbol::Symbol(sym_id) => IrExpr::new(
-              self.lower_type(Type::Inferred),
-              IrExprKind::Symbol(self.mangle_symbol(sym_id)),
-            ),
-            FieldSymbol::Expr(expr) => self.lower_expr(*expr),
-          },
-          IrExpr::sym(main_access.to_string()),
-        ];
-
-        for (i, (field, access)) in fields.iter().enumerate() {
-          f.push(IrExpr::sym(resolve(field)));
-
-          if i != fields.len() - 1 {
-            f.push(IrExpr::sym(access.to_string()));
-          }
-        }
-
-        IrExprKind::FieldAccess(f)
-      }
-      HirExprKind::Ternary { condition, true_expr, false_expr } => IrExprKind::Ternary(
-        Box::new(self.lower_expr(*condition)),
-        Box::new(self.lower_expr(*true_expr)),
-        Box::new(self.lower_expr(*false_expr)),
-      ),
-      HirExprKind::If { condition, then_branch, else_branch } => IrExprKind::If {
-        condition: Box::new(self.lower_expr(*condition)),
-        then_branch: Box::new(self.lower_expr(*then_branch)),
-        else_branch: else_branch.map(|e| Box::new(self.lower_expr(*e))),
-      },
-      HirExprKind::Match { arms, scrutinee } => {
-        let ir_scrutinee = self.lower_expr(*scrutinee);
-        let scrutinee_type = ir_scrutinee.ty.clone();
-        let ir_arms = arms
-          .into_iter()
-          .map(|arm| self.lower_match_arm(arm, &scrutinee_type))
-          .collect::<Vec<_>>();
-
-        IrExprKind::Match { scrutinee: Box::new(ir_scrutinee), arms: ir_arms }
-      }
+      HirExprKind::Binary { left, right, op } => self.lower_binary(*left, *right, op),
+      HirExprKind::FieldAccess { base_field, main_access, fields } => self.lower_field_access(base_field, main_access, fields),
+      HirExprKind::Ternary { condition, true_expr, false_expr } => self.lower_ternary(*condition, *true_expr, *false_expr),
+      HirExprKind::If { condition, then_branch, else_branch } => self.lower_if(*condition, *then_branch, else_branch.map(|e| *e)),
+      HirExprKind::Match { arms, scrutinee } => self.lower_match(*scrutinee, arms),
       _ => {
-        warn!("unhandled expression: {expr:?}");
+        warn!("unhandled expression: {kind:?}");
         IrExprKind::Symbol(String::new())
       }
+    }
+  }
+
+  fn lower_call_expr(&mut self, callee: Box<HirExpr>, args: Vec<HirExpr>, call_info: Option<CallInfo>) -> IrExprKind {
+    let (identifier, symbol_id) = if let Some(call_info) = call_info {
+      self.extract_call_identifier(call_info)
+    } else if let HirExprKind::Symbol(id) = callee.kind {
+      self.new_relation(SymbolRelationNode::Symbol(id));
+      (self.mangle_symbol(id), id)
+    } else {
+      unreachable!("Invalid call expression structure")
+    };
+    
+    let ir_args = args.iter().map(|arg| self.lower_expr(arg.clone())).collect::<Vec<_>>();
+    let final_identifier = self.get_call_identifier(identifier, symbol_id);
+    
+    IrExprKind::Call(final_identifier, ir_args)
+  }
+
+  fn extract_call_identifier(&mut self, call_info: CallInfo) -> (String, SymbolId) {
+    if let Some(mono_id) = call_info.monomorphized_id {
+      self.new_relation(SymbolRelationNode::Monomorphization(mono_id));
+      (self.get_monomorphized_name(mono_id), call_info.original_symbol)
+    } else {
+      self.new_relation(SymbolRelationNode::Symbol(call_info.original_symbol));
+      (self.mangle_symbol(call_info.original_symbol), call_info.original_symbol)
+    }
+  }
+
+  fn get_call_identifier(&mut self, identifier: String, symbol_id: SymbolId) -> String {
+    if matches!(self.symbol_table.get_symbol_unchecked(&symbol_id).kind, SymbolKind::EnumVariant { .. }) {
+      format!("{identifier}_constructor")
+    } else {
+      identifier
+    }
+  }
+
+  fn lower_struct_init(&mut self, name: Box<HirExpr>, fields: HashMap<zirael_utils::prelude::Identifier, HirExpr>, call_info: Option<CallInfo>) -> IrExprKind {
+    let constructor_identifier = if let Some(call_info) = &call_info {
+      if let Some(mono_id) = call_info.monomorphized_id {
+        self.get_monomorphized_name(mono_id)
+      } else {
+        self.mangle_symbol(call_info.original_symbol)
+      }
+    } else if let HirExprKind::Symbol(id) = name.kind {
+      self.mangle_symbol(id)
+    } else {
+      unreachable!("Invalid struct init expression structure")
     };
 
-    let mut expr_type = self.lower_type(expr.ty);
+    let mut ir_fields = HashMap::new();
+    for (ident, expr) in fields {
+      ir_fields.insert(resolve(&ident), self.lower_expr(expr.clone()));
+    }
 
-    let mut fixed_kind = kind;
-    if let IrExprKind::StructInit(_constructor_name, fields) = &fixed_kind {
-      if let Type::Named { name: struct_name, generics } = &expr_type {
+    IrExprKind::StructInit(constructor_identifier, ir_fields)
+  }
+
+  fn lower_assign(&mut self, lhs: HirExpr, rhs: HirExpr) -> IrExprKind {
+    IrExprKind::Assign(Box::new(self.lower_expr(lhs)), Box::new(self.lower_expr(rhs)))
+  }
+
+  fn lower_binary(&mut self, left: HirExpr, right: HirExpr, op: zirael_parser::BinaryOp) -> IrExprKind {
+    IrExprKind::Binary(Box::new(self.lower_expr(left)), op, Box::new(self.lower_expr(right)))
+  }
+
+  fn lower_field_access(&mut self, base_field: FieldSymbol, main_access: AccessKind, fields: Vec<(zirael_utils::prelude::Identifier, AccessKind)>) -> IrExprKind {
+    let mut f = vec![
+      match base_field {
+        FieldSymbol::Symbol(sym_id) => IrExpr::new(
+          self.lower_type(Type::Inferred),
+          IrExprKind::Symbol(self.mangle_symbol(sym_id)),
+        ),
+        FieldSymbol::Expr(expr) => self.lower_expr(*expr),
+      },
+      IrExpr::sym(main_access.to_string()),
+    ];
+
+    for (i, (field, access)) in fields.iter().enumerate() {
+      f.push(IrExpr::sym(resolve(field)));
+      if i != fields.len() - 1 {
+        f.push(IrExpr::sym(access.to_string()));
+      }
+    }
+
+    IrExprKind::FieldAccess(f)
+  }
+
+  fn lower_ternary(&mut self, condition: HirExpr, true_expr: HirExpr, false_expr: HirExpr) -> IrExprKind {
+    IrExprKind::Ternary(
+      Box::new(self.lower_expr(condition)),
+      Box::new(self.lower_expr(true_expr)),
+      Box::new(self.lower_expr(false_expr)),
+    )
+  }
+
+  fn lower_if(&mut self, condition: HirExpr, then_branch: HirExpr, else_branch: Option<HirExpr>) -> IrExprKind {
+    IrExprKind::If {
+      condition: Box::new(self.lower_expr(condition)),
+      then_branch: Box::new(self.lower_expr(then_branch)),
+      else_branch: else_branch.map(|e| Box::new(self.lower_expr(e))),
+    }
+  }
+
+  fn lower_match(&mut self, scrutinee: HirExpr, arms: Vec<HirMatchArm>) -> IrExprKind {
+    let ir_scrutinee = self.lower_expr(scrutinee);
+    let scrutinee_type = ir_scrutinee.ty.clone();
+    let ir_arms = arms
+      .into_iter()
+      .map(|arm| self.lower_match_arm(arm, &scrutinee_type))
+      .collect::<Vec<_>>();
+
+    IrExprKind::Match { scrutinee: Box::new(ir_scrutinee), arms: ir_arms }
+  }
+
+  fn fix_struct_init_if_needed(&mut self, kind: IrExprKind, expr_type: &Type, _original_ty: &Type) -> (IrExprKind, Option<Type>) {
+    if let IrExprKind::StructInit(_constructor_name, fields) = &kind {
+      if let Type::Named { name: struct_name, generics } = expr_type {
         if !generics.is_empty() && generics.iter().any(|g| matches!(g, Type::Variable { .. })) {
           for (mono_id, entry) in &self.mono_table.entries {
             let original_symbol = self.symbol_table.get_symbol_unchecked(&entry.original_id);
-            if let SymbolKind::Struct { .. } | SymbolKind::Enum { .. } = original_symbol.kind {
-              if original_symbol.name == *struct_name {
-                let mono_name = self.get_monomorphized_name(*mono_id);
-                let new_type = Type::Named {
-                  name: get_or_intern(&format!("struct {mono_name}"), None),
-                  generics: vec![],
-                };
-                expr_type = new_type;
-
-                fixed_kind = IrExprKind::StructInit(mono_name, fields.clone());
-                break;
-              }
+            if matches!(original_symbol.kind, SymbolKind::Struct { .. } | SymbolKind::Enum { .. }) 
+               && original_symbol.name == *struct_name {
+              let mono_name = self.get_monomorphized_name(*mono_id);
+              let new_type = Type::Named {
+                name: get_or_intern(&format!("struct {mono_name}"), None),
+                generics: vec![],
+              };
+              return (IrExprKind::StructInit(mono_name, fields.clone()), Some(new_type));
             }
           }
         }
       }
     }
-
-    IrExpr { ty: expr_type, kind: fixed_kind }
+    (kind, None)
   }
 
   fn lower_match_arm(&mut self, arm: HirMatchArm, scrutinee_type: &Type) -> IrMatchArm {
@@ -685,8 +710,8 @@ impl<'reports> HirLowering<'reports> {
 
         IrPattern::EnumVariant { tag_name, bindings }
       }
-      HirPattern::Struct { symbol_id, fields } => {
-        todo!()
+      HirPattern::Struct { symbol_id: _, fields: _ } => {
+        todo!("Struct pattern lowering not implemented")
       }
     }
   }

@@ -16,50 +16,54 @@ impl<'reports> HirLowering<'reports> {
     &mut self,
     module: &mut IrModule,
     all_modules: &[IrModule],
-    processed_monos: &mut std::collections::HashSet<MonomorphizationId>,
+    processed_monos: &mut HashSet<MonomorphizationId>,
   ) {
-    // TODO: find a way to do that without cloning the entries
     let entries: Vec<_> = self.mono_table.entries.clone().into_iter().collect();
+    let (struct_entries, func_entries) = self.partition_entries(entries);
 
-    let (struct_entries, func_entries): (Vec<_>, Vec<_>) =
-      entries.into_iter().partition(|(_, entry)| {
-        let symbol = self.symbol_table.get_symbol_unchecked(&entry.original_id);
-        matches!(
-          symbol.kind,
-          SymbolKind::Struct { .. } | SymbolKind::Enum { .. } | SymbolKind::EnumVariant { .. }
-        )
-      });
+    self.process_entries_in_scope(module, struct_entries, all_modules, processed_monos);
+    self.process_entries_in_scope(module, func_entries, all_modules, processed_monos);
+  }
 
+  fn partition_entries(&self, entries: Vec<(MonomorphizationId, MonomorphizationEntry)>) -> (Vec<(MonomorphizationId, MonomorphizationEntry)>, Vec<(MonomorphizationId, MonomorphizationEntry)>) {
+    entries.into_iter().partition(|(_, entry)| {
+      let symbol = self.symbol_table.get_symbol_unchecked(&entry.original_id);
+      matches!(
+        symbol.kind,
+        SymbolKind::Struct { .. } | SymbolKind::Enum { .. } | SymbolKind::EnumVariant { .. }
+      )
+    })
+  }
+
+  fn process_entries_in_scope(
+    &mut self,
+    module: &mut IrModule,
+    entries: Vec<(MonomorphizationId, MonomorphizationEntry)>,
+    all_modules: &[IrModule],
+    processed_monos: &mut HashSet<MonomorphizationId>,
+  ) {
     self.push_scope(ScopeType::Module(module.id));
-    for (id, entry) in struct_entries {
-      let accessible = self.are_concrete_types_accessible_in_module(&entry, module);
-      debug!(
-        "Monomorphization entry {:?} in module {:?}: accessible = {}",
-        id, module.id, accessible
-      );
-      if accessible && !processed_monos.contains(&id) {
-        if let Some(monomorphized_item) =
-          self.create_monomorphized_item(&id, &entry, module, all_modules)
-        {
+    
+    for (id, entry) in entries {
+      if self.should_process_entry(&id, &entry, module, processed_monos) {
+        if let Some(monomorphized_item) = self.create_monomorphized_item(&id, &entry, module, all_modules) {
           module.mono_items.push(monomorphized_item);
           processed_monos.insert(id);
         }
       }
     }
-
-    for (id, entry) in func_entries {
-      if self.are_concrete_types_accessible_in_module(&entry, module)
-        && !processed_monos.contains(&id)
-      {
-        if let Some(monomorphized_item) =
-          self.create_monomorphized_item(&id, &entry, module, all_modules)
-        {
-          module.mono_items.push(monomorphized_item);
-          processed_monos.insert(id);
-        }
-      }
-    }
+    
     self.pop_scope();
+  }
+
+  fn should_process_entry(
+    &mut self,
+    id: &MonomorphizationId,
+    entry: &MonomorphizationEntry,
+    module: &IrModule,
+    processed_monos: &HashSet<MonomorphizationId>,
+  ) -> bool {
+    self.are_concrete_types_accessible_in_module(entry, module) && !processed_monos.contains(id)
   }
 
   fn are_concrete_types_accessible_in_module(
@@ -67,12 +71,7 @@ impl<'reports> HirLowering<'reports> {
     entry: &MonomorphizationEntry,
     module: &IrModule,
   ) -> bool {
-    for (name, ty) in &entry.concrete_types {
-      if !self.is_type_accessible_in_module(ty, module) {
-        return false;
-      }
-    }
-    true
+    entry.concrete_types.values().all(|ty| self.is_type_accessible_in_module(ty, module))
   }
 
   fn is_type_accessible_in_module(&mut self, ty: &Type, module: &IrModule) -> bool {
@@ -383,83 +382,98 @@ impl<'reports> HirLowering<'reports> {
     type_map: &HashMap<Identifier, Type>,
   ) -> IrExpr {
     let ty = self.substitute_type(&original.ty, type_map);
-
-    let kind = match &original.kind {
-      IrExprKind::Symbol(sym) => IrExprKind::Symbol(sym.clone()),
-
-      IrExprKind::Block(block) => IrExprKind::Block(self.monomorphize_block(block, type_map)),
-
-      IrExprKind::Literal(lit) => IrExprKind::Literal(lit.clone()),
-
-      IrExprKind::Call(func, args) => {
-        let mono_args = args.iter().map(|arg| self.monomorphize_expr(arg, type_map)).collect();
-
-        IrExprKind::Call(func.clone(), mono_args)
-      }
-
-      IrExprKind::CCall(func, args) => {
-        let mono_args = args.iter().map(|arg| self.monomorphize_expr(arg, type_map)).collect();
-
-        IrExprKind::CCall(func.clone(), mono_args)
-      }
-
-      IrExprKind::Assign(left, right) => IrExprKind::Assign(
-        Box::new(self.monomorphize_expr(left, type_map)),
-        Box::new(self.monomorphize_expr(right, type_map)),
-      ),
-
-      IrExprKind::Unary(op, expr) => {
-        IrExprKind::Unary(op.clone(), Box::new(self.monomorphize_expr(expr, type_map)))
-      }
-
-      IrExprKind::Binary(left, op, right) => IrExprKind::Binary(
-        Box::new(self.monomorphize_expr(left, type_map)),
-        op.clone(),
-        Box::new(self.monomorphize_expr(right, type_map)),
-      ),
-
-      IrExprKind::StructInit(struct_name, fields) => {
-        let mut new_fields = HashMap::new();
-        for (field_name, field_expr) in fields {
-          let new_field_expr = self.monomorphize_expr(field_expr, type_map);
-          new_fields.insert(field_name.clone(), new_field_expr);
-        }
-
-        IrExprKind::StructInit(struct_name.clone(), new_fields)
-      }
-
-      IrExprKind::Type(ty) => IrExprKind::Type(self.substitute_type(ty, type_map)),
-
-      IrExprKind::FieldAccess(fields) => {
-        let mono_fields = fields.clone();
-        IrExprKind::FieldAccess(mono_fields)
-      }
-
-      IrExprKind::Ternary(cond, tr, fl) => IrExprKind::Ternary(
-        Box::new(self.monomorphize_expr(cond, type_map)),
-        Box::new(self.monomorphize_expr(tr, type_map)),
-        Box::new(self.monomorphize_expr(fl, type_map)),
-      ),
-
-      IrExprKind::If { condition, then_branch, else_branch } => IrExprKind::If {
-        condition: Box::new(self.monomorphize_expr(condition, type_map)),
-        then_branch: Box::new(self.monomorphize_expr(then_branch, type_map)),
-        else_branch: else_branch.as_ref().map(|e| Box::new(self.monomorphize_expr(e, type_map))),
-      },
-
-      IrExprKind::Match { scrutinee, arms } => IrExprKind::Match {
-        scrutinee: Box::new(self.monomorphize_expr(scrutinee, type_map)),
-        arms: arms
-          .iter()
-          .map(|arm| IrMatchArm {
-            pattern: arm.pattern.clone(),
-            body: self.monomorphize_expr(&arm.body, type_map),
-          })
-          .collect(),
-      },
-    };
-
+    let kind = self.monomorphize_expr_kind(&original.kind, type_map);
     IrExpr { ty, kind }
+  }
+
+  fn monomorphize_expr_kind(
+    &mut self,
+    kind: &IrExprKind,
+    type_map: &HashMap<Identifier, Type>,
+  ) -> IrExprKind {
+    match kind {
+      IrExprKind::Symbol(sym) => IrExprKind::Symbol(sym.clone()),
+      IrExprKind::Block(block) => IrExprKind::Block(self.monomorphize_block(block, type_map)),
+      IrExprKind::Literal(lit) => IrExprKind::Literal(lit.clone()),
+      IrExprKind::Call(func, args) => self.monomorphize_call(func, args, type_map),
+      IrExprKind::CCall(func, args) => self.monomorphize_ccall(func, args, type_map),
+      IrExprKind::Assign(left, right) => self.monomorphize_assign(left, right, type_map),
+      IrExprKind::Unary(op, expr) => self.monomorphize_unary(op, expr, type_map),
+      IrExprKind::Binary(left, op, right) => self.monomorphize_binary(left, op, right, type_map),
+      IrExprKind::StructInit(struct_name, fields) => self.monomorphize_struct_init(struct_name, fields, type_map),
+      IrExprKind::Type(ty) => IrExprKind::Type(self.substitute_type(ty, type_map)),
+      IrExprKind::FieldAccess(fields) => IrExprKind::FieldAccess(fields.clone()),
+      IrExprKind::Ternary(cond, tr, fl) => self.monomorphize_ternary(cond, tr, fl, type_map),
+      IrExprKind::If { condition, then_branch, else_branch } => self.monomorphize_if(condition, then_branch, else_branch, type_map),
+      IrExprKind::Match { scrutinee, arms } => self.monomorphize_match(scrutinee, arms, type_map),
+    }
+  }
+
+  fn monomorphize_call(&mut self, func: &str, args: &[IrExpr], type_map: &HashMap<Identifier, Type>) -> IrExprKind {
+    let mono_args = args.iter().map(|arg| self.monomorphize_expr(arg, type_map)).collect();
+    IrExprKind::Call(func.to_string(), mono_args)
+  }
+
+  fn monomorphize_ccall(&mut self, func: &str, args: &[IrExpr], type_map: &HashMap<Identifier, Type>) -> IrExprKind {
+    let mono_args = args.iter().map(|arg| self.monomorphize_expr(arg, type_map)).collect();
+    IrExprKind::CCall(func.to_string(), mono_args)
+  }
+
+  fn monomorphize_assign(&mut self, left: &IrExpr, right: &IrExpr, type_map: &HashMap<Identifier, Type>) -> IrExprKind {
+    IrExprKind::Assign(
+      Box::new(self.monomorphize_expr(left, type_map)),
+      Box::new(self.monomorphize_expr(right, type_map)),
+    )
+  }
+
+  fn monomorphize_unary(&mut self, op: &zirael_parser::UnaryOp, expr: &IrExpr, type_map: &HashMap<Identifier, Type>) -> IrExprKind {
+    IrExprKind::Unary(op.clone(), Box::new(self.monomorphize_expr(expr, type_map)))
+  }
+
+  fn monomorphize_binary(&mut self, left: &IrExpr, op: &zirael_parser::BinaryOp, right: &IrExpr, type_map: &HashMap<Identifier, Type>) -> IrExprKind {
+    IrExprKind::Binary(
+      Box::new(self.monomorphize_expr(left, type_map)),
+      op.clone(),
+      Box::new(self.monomorphize_expr(right, type_map)),
+    )
+  }
+
+  fn monomorphize_struct_init(&mut self, struct_name: &str, fields: &HashMap<String, IrExpr>, type_map: &HashMap<Identifier, Type>) -> IrExprKind {
+    let mut new_fields = HashMap::new();
+    for (field_name, field_expr) in fields {
+      let new_field_expr = self.monomorphize_expr(field_expr, type_map);
+      new_fields.insert(field_name.clone(), new_field_expr);
+    }
+    IrExprKind::StructInit(struct_name.to_string(), new_fields)
+  }
+
+  fn monomorphize_ternary(&mut self, cond: &IrExpr, tr: &IrExpr, fl: &IrExpr, type_map: &HashMap<Identifier, Type>) -> IrExprKind {
+    IrExprKind::Ternary(
+      Box::new(self.monomorphize_expr(cond, type_map)),
+      Box::new(self.monomorphize_expr(tr, type_map)),
+      Box::new(self.monomorphize_expr(fl, type_map)),
+    )
+  }
+
+  fn monomorphize_if(&mut self, condition: &IrExpr, then_branch: &IrExpr, else_branch: &Option<Box<IrExpr>>, type_map: &HashMap<Identifier, Type>) -> IrExprKind {
+    IrExprKind::If {
+      condition: Box::new(self.monomorphize_expr(condition, type_map)),
+      then_branch: Box::new(self.monomorphize_expr(then_branch, type_map)),
+      else_branch: else_branch.as_ref().map(|e| Box::new(self.monomorphize_expr(e, type_map))),
+    }
+  }
+
+  fn monomorphize_match(&mut self, scrutinee: &IrExpr, arms: &[IrMatchArm], type_map: &HashMap<Identifier, Type>) -> IrExprKind {
+    IrExprKind::Match {
+      scrutinee: Box::new(self.monomorphize_expr(scrutinee, type_map)),
+      arms: arms
+        .iter()
+        .map(|arm| IrMatchArm {
+          pattern: arm.pattern.clone(),
+          body: self.monomorphize_expr(&arm.body, type_map),
+        })
+        .collect(),
+    }
   }
 
   fn substitute_type(&mut self, ty: &Type, type_map: &HashMap<Identifier, Type>) -> Type {

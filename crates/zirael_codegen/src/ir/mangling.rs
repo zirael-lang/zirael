@@ -8,11 +8,72 @@ use zirael_utils::{
 
 impl<'reports> HirLowering<'reports> {
   pub fn mangle_symbol(&mut self, sym_id: SymbolId) -> String {
-    if self.mode == Mode::Debug {
-      self.mangle_debug_symbol(sym_id, None, &[])
-    } else {
-      self.mangle_release_symbol(sym_id, None, &[])
+    match self.mode {
+      Mode::Debug => self.mangle_debug_symbol(sym_id, None, &[]),
+      Mode::Release => self.mangle_release_symbol(sym_id, None, &[]),
     }
+  }
+
+  pub fn mangle_monomorphized_symbol(
+    &mut self,
+    original_sym_id: SymbolId,
+    mono_id: MonomorphizationId,
+    type_arguments: &[Type],
+  ) -> String {
+    match self.mode {
+      Mode::Debug => self.mangle_debug_symbol(original_sym_id, Some(mono_id), type_arguments),
+      Mode::Release => self.mangle_release_symbol(original_sym_id, Some(mono_id), type_arguments),
+    }
+  }
+
+  fn mangle_debug_symbol(
+    &mut self,
+    sym_id: SymbolId,
+    mono_id: Option<MonomorphizationId>,
+    type_arguments: &[Type],
+  ) -> String {
+    let symbol = self.symbol_table.get_symbol_unchecked(&sym_id);
+    let canonical_symbol = self.symbol_table.get_symbol_unchecked(&symbol.canonical_symbol);
+    let base_name = format!("zirael_{}", self.get_sym_name(&canonical_symbol, mono_id));
+    
+    self.build_mangled_name_with_types(base_name, type_arguments)
+  }
+
+  fn mangle_release_symbol(
+    &mut self,
+    sym_id: SymbolId,
+    mono_id: Option<MonomorphizationId>,
+    type_arguments: &[Type],
+  ) -> String {
+    let symbol = self.symbol_table.get_symbol_unchecked(&sym_id);
+    let canonical_id = symbol.canonical_symbol;
+    let cache_key = self.compute_cache_key(canonical_id, type_arguments);
+    
+    if let Some(cached) = self.get_cached_mangled_name(canonical_id, &cache_key) {
+      return cached;
+    }
+
+    let canonical_symbol = self.symbol_table.get_symbol_unchecked(&canonical_id);
+    let result = self.build_mangled_name(&canonical_symbol, mono_id, type_arguments);
+    self.cache_mangled_name(canonical_id, cache_key, result.clone());
+    result
+  }
+
+  fn build_mangled_name_with_types(&mut self, base_name: String, type_arguments: &[Type]) -> String {
+    if type_arguments.is_empty() {
+      base_name
+    } else {
+      let type_suffix = self.create_type_suffix(type_arguments);
+      format!("{base_name}__{type_suffix}")
+    }
+  }
+
+  fn create_type_suffix(&mut self, type_arguments: &[Type]) -> String {
+    type_arguments
+      .iter()
+      .map(|ty| self.mangle_type_for_name(ty))
+      .collect::<Vec<_>>()
+      .join("_")
   }
 
   pub fn get_sym_name(&mut self, sym: &Symbol, _mono_id: Option<MonomorphizationId>) -> String {
@@ -30,60 +91,6 @@ impl<'reports> HirLowering<'reports> {
     } else {
       base
     }
-  }
-
-  pub fn mangle_monomorphized_symbol(
-    &mut self,
-    original_sym_id: SymbolId,
-    mono_id: MonomorphizationId,
-    type_arguments: &[Type],
-  ) -> String {
-    if self.mode == Mode::Debug {
-      self.mangle_debug_symbol(original_sym_id, Some(mono_id), type_arguments)
-    } else {
-      self.mangle_release_symbol(original_sym_id, Some(mono_id), type_arguments)
-    }
-  }
-
-  fn mangle_debug_symbol(
-    &mut self,
-    sym_id: SymbolId,
-    mono_id: Option<MonomorphizationId>,
-    type_arguments: &[Type],
-  ) -> String {
-    let symbol = self.symbol_table.get_symbol_unchecked(&sym_id);
-    let canonical_symbol = self.symbol_table.get_symbol_unchecked(&symbol.canonical_symbol);
-
-    let base_name = format!("zirael_{}", self.get_sym_name(&canonical_symbol, mono_id));
-
-    if type_arguments.is_empty() {
-      base_name
-    } else {
-      let type_suffix =
-        type_arguments.iter().map(|ty| self.mangle_type_for_name(ty)).collect::<Vec<_>>().join("_");
-      format!("{base_name}__{type_suffix}")
-    }
-  }
-
-  fn mangle_release_symbol(
-    &mut self,
-    sym_id: SymbolId,
-    mono_id: Option<MonomorphizationId>,
-    type_arguments: &[Type],
-  ) -> String {
-    let symbol = self.symbol_table.get_symbol_unchecked(&sym_id);
-    let canonical_id = symbol.canonical_symbol;
-
-    let cache_key = self.compute_cache_key(canonical_id, type_arguments);
-    if let Some(cached) = self.get_cached_mangled_name(canonical_id, &cache_key) {
-      return cached;
-    }
-
-    let canonical_symbol = self.symbol_table.get_symbol_unchecked(&canonical_id);
-    let result = self.build_mangled_name(&canonical_symbol, mono_id, type_arguments);
-
-    self.cache_mangled_name(canonical_id, cache_key, result.clone());
-    result
   }
 
   fn build_mangled_name(
@@ -167,38 +174,19 @@ impl<'reports> HirLowering<'reports> {
       Type::Never => "never".to_owned(),
       Type::Pointer(inner) => format!("ptr{}", self.mangle_type_for_name(inner)),
       Type::Reference(inner) => format!("ref{}", self.mangle_type_for_name(inner)),
-      Type::Array(inner, Some(size)) => {
-        format!("arr{}_{}", size, self.mangle_type_for_name(inner))
-      }
-      Type::Array(inner, None) => format!("slice{}", self.mangle_type_for_name(inner)),
-      Type::Named { name, generics } => {
-        if generics.is_empty() {
-          resolve(name)
-        } else {
-          let generic_parts =
-            generics.iter().map(|g| self.mangle_type_for_name(g)).collect::<Vec<_>>().join("_");
-          format!("{}_{}", resolve(name), generic_parts)
-        }
-      }
-      Type::Function { params, return_type } => {
-        let param_names =
-          params.iter().map(|p| self.mangle_type_for_name(p)).collect::<Vec<_>>().join("_");
-        format!("fn_{}__ret_{}", param_names, self.mangle_type_for_name(return_type))
-      }
+      Type::Array(inner, size) => self.mangle_array_type(inner, size),
+      Type::Named { name, generics } => self.mangle_named_type(name, generics),
+      Type::Function { params, return_type } => self.mangle_function_type(params, return_type),
       Type::MonomorphizedSymbol(mono) => {
         let mono = self.handle_monomorphized_symbol(mono, false);
         self.mangle_type_for_name(&mono)
       }
       Type::Inferred => {
-        warn!(
-          "encountered Type::Inferred during mangling - this should have been resolved earlier"
-        );
+        warn!("encountered Type::Inferred during mangling - this should have been resolved earlier");
         "inferred".to_owned()
       }
       Type::Variable { name, .. } => {
-        warn!(
-          "encountered Type::Variable during mangling - this should have been resolved earlier"
-        );
+        warn!("encountered Type::Variable during mangling - this should have been resolved earlier");
         format!("var_{}", resolve(name))
       }
       _ => {
@@ -206,6 +194,31 @@ impl<'reports> HirLowering<'reports> {
         "unknown".to_owned()
       }
     }
+  }
+
+  fn mangle_array_type(&mut self, inner: &Type, size: &Option<usize>) -> String {
+    match size {
+      Some(size) => format!("arr{}_{}", size, self.mangle_type_for_name(inner)),
+      None => format!("slice{}", self.mangle_type_for_name(inner)),
+    }
+  }
+
+  fn mangle_named_type(&mut self, name: &zirael_utils::prelude::Identifier, generics: &[Type]) -> String {
+    if generics.is_empty() {
+      resolve(name)
+    } else {
+      let generic_parts = self.create_type_suffix(generics);
+      format!("{}_{}", resolve(name), generic_parts)
+    }
+  }
+
+  fn mangle_function_type(&mut self, params: &[Type], return_type: &Type) -> String {
+    let param_names = params
+      .iter()
+      .map(|p| self.mangle_type_for_name(p))
+      .collect::<Vec<_>>()
+      .join("_");
+    format!("fn_{}__ret_{}", param_names, self.mangle_type_for_name(return_type))
   }
 
   fn mangle_type_into_string(&self, ty: &Type, result: &mut String) {
