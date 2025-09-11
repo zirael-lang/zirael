@@ -104,13 +104,13 @@ impl<'reports> HirLowering<'reports> {
     let file_path = self.sources.get_unchecked(symbol_file).path();
     let base_path = strip_same_root(&file_path, self.root.as_path()).with_extension("");
 
-    let mut result = String::from("_ZN");
+    let mut result = String::new();
 
-    result.push_str(&format!("{}{}", symbol_name.len(), symbol_name));
+    result.push_str(&symbol_name);
 
     for component in base_path.components() {
       if let Some(component_str) = component.as_os_str().to_str() {
-        result.push_str(&format!("{}{}", component_str.len(), component_str));
+        result.push_str(&format!("_{}", component_str));
       }
     }
 

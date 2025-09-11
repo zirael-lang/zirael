@@ -152,7 +152,7 @@ impl<'reports> HirLowering<'reports> {
     let enum_symbol = self.symbol_table.get_symbol_unchecked(&parent_enum_id);
     let generics = self.get_enum_generics(&enum_symbol)?;
 
-    let base_name = self.build_base_variant_name(variant_symbol);
+    let base_name = self.mangle_symbol(variant_symbol.id);
     let parent_name = self.mangle_symbol(enum_symbol.id);
 
     if self.should_use_monomorphized_name(variant_symbol.id, generics) {
@@ -175,11 +175,6 @@ impl<'reports> HirLowering<'reports> {
       SymbolKind::Enum { generics, .. } => Some(generics),
       _ => None,
     }
-  }
-
-  fn build_base_variant_name(&mut self, variant_symbol: &Symbol) -> String {
-    let canonical_symbol = self.symbol_table.get_symbol_unchecked(&variant_symbol.canonical_symbol);
-    format!("zirael_{}", self.get_sym_name(&canonical_symbol, None))
   }
 
   fn should_use_monomorphized_name(
