@@ -80,6 +80,7 @@ impl<'ctx> CompilationUnit<'ctx> {
       sources,
       self.context.packages().clone(),
       vec![],
+      self.info.mode,
     );
     decl.collect(&mut result.modules);
     if self.info.ty == PackageType::Binary
@@ -102,6 +103,7 @@ impl<'ctx> CompilationUnit<'ctx> {
       reports,
       inference.mono_table.clone(),
       self.info.ty == PackageType::Library,
+      self.info.mode,
     );
     let ir = &mut lower_hir_to_ir(
       &mut hir,

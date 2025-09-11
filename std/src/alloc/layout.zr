@@ -1,6 +1,7 @@
 import "./alignment.zr"
 import "../option.zr"
 import "../panic.zr"
+import "../assert.zr"
 
 /// Describes the memory layout requirements for a type or allocation.
 ///
@@ -29,7 +30,7 @@ struct Layout {
 
         match alignment {
             Option::Some { value } => {
-                //assert(size >= 0, "Size must be non-negative");
+                assertDebug(size >= 0, "Size must be non-negative");
 
                 //var end = size + value.value - 1;
                 //assert(end >= size, "Size and alignment cause overflow");

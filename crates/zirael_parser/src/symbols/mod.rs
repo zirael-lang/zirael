@@ -1,5 +1,5 @@
 use id_arena::Id;
-use zirael_utils::prelude::{Identifier, Span};
+use zirael_utils::prelude::{Identifier, Mode, Span};
 
 mod relations;
 pub mod scopes;
@@ -108,4 +108,6 @@ pub struct Symbol {
   pub declaration_order: usize,
   pub imported_from: Option<ScopeId>,
   pub canonical_symbol: SymbolId,
+  // if this is some, this symbol was hidden because of the @mode attribute
+  pub mode_specific: Option<Mode>,
 }

@@ -28,11 +28,7 @@ pub enum Pattern {
   /// Literal pattern `42`, `"hello"`, etc.
   Literal(Literal),
   /// Enum variant pattern `Result::Ok { value }`
-  EnumVariant {
-    path: Path,
-    fields: Option<Vec<PatternField>>,
-    resolved_variant: Option<SymbolId>,
-  },
+  EnumVariant { path: Path, fields: Option<Vec<PatternField>>, resolved_variant: Option<SymbolId> },
   /// Struct pattern `Point { x, y }`
   Struct { name: Identifier, fields: Vec<PatternField> },
 }
@@ -170,7 +166,13 @@ impl Expr {
 impl ExprKind {
   pub fn name(&self) -> &'static str {
     match self {
-      Self::Literal(_) => "literal",
+      Self::Literal(literal) => match literal {
+        Literal::Integer(_) => "integer literal",
+        Literal::Float(_) => "float literal",
+        Literal::String(_) => "string literal",
+        Literal::Char(_) => "char literal",
+        Literal::Bool(_) => "boolean literal",
+      },
       Self::Identifier(_, _) => "identifier",
       Self::Path(_) => "path",
       Self::Binary { .. } => "binary expression",
@@ -192,6 +194,9 @@ impl ExprKind {
   }
 
   pub fn can_be_borrowed(&self) -> bool {
-    matches!(self, Self::Identifier(_, _) | Self::Path(_) | Self::FieldAccess(_) | Self::IndexAccess(_, _))
+    matches!(
+      self,
+      Self::Identifier(_, _) | Self::Path(_) | Self::FieldAccess(_) | Self::IndexAccess(_, _)
+    )
   }
 }

@@ -1,4 +1,5 @@
 use crate::hir::{
+  HirItem,
   expr::{HirExpr, HirExprKind},
   lowering::AstLowering,
 };
@@ -36,11 +37,7 @@ impl<'reports> AstLowering<'reports> {
   }
 
   pub fn result_not_used_error(&mut self, expr: &HirExpr) {
-    self.warn(
-      "expression result is not used",
-      vec![("here".to_owned(), expr.span)],
-      vec![],
-    );
+    self.warn("expression result is not used", vec![("here".to_owned(), expr.span)], vec![]);
   }
 
   pub fn try_unused_symbol(&mut self, symbol: &Symbol) -> bool {

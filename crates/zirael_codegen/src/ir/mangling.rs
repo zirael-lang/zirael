@@ -35,7 +35,7 @@ impl<'reports> HirLowering<'reports> {
     let symbol = self.symbol_table.get_symbol_unchecked(&sym_id);
     let canonical_symbol = self.symbol_table.get_symbol_unchecked(&symbol.canonical_symbol);
     let base_name = format!("zirael_{}", self.get_sym_name(&canonical_symbol, mono_id));
-    
+
     self.build_mangled_name_with_types(base_name, type_arguments)
   }
 
@@ -48,7 +48,7 @@ impl<'reports> HirLowering<'reports> {
     let symbol = self.symbol_table.get_symbol_unchecked(&sym_id);
     let canonical_id = symbol.canonical_symbol;
     let cache_key = self.compute_cache_key(canonical_id, type_arguments);
-    
+
     if let Some(cached) = self.get_cached_mangled_name(canonical_id, &cache_key) {
       return cached;
     }
@@ -59,7 +59,11 @@ impl<'reports> HirLowering<'reports> {
     result
   }
 
-  fn build_mangled_name_with_types(&mut self, base_name: String, type_arguments: &[Type]) -> String {
+  fn build_mangled_name_with_types(
+    &mut self,
+    base_name: String,
+    type_arguments: &[Type],
+  ) -> String {
     if type_arguments.is_empty() {
       base_name
     } else {
@@ -69,11 +73,7 @@ impl<'reports> HirLowering<'reports> {
   }
 
   fn create_type_suffix(&mut self, type_arguments: &[Type]) -> String {
-    type_arguments
-      .iter()
-      .map(|ty| self.mangle_type_for_name(ty))
-      .collect::<Vec<_>>()
-      .join("_")
+    type_arguments.iter().map(|ty| self.mangle_type_for_name(ty)).collect::<Vec<_>>().join("_")
   }
 
   pub fn get_sym_name(&mut self, sym: &Symbol, _mono_id: Option<MonomorphizationId>) -> String {
@@ -81,7 +81,7 @@ impl<'reports> HirLowering<'reports> {
 
     if let Some(parent_struct) = self.symbol_table.is_a_child_of_symbol(sym.id) {
       let parent_struct = self.symbol_table.get_symbol_unchecked(&parent_struct);
-      let parent_struct_name = resolve(&parent_struct.name);
+      let parent_struct_name = self.mangle_symbol(parent_struct.id);
 
       if let SymbolKind::TypeExtension { ty, .. } = parent_struct.kind {
         return format!("ext_{}_{}", self.mangle_type_for_name(&ty), base);
@@ -182,11 +182,15 @@ impl<'reports> HirLowering<'reports> {
         self.mangle_type_for_name(&mono)
       }
       Type::Inferred => {
-        warn!("encountered Type::Inferred during mangling - this should have been resolved earlier");
+        warn!(
+          "encountered Type::Inferred during mangling - this should have been resolved earlier"
+        );
         "inferred".to_owned()
       }
       Type::Variable { name, .. } => {
-        warn!("encountered Type::Variable during mangling - this should have been resolved earlier");
+        warn!(
+          "encountered Type::Variable during mangling - this should have been resolved earlier"
+        );
         format!("var_{}", resolve(name))
       }
       _ => {
@@ -203,7 +207,11 @@ impl<'reports> HirLowering<'reports> {
     }
   }
 
-  fn mangle_named_type(&mut self, name: &zirael_utils::prelude::Identifier, generics: &[Type]) -> String {
+  fn mangle_named_type(
+    &mut self,
+    name: &zirael_utils::prelude::Identifier,
+    generics: &[Type],
+  ) -> String {
     if generics.is_empty() {
       resolve(name)
     } else {
@@ -213,11 +221,8 @@ impl<'reports> HirLowering<'reports> {
   }
 
   fn mangle_function_type(&mut self, params: &[Type], return_type: &Type) -> String {
-    let param_names = params
-      .iter()
-      .map(|p| self.mangle_type_for_name(p))
-      .collect::<Vec<_>>()
-      .join("_");
+    let param_names =
+      params.iter().map(|p| self.mangle_type_for_name(p)).collect::<Vec<_>>().join("_");
     format!("fn_{}__ret_{}", param_names, self.mangle_type_for_name(return_type))
   }
 

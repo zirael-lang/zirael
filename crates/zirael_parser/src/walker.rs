@@ -43,7 +43,7 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
   fn walk_item(&mut self, item: &mut Item) {
     self.visit_item(item);
 
-    for attr in &mut item.attributes {
+    for attr in item.attributes.iter_mut() {
       self.walk_attribute(attr);
     }
 
@@ -167,7 +167,7 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
     self.visit_struct_field(field);
     self.walk_type(&mut field.ty);
 
-    for attr in &mut field.attributes {
+    for attr in field.attributes.iter_mut() {
       self.walk_attribute(attr);
     }
   }
@@ -196,7 +196,7 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
     self.visit_enum_variant(variant);
     self.walk_enum_variant_data(&mut variant.data);
 
-    for attr in &mut variant.attributes {
+    for attr in variant.attributes.iter_mut() {
       self.walk_attribute(attr);
     }
   }

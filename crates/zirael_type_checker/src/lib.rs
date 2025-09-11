@@ -281,7 +281,7 @@ impl<'reports> AstWalker<'reports> for TypeInference<'reports> {
     self.visit_struct_field(field);
     self.walk_type(&mut field.ty);
 
-    for attr in &mut field.attributes {
+    for attr in field.attributes.iter_mut() {
       self.walk_attribute(attr);
     }
   }

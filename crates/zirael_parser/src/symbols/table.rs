@@ -97,6 +97,7 @@ impl SymbolTable {
     name: Identifier,
     kind: SymbolKind,
     span: Option<Span>,
+    mode_specific: Option<Mode>,
   ) -> Result<SymbolId, SymbolTableError> {
     self.write(|table| {
       let current_scope = table.current_scope_creation_id;
@@ -120,6 +121,7 @@ impl SymbolTable {
         declaration_order: table.declaration_counter,
         imported_from: None,
         canonical_symbol: id,
+        mode_specific,
       });
 
       table.name_lookup.insert((name, current_scope), symbol_id);
@@ -231,7 +233,7 @@ impl SymbolTable {
         if let Some(&symbol_id) = table.name_lookup.get(&(*name, scope_id)) {
           return Some(symbol_id);
         }
-        
+
         current_scope = table.scopes_arena.get(scope_id)?.parent;
       }
 
@@ -278,13 +280,20 @@ impl SymbolTable {
     }
   }
 
-  pub fn modify_symbol<R>(&self, id: SymbolId, f: impl FnOnce(&mut Symbol) -> R) -> Result<R, SymbolTableError> {
+  pub fn modify_symbol(
+    &self,
+    id: SymbolId,
+    f: impl FnOnce(&mut SymbolKind) -> SymbolKind,
+  ) -> Result<(), SymbolTableError> {
     self.write(|table| {
       let symbol = table.symbols.get_mut(id).ok_or(SymbolTableError::SymbolNotFound {
         name: get_or_intern("__unknown__", None),
         scope: table.current_traversal_scope,
       })?;
-      Ok(f(symbol))
+
+      symbol.kind = f(&mut symbol.kind);
+
+      Ok(())
     })
   }
 
@@ -329,24 +338,6 @@ impl SymbolTable {
     })
   }
 
-  pub fn update_symbol_kind(
-    &self,
-    id: SymbolId,
-    new_kind: impl FnOnce(&mut SymbolKind) -> SymbolKind,
-  ) -> Result<(), SymbolTableError> {
-    self.write(|table| {
-      if let Some(symbol) = table.symbols.get_mut(id) {
-        symbol.kind = new_kind(&mut symbol.kind);
-        Ok(())
-      } else {
-        Err(SymbolTableError::SymbolNotFound {
-          name: default_ident(),
-          scope: table.current_traversal_scope,
-        })
-      }
-    })
-  }
-
   pub fn is_ancestor_scope(&self, ancestor: ScopeId, descendant: ScopeId) -> bool {
     self.read(|table| {
       let mut current = Some(descendant);
@@ -356,7 +347,7 @@ impl SymbolTable {
         if scope_id == ancestor {
           return true;
         }
-        
+
         if visited.contains(&scope_id) {
           return false;
         }
@@ -444,7 +435,7 @@ impl SymbolTable {
     });
 
     let kind = SymbolKind::Temporary { ty, lifetime };
-    self.insert(temp_name, kind, span)
+    self.insert(temp_name, kind, span, None)
   }
 
   pub fn find_similar_symbol(
@@ -581,12 +572,10 @@ impl SymbolTable {
         Some(generics.clone())
       }
 
-      SymbolKind::EnumVariant { parent_enum, .. } => {
-        match self.get_symbol(*parent_enum) {
-          Ok(parent_symbol) => self.get_generics_for_symbol(&parent_symbol),
-          Err(_) => None,
-        }
-      }
+      SymbolKind::EnumVariant { parent_enum, .. } => match self.get_symbol(*parent_enum) {
+        Ok(parent_symbol) => self.get_generics_for_symbol(&parent_symbol),
+        Err(_) => None,
+      },
 
       _ => None,
     }
@@ -641,6 +630,7 @@ impl SymbolTableImpl {
       declaration_order: self.declaration_counter,
       imported_from: Some(source_module),
       canonical_symbol: source_symbol_id,
+      mode_specific: source_symbol.mode_specific,
     });
 
     self.name_lookup.insert((symbol_name, target_module), imported_symbol_id);

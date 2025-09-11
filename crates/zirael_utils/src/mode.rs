@@ -1,10 +1,21 @@
 use clap::ValueEnum;
 use std::fmt::Display;
 
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug, Default)]
 pub enum Mode {
+  #[default]
   Debug,
   Release,
+}
+
+impl Mode {
+  pub fn from_str(mode: &str) -> Option<Self> {
+    match mode.to_lowercase().as_str() {
+      "debug" => Some(Self::Debug),
+      "release" => Some(Self::Release),
+      _ => None,
+    }
+  }
 }
 
 impl Display for Mode {

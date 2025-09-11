@@ -92,7 +92,7 @@ impl<'reports> MemoryAnalysis<'reports> {
 
       self
         .symbol_table
-        .update_symbol_kind(sym_id, |_| symbol.kind.clone())
+        .modify_symbol(sym_id, |_| symbol.kind.clone())
         .expect("failed to update symbol kind");
 
       true

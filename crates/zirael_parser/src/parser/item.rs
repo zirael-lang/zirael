@@ -1,5 +1,5 @@
 use crate::{
-  AstId, Attribute, ExpectedAttribute, StructDeclaration, StructField, TokenKind, Type,
+  AstId, Attribute, Attributes, ExpectedAttribute, StructDeclaration, StructField, TokenKind, Type,
   TypeExtension,
   ast::{
     Abi, EnumDeclaration, EnumVariant, EnumVariantData, Function, FunctionModifiers,
@@ -164,7 +164,7 @@ impl<'a> Parser<'a> {
     }
   }
 
-  pub fn parse_single_method(&mut self, attrs: Vec<Attribute>, span: Span) -> Option<Item> {
+  pub fn parse_single_method(&mut self, attrs: Attributes, span: Span) -> Option<Item> {
     if !self.check_keyword(Keyword::Fn) {
       return None;
     }
@@ -387,15 +387,10 @@ impl<'a> Parser<'a> {
     )
   }
 
-  pub fn parse_fn(
-    &mut self,
-    id: AstId,
-    attrs: &Vec<Attribute>,
-    span: Span,
-  ) -> (ItemKind, Identifier) {
+  pub fn parse_fn(&mut self, id: AstId, attrs: &Attributes, span: Span) -> (ItemKind, Identifier) {
     let async_ = self.match_keyword(Keyword::Async);
     let const_ = self.match_keyword(Keyword::Const);
-    let extern_ = attrs.iter().find(|attr| resolve(&attr.name) == "extern");
+    let extern_ = attrs.get("extern");
 
     let (extern_, abi) = if let Some(extern_) = extern_ {
       let abi = if let Some(abi) = extern_.get_arg_value(0, ExpectedAttribute::String)
@@ -544,10 +539,8 @@ impl<'a> Parser<'a> {
         ReportBuilder::builder("Found multiple parameters with the same name", ReportKind::Error);
 
       for (i, param) in duplicate_params.iter().enumerate() {
-        report = report.label(
-          &format!("{} parameter found here", (i + 1).to_ordinal_string()),
-          param.span,
-        );
+        report = report
+          .label(&format!("{} parameter found here", (i + 1).to_ordinal_string()), param.span);
       }
 
       self.add_report(report);

@@ -20,6 +20,7 @@ pub struct AstLowering<'reports> {
   pub folded_vars: HashMap<SymbolId, HirExprKind>,
   ast_id_arena: Arena<()>,
   pub is_library: bool,
+  pub mode: Mode,
 }
 
 impl<'reports> AstLowering<'reports> {
@@ -28,6 +29,7 @@ impl<'reports> AstLowering<'reports> {
     reports: &Reports<'reports>,
     mono_table: MonomorphizationTable,
     is_library: bool,
+    mode: Mode,
   ) -> Self {
     Self {
       symbol_table: symbol_table.clone(),
@@ -37,7 +39,18 @@ impl<'reports> AstLowering<'reports> {
       ast_id_arena: Arena::new(),
       mono_table,
       is_library,
+      mode,
     }
+  }
+
+  fn lower_type(&mut self, ty: Type) -> Type {
+    if let Type::Named { name, .. } = &ty {
+      if let Some(symbol) = self.symbol_table.lookup_symbol(name) {
+        self.symbol_for_mode_check(&symbol, *name.span());
+      }
+    }
+
+    ty
   }
 
   fn is_enum_variant_constructor(&self, name_expr: &Expr) -> bool {
@@ -83,28 +96,47 @@ impl<'reports> AstLowering<'reports> {
     None
   }
 
-  fn convert_enum_variant_to_call(&mut self, symbol_id: SymbolId) -> HirExprKind {
+  fn lower_identifier(&mut self, symbol_id: SymbolId) -> HirExprKind {
     let symbol = self.symbol_table.get_symbol_unchecked(&symbol_id);
+    self.symbol_for_mode_check(&symbol, *symbol.name.span());
+
     if let SymbolKind::EnumVariant { data, .. } = &symbol.kind {
       match data {
-        EnumVariantData::Unit => {
-          HirExprKind::Call {
-            callee: Box::new(HirExpr {
-              kind: HirExprKind::Symbol(symbol_id),
-              ty: Type::Inferred,
-              span: Span { start: 0, end: 0 },
-              id: self.ast_id_arena.alloc(()),
-            }),
-            args: vec![],
-            call_info: None,
-          }
-        }
-        EnumVariantData::Struct(_) => {
-          HirExprKind::Symbol(symbol_id)
-        }
+        EnumVariantData::Unit => HirExprKind::Call {
+          callee: Box::new(HirExpr {
+            kind: HirExprKind::Symbol(symbol_id),
+            ty: Type::Inferred,
+            span: Span { start: 0, end: 0 },
+            id: self.ast_id_arena.alloc(()),
+          }),
+          args: vec![],
+          call_info: None,
+        },
+        EnumVariantData::Struct(_) => HirExprKind::Symbol(symbol_id),
       }
     } else {
       HirExprKind::Symbol(symbol_id)
+    }
+  }
+
+  pub fn symbol_for_mode_check(&mut self, symbol: &Symbol, span: Span) {
+    if symbol.mode_specific.is_some_and(|mode| mode == self.mode) {
+      self.error(
+        &format!(
+          "{} only works in {} mode, bur currently it's {} mode",
+          symbol.name.to_string().dimmed().bold(),
+          symbol.mode_specific.unwrap().to_string().dimmed().bold(),
+          self.mode.to_string().dimmed().bold()
+        ),
+        vec![
+          ("used here".to_string(), span),
+          (
+            format!("{} is defined here", symbol.name.to_string().dimmed().bold()),
+            symbol.source_location.unwrap_or_default(),
+          ),
+        ],
+        vec![],
+      );
     }
   }
 
@@ -149,6 +181,10 @@ impl<'reports> AstLowering<'reports> {
       return None;
     }
 
+    if sym.mode_specific.is_some_and(|mode| mode == self.mode) {
+      return None;
+    }
+
     match &mut item.kind {
       ItemKind::Function(func) => {
         self.push_scope(ScopeType::Function(func.id));
@@ -159,13 +195,19 @@ impl<'reports> AstLowering<'reports> {
           symbol_id,
           kind: HirItemKind::Function(hir_function),
           span: item.span,
+          attrs: item.attributes.clone(),
         })
       }
       ItemKind::Struct(struct_def) => {
         self.push_scope(ScopeType::Struct(struct_def.id));
         let hir_struct = self.lower_struct(struct_def, symbol_id);
         self.pop_scope();
-        Some(HirItem { symbol_id, kind: HirItemKind::Struct(hir_struct), span: item.span })
+        Some(HirItem {
+          symbol_id,
+          kind: HirItemKind::Struct(hir_struct),
+          span: item.span,
+          attrs: item.attributes.clone(),
+        })
       }
       ItemKind::TypeExtension(ty_ext) => {
         self.push_scope(ScopeType::TypeExtension(ty_ext.id));
@@ -176,6 +218,7 @@ impl<'reports> AstLowering<'reports> {
           symbol_id,
           kind: HirItemKind::TypeExtension(ty_ext),
           span: item.span,
+          attrs: item.attributes.clone(),
         })
       }
       ItemKind::Enum(enum_def) => {
@@ -183,7 +226,12 @@ impl<'reports> AstLowering<'reports> {
         let hir_enum = self.lower_enum(enum_def, symbol_id);
         self.pop_scope();
 
-        Some(HirItem { symbol_id, kind: HirItemKind::Enum(hir_enum), span: item.span })
+        Some(HirItem {
+          symbol_id,
+          kind: HirItemKind::Enum(hir_enum),
+          span: item.span,
+          attrs: item.attributes.clone(),
+        })
       }
       ItemKind::Import(..) => None,
     }
@@ -235,8 +283,10 @@ impl<'reports> AstLowering<'reports> {
       .filter_map(|param| self.lower_parameter(param))
       .collect();
 
-    let hir_signature =
-      HirFunctionSignature { parameters, return_type: func.signature.return_type.clone() };
+    let hir_signature = HirFunctionSignature {
+      parameters,
+      return_type: self.lower_type(func.signature.return_type.clone()),
+    };
 
     let body = func.body.as_mut().map(|body_expr| self.lower_function_body(body_expr, symbol_id));
 
@@ -258,7 +308,7 @@ impl<'reports> AstLowering<'reports> {
 
     Some(HirParam {
       symbol_id,
-      ty: param.ty.clone(),
+      ty: self.lower_type(param.ty.clone()),
       is_variadic: matches!(param.kind, ParameterKind::Variadic),
       default_value,
     })
@@ -327,7 +377,7 @@ impl<'reports> AstLowering<'reports> {
 
     HirExpr {
       kind: hir_kind,
-      ty: ast_expr.ty.clone(),
+      ty: self.lower_type(ast_expr.ty.clone()),
       span: ast_expr.span,
       id: ast_expr.id,
     }
@@ -372,7 +422,7 @@ impl<'reports> AstLowering<'reports> {
           lhs: lhs_expr.clone(),
           rhs: Box::new(HirExpr {
             kind: HirExprKind::Binary { left: lhs_expr, op: op.clone(), right: rhs_expr },
-            ty: ast_expr.ty.clone(),
+            ty: self.lower_type(ast_expr.ty.clone()),
             span: ast_expr.span,
             id: ast_expr.id,
           }),
@@ -382,7 +432,7 @@ impl<'reports> AstLowering<'reports> {
       _ => {
         return HirExpr {
           kind: self.lower_expr_impl(ast_expr, context).kind,
-          ty: ast_expr.ty.clone(),
+          ty: self.lower_type(ast_expr.ty.clone()),
           span: ast_expr.span,
           id: ast_expr.id,
         };
@@ -391,7 +441,7 @@ impl<'reports> AstLowering<'reports> {
 
     HirExpr {
       kind: hir_kind,
-      ty: ast_expr.ty.clone(),
+      ty: self.lower_type(ast_expr.ty.clone()),
       span: ast_expr.span,
       id: ast_expr.id,
     }
@@ -405,13 +455,11 @@ impl<'reports> AstLowering<'reports> {
     let hir_kind = match &mut ast_expr.kind {
       ExprKind::Literal(lit) => HirExprKind::Literal(lit.clone()),
 
-      ExprKind::Identifier(_name, Some(symbol_id)) => {
-        self.convert_enum_variant_to_call(*symbol_id)
-      }
+      ExprKind::Identifier(_name, Some(symbol_id)) => self.lower_identifier(*symbol_id),
 
       ExprKind::Identifier(name, None) => {
         if let Some(symbol) = self.symbol_table.lookup_symbol(name) {
-          self.convert_enum_variant_to_call(symbol.id)
+          self.lower_identifier(symbol.id)
         } else {
           self.error("Unresolved identifier", vec![], vec![]);
           HirExprKind::Error
@@ -421,7 +469,7 @@ impl<'reports> AstLowering<'reports> {
       ExprKind::Path(path) => {
         if let Some(last_segment) = path.segments.last() {
           if let Some(symbol_id) = last_segment.symbol_id {
-            self.convert_enum_variant_to_call(symbol_id)
+            self.lower_identifier(symbol_id)
           } else {
             self.error("Unresolved path", vec![], vec![]);
             HirExprKind::Error
@@ -467,7 +515,7 @@ impl<'reports> AstLowering<'reports> {
           lhs: lhs_expr.clone(),
           rhs: Box::new(HirExpr {
             kind: HirExprKind::Binary { left: lhs_expr, op: op.clone(), right: rhs_expr },
-            ty: ast_expr.ty.clone(),
+            ty: self.lower_type(ast_expr.ty.clone()),
             span: ast_expr.span,
             id: ast_expr.id,
           }),
@@ -499,7 +547,7 @@ impl<'reports> AstLowering<'reports> {
           self.error("Invalid method call chain", vec![], vec![]);
           return HirExpr {
             kind: HirExprKind::Error,
-            ty: ast_expr.ty.clone(),
+            ty: self.lower_type(ast_expr.ty.clone()),
             span: ast_expr.span,
             id: ast_expr.id,
           };
@@ -516,7 +564,7 @@ impl<'reports> AstLowering<'reports> {
         let mut method_args = vec![if signature.parameters.first().unwrap().ty.is_reference() {
           HirExpr {
             kind: HirExprKind::Unary { op: UnaryOp::Ref, operand: Box::new(receiver) },
-            ty: Type::Inferred,
+            ty: self.lower_type(Type::Inferred),
             span: Default::default(),
             id: self.ast_id_arena.alloc(()),
           }
@@ -534,11 +582,11 @@ impl<'reports> AstLowering<'reports> {
 
       ExprKind::StructInit { name, fields, call_info } => {
         let is_enum_variant = self.is_enum_variant_constructor(name);
-        
+
         if is_enum_variant {
           let callee = Box::new(self.lower_expr(name));
           let mut field_values = Vec::new();
-          
+
           if let Some(field_order) = self.get_variant_field_order(name) {
             for field_name in field_order {
               if let Some(field_expr) = fields.get_mut(&field_name) {
@@ -546,12 +594,8 @@ impl<'reports> AstLowering<'reports> {
               }
             }
           }
-          
-          HirExprKind::Call {
-            callee,
-            args: field_values,
-            call_info: call_info.clone(),
-          }
+
+          HirExprKind::Call { callee, args: field_values, call_info: call_info.clone() }
         } else {
           let name_expr = Box::new(self.lower_expr(name));
 
@@ -660,7 +704,7 @@ impl<'reports> AstLowering<'reports> {
       } else {
         self.try_to_constant_fold(hir_kind)
       },
-      ty: ast_expr.ty.clone(),
+      ty: self.lower_type(ast_expr.ty.clone()),
       span: ast_expr.span,
       id: ast_expr.id,
     }
@@ -713,7 +757,9 @@ impl<'reports> AstLowering<'reports> {
       }
       Pattern::Literal(lit) => HirPattern::Literal(lit.clone()),
       Pattern::EnumVariant { path, fields, resolved_variant } => {
-        let hir_fields = fields.as_mut().map(|fields| fields.iter_mut().map(|field| self.lower_pattern_field(field)).collect());
+        let hir_fields = fields
+          .as_mut()
+          .map(|fields| fields.iter_mut().map(|field| self.lower_pattern_field(field)).collect());
 
         HirPattern::EnumVariant { symbol_id: resolved_variant.unwrap(), fields: hir_fields }
       }
@@ -738,7 +784,7 @@ impl<'reports> AstLowering<'reports> {
       symbol_id,
       pattern,
       span: field.span,
-      ty: field.ty.clone().unwrap(),
+      ty: self.lower_type(field.ty.clone().unwrap()),
     }
   }
 
@@ -776,7 +822,7 @@ impl<'reports> AstLowering<'reports> {
 
     let then_branch = Box::new(HirExpr {
       kind: HirExprKind::Block(then_branch_stmts),
-      ty: Type::Void,
+      ty: self.lower_type(Type::Void),
       span: if_stmt.span,
       id: if_stmt.then_branch_id,
     });
@@ -814,7 +860,7 @@ impl<'reports> AstLowering<'reports> {
 
           Some(Box::new(HirExpr {
             kind: HirExprKind::Block(else_stmts),
-            ty: Type::Void,
+            ty: self.lower_type(Type::Void),
             span: if_stmt.span,
             id: *block_id,
           }))
@@ -827,7 +873,7 @@ impl<'reports> AstLowering<'reports> {
 
     HirExpr {
       kind: HirExprKind::If { condition, then_branch, else_branch },
-      ty: Type::Void,
+      ty: self.lower_type(Type::Void),
       span: if_stmt.span,
       id: if_stmt.then_branch_id,
     }
@@ -840,7 +886,8 @@ pub fn lower_ast_to_hir<'reports>(
   reports: &Reports<'reports>,
   mono: MonomorphizationTable,
   is_library: bool,
+  mode: Mode,
 ) -> Vec<HirModule> {
-  let mut lowering = AstLowering::new(symbol_table, reports, mono, is_library);
+  let mut lowering = AstLowering::new(symbol_table, reports, mono, is_library, mode);
   lowering.lower_modules(lexed_modules)
 }

@@ -1,10 +1,12 @@
 use crate::prelude::{ReportKind, WalkerContext, debug};
 use std::path::{Path, PathBuf};
 use zirael_parser::{
-  Ast, AstId, AstWalker, Dependencies, ElseBranch, If, ImportConflict, ImportKind, ItemKind,
-  LexedModule, MatchArm, ModuleId, Parameter, ParameterKind, Pattern, ScopeType, Stmt, Symbol,
-  SymbolId, SymbolKind, SymbolTable, SymbolTableError, Type, VarDecl, impl_ast_walker, item::Item,
+  Ast, AstId, AstWalker, AttributeValue, Dependencies, ElseBranch, ExpectedAttribute, If,
+  ImportConflict, ImportKind, ItemKind, LexedModule, MatchArm, ModuleId, Parameter, ParameterKind,
+  Pattern, ScopeType, Stmt, Symbol, SymbolId, SymbolKind, SymbolTable, SymbolTableError, Type,
+  VarDecl, impl_ast_walker, item::Item,
 };
+use zirael_utils::prelude::Mode;
 use zirael_utils::{
   prelude::{
     Colorize as _, Identifier, ReportBuilder, Reports, Sources, Span, default_ident, resolve,
@@ -14,7 +16,8 @@ use zirael_utils::{
 
 impl_ast_walker!(DeclarationCollection, {
     packages: Dependencies,
-    used_externals: Vec<String>
+    used_externals: Vec<String>,
+    mode: Mode
 });
 
 impl<'reports> DeclarationCollection<'reports> {
@@ -150,11 +153,11 @@ impl<'reports> DeclarationCollection<'reports> {
     for conflict in conflicts {
       let existing_symbol = match self.symbol_table.get_symbol(conflict.existing_id) {
         Ok(symbol) => symbol,
-        Err(_) => continue, 
+        Err(_) => continue,
       };
       let new_symbol = match self.symbol_table.get_symbol(conflict.new_id) {
         Ok(symbol) => symbol,
-        Err(_) => continue, 
+        Err(_) => continue,
       };
 
       let conflict_message = format!(
@@ -181,18 +184,38 @@ impl<'reports> DeclarationCollection<'reports> {
     format!("{} {}", symbol.kind.name(), resolve(&symbol.name)).dimmed().bold().to_string()
   }
 
-  pub fn register_symbol(
+  fn register_symbol(
     &mut self,
     name: Identifier,
     kind: &SymbolKind,
     span: Span,
+  ) -> Option<SymbolId> {
+    self.register_symbol_impl(name, kind, span, None)
+  }
+
+  fn register_mode_specific_symbol(
+    &mut self,
+    name: Identifier,
+    kind: &SymbolKind,
+    span: Span,
+    mode: Option<Mode>,
+  ) -> Option<SymbolId> {
+    self.register_symbol_impl(name, kind, span, mode)
+  }
+
+  fn register_symbol_impl(
+    &mut self,
+    name: Identifier,
+    kind: &SymbolKind,
+    span: Span,
+    mode_specific: Option<Mode>,
   ) -> Option<SymbolId> {
     let file_id =
       self.processed_file.expect("when registering a symbol, the current file must be known");
     let symbol_name = resolve(&name);
     let symbol_type = kind.name();
 
-    match self.symbol_table.insert(name, kind.clone(), Some(span)) {
+    match self.symbol_table.insert(name, kind.clone(), Some(span), mode_specific) {
       Ok(id) => Some(id),
       Err(SymbolTableError::SymbolAlreadyExists { existing_id, .. }) => {
         if let Ok(existing_symbol) = self.symbol_table.get_symbol(existing_id) {
@@ -241,15 +264,21 @@ impl<'reports> AstWalker<'reports> for DeclarationCollection<'reports> {
   }
 
   fn walk_item(&mut self, item: &mut Item) {
+    let mode =
+      item.attributes.get_arg_value("mode", 1, ExpectedAttribute::String).and_then(|value| {
+        if let AttributeValue::String(mode_str) = value { Mode::from_str(&mode_str) } else { None }
+      });
+
     let id = match &mut item.kind {
       ItemKind::Function(func) => {
-        let sym = self.register_symbol(
+        let sym = self.register_mode_specific_symbol(
           func.name,
           &SymbolKind::Function {
             signature: func.signature.clone(),
             modifiers: func.modifiers.clone(),
           },
           func.span,
+          mode,
         );
 
         self.symbol_table.create_scope(ScopeType::Function(func.id));
@@ -265,7 +294,7 @@ impl<'reports> AstWalker<'reports> for DeclarationCollection<'reports> {
 
         self
           .symbol_table
-          .update_symbol_kind(sym.unwrap(), |kind| {
+          .modify_symbol(sym.unwrap(), |kind| {
             if let SymbolKind::Function { signature, .. } = kind {
               *signature = func.signature.clone();
             }
@@ -277,7 +306,7 @@ impl<'reports> AstWalker<'reports> for DeclarationCollection<'reports> {
         sym
       }
       ItemKind::Struct(struct_def) => {
-        let sym = self.register_symbol(
+        let sym = self.register_mode_specific_symbol(
           struct_def.name,
           &SymbolKind::Struct {
             generics: struct_def.generics.clone(),
@@ -285,6 +314,7 @@ impl<'reports> AstWalker<'reports> for DeclarationCollection<'reports> {
             methods: vec![],
           },
           struct_def.span,
+          mode,
         );
         let mut methods = vec![];
 
@@ -300,7 +330,7 @@ impl<'reports> AstWalker<'reports> for DeclarationCollection<'reports> {
 
         self
           .symbol_table
-          .update_symbol_kind(sym.unwrap(), |_kind| SymbolKind::Struct {
+          .modify_symbol(sym.unwrap(), |_kind| SymbolKind::Struct {
             generics: struct_def.generics.clone(),
             fields: struct_def.fields.clone(),
             methods: methods.clone(),
@@ -310,7 +340,7 @@ impl<'reports> AstWalker<'reports> for DeclarationCollection<'reports> {
         sym
       }
       ItemKind::Enum(enum_def) => {
-        let sym = self.register_symbol(
+        let sym = self.register_mode_specific_symbol(
           enum_def.name,
           &SymbolKind::Enum {
             generics: enum_def.generics.clone(),
@@ -319,14 +349,16 @@ impl<'reports> AstWalker<'reports> for DeclarationCollection<'reports> {
             id: enum_def.id,
           },
           enum_def.span,
+          mode,
         );
 
         let mut variants = vec![];
         for variant in &mut enum_def.variants {
-          let variant_sym = self.register_symbol(
+          let variant_sym = self.register_mode_specific_symbol(
             variant.name,
             &SymbolKind::EnumVariant { parent_enum: sym.unwrap(), data: variant.data.clone() },
             variant.span,
+            mode,
           );
           variant.symbol_id = variant_sym;
           variants.push(variant_sym.unwrap());
@@ -347,7 +379,7 @@ impl<'reports> AstWalker<'reports> for DeclarationCollection<'reports> {
 
         self
           .symbol_table
-          .update_symbol_kind(sym.unwrap(), |_kind| SymbolKind::Enum {
+          .modify_symbol(sym.unwrap(), |_kind| SymbolKind::Enum {
             generics: enum_def.generics.clone(),
             variants,
             methods: methods.clone(),
@@ -358,10 +390,11 @@ impl<'reports> AstWalker<'reports> for DeclarationCollection<'reports> {
         sym
       }
       ItemKind::TypeExtension(ty_ext) => {
-        let sym = self.register_symbol(
+        let sym = self.register_mode_specific_symbol(
           default_ident(),
           &SymbolKind::TypeExtension { ty: ty_ext.ty.clone(), methods: vec![] },
           ty_ext.span,
+          mode,
         );
         let mut methods = vec![];
 
@@ -377,7 +410,7 @@ impl<'reports> AstWalker<'reports> for DeclarationCollection<'reports> {
 
         self
           .symbol_table
-          .update_symbol_kind(sym.unwrap(), |_kind| SymbolKind::TypeExtension {
+          .modify_symbol(sym.unwrap(), |_kind| SymbolKind::TypeExtension {
             ty: ty_ext.ty.clone(),
             methods: methods.clone(),
           })

@@ -6,6 +6,7 @@ use crate::{
   },
 };
 use id_arena::Id;
+use std::fmt::Display;
 use std::path::PathBuf;
 use zirael_utils::prelude::*;
 
@@ -13,7 +14,7 @@ use zirael_utils::prelude::*;
 pub struct Item {
   pub id: AstId,
   pub kind: ItemKind,
-  pub attributes: Vec<Attribute>,
+  pub attributes: Attributes,
   pub name: Identifier,
   pub span: Span,
   pub symbol_id: Option<SymbolId>,
@@ -91,6 +92,32 @@ pub enum ParameterKind {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct Attributes(Vec<Attribute>);
+
+impl Attributes {
+  pub fn new(attrs: Vec<Attribute>) -> Self {
+    Self(attrs)
+  }
+
+  pub fn get(&self, name: &str) -> Option<&Attribute> {
+    self.0.iter().find(|attr| attr.name.to_string() == name)
+  }
+
+  pub fn iter(&self) -> impl Iterator<Item = &Attribute> {
+    self.0.iter()
+  }
+  
+  pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Attribute> {
+    self.0.iter_mut()
+  }
+  
+  pub fn get_arg_value(&self, attr_name: &str, index: usize, expected: ExpectedAttribute) -> Option<AttributeValue> {
+    let attr = self.get(attr_name)?;
+    attr.get_arg_value(index, expected)
+  }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct Attribute {
   pub name: Identifier,
   pub args: Option<Vec<Expr>>,
@@ -101,6 +128,16 @@ pub enum ExpectedAttribute {
   String,
   Int,
   Float,
+}
+
+impl Display for ExpectedAttribute {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self {
+      Self::String => write!(f, "string"),
+      Self::Int => write!(f, "integer"),
+      Self::Float => write!(f, "float"),
+    }
+  }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -161,7 +198,7 @@ pub struct StructField {
   pub name: Identifier,
   pub ty: Type,
   pub is_public: bool,
-  pub attributes: Vec<Attribute>,
+  pub attributes: Attributes,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -179,7 +216,7 @@ pub struct EnumVariant {
   pub id: AstId,
   pub name: Identifier,
   pub data: EnumVariantData,
-  pub attributes: Vec<Attribute>,
+  pub attributes: Attributes,
   pub span: Span,
   pub symbol_id: Option<SymbolId>,
 }

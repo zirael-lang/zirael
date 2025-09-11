@@ -412,10 +412,12 @@ impl<'a> Parser<'a> {
           }
 
           if self.check(&TokenKind::BraceOpen) {
-            return self.parse_struct_initializer_from_path(Path::from_identifier(
-              identifier,
-              identifier_span,
-            ));
+            if self.looks_like_struct_initializer() {
+              return self.parse_struct_initializer_from_path(Path::from_identifier(
+                identifier,
+                identifier_span,
+              ));
+            }
           }
 
           self.new_expr(ExprKind::Identifier(identifier, None), identifier_span)
@@ -513,17 +515,15 @@ impl<'a> Parser<'a> {
         TokenKind::Identifier(_) => {
           let checkpoint = self.position;
           let expr = self.parse_primary_for_match_scrutinee();
-          
+
           if self.check(&TokenKind::DoubleColon) {
             self.position = checkpoint;
             return self.parse_path_expression_for_match_scrutinee();
           }
-          
+
           expr
         }
-        _ => {
-          self.parse_primary()
-        }
+        _ => self.parse_primary(),
       }
     } else {
       self.error_at_current("unexpected end of input");
@@ -543,9 +543,7 @@ impl<'a> Parser<'a> {
 
           self.new_expr(ExprKind::Identifier(identifier, None), identifier_span)
         }
-        _ => {
-          self.parse_primary()
-        }
+        _ => self.parse_primary(),
       }
     } else {
       self.error_at_current("unexpected end of input");
@@ -872,6 +870,28 @@ impl<'a> Parser<'a> {
 
       if position > 50 {
         return false;
+      }
+    }
+
+    false
+  }
+
+  fn looks_like_struct_initializer(&mut self) -> bool {
+    if !self.check(&TokenKind::BraceOpen) {
+      return false;
+    }
+
+    if let Some(next_token) = self.peek_ahead(1) {
+      if next_token.kind == TokenKind::BraceClose {
+        return true;
+      }
+
+      if let TokenKind::Identifier(_) = &next_token.kind {
+        if let Some(third_token) = self.peek_ahead(2) {
+          if matches!(third_token.kind, TokenKind::Colon | TokenKind::Equals) {
+            return true;
+          }
+        }
       }
     }
 
