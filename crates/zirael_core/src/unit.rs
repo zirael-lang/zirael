@@ -2,8 +2,6 @@ use crate::{
   passes::{DeclarationCollection, MemoryAnalysis, NameResolution},
   prelude::*,
 };
-use zirael_codegen::ir::IrModule;
-use zirael_codegen::{codegen::run_codegen, ir::lower_hir_to_ir};
 use zirael_hir::hir::lowering::lower_ast_to_hir;
 use zirael_type_checker::TypeInference;
 
@@ -66,7 +64,7 @@ impl<'ctx> CompilationUnit<'ctx> {
     })
   }
 
-  pub fn check(&mut self) -> (Vec<IrModule>, Vec<String>) {
+  pub fn check(&mut self) -> (Vec<()>, Vec<String>) {
     let reports = self.context.reports();
     let sources = self.context.sources();
     let symbols = self.context.symbols();
@@ -105,25 +103,27 @@ impl<'ctx> CompilationUnit<'ctx> {
       self.info.ty == PackageType::Library,
       self.info.mode,
     );
-    let ir = &mut lower_hir_to_ir(
-      &mut hir,
-      symbols,
-      inference.mono_table.clone(),
-      reports,
-      sources,
-      self.info.mode,
-      self.info.root.clone(),
-      &mut self.main_function_id,
-    );
-    reports.print(sources);
+    // let ir = &mut lower_hir_to_ir(
+    //   &mut hir,
+    //   symbols,
+    //   inference.mono_table.clone(),
+    //   reports,
+    //   sources,
+    //   self.info.mode,
+    //   self.info.root.clone(),
+    //   &mut self.main_function_id,
+    // );
+    // reports.print(sources);
 
-    (ir.clone(), decl.used_externals.clone())
+    (vec![], decl.used_externals.clone())
   }
 
   pub fn compile(&mut self) -> Result<PathBuf> {
     let (ref mut ir, used_externals) = self.check();
 
     let order = self.context.symbols().build_symbol_relations()?;
-    run_codegen(ir, &self.info, order, used_externals, &self.main_function_id)
+    // run_codegen(ir, &self.info, order, used_externals, &self.main_function_id)
+
+    Ok(PathBuf::new())
   }
 }

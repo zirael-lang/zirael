@@ -36,7 +36,6 @@ strum = { version = "0.27.2", features = ["derive"] }
 which = "8.0.0"
 serde = { version = "1.0.219", features = ["derive"] }
 
-zirael_codegen = { path = "crates/zirael_codegen", version = "0.1.0" }
 zirael_core = { path = "crates/zirael_core", version = "0.1.0" }
 zirael_hir = { path = "crates/zirael_hir", version = "0.1.0" }
 zirael_parser = { path = "crates/zirael_parser", version = "0.1.0" }

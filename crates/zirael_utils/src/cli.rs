@@ -70,4 +70,10 @@ pub struct Cli {
   )]
   pub output: PathBuf,
 
+  #[arg(
+    value_name = "check-only",
+    help = "Do not output codegen or compile the code, only check for errors",
+    long = "check-only"
+  )]
+  pub check_only: bool,
 }
