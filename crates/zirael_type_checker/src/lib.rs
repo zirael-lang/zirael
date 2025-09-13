@@ -1,64 +1,31 @@
-mod block_inference;
-mod call_inference;
-mod call_validation;
 mod ctx;
-mod enums;
+//mod enums;
 mod errors;
 mod expressions;
 mod generic_inference;
 mod method_utils;
-pub mod monomorphization;
-mod structs;
+//mod structs;
 mod substitution;
+mod symbol_table;
 mod type_operations;
-pub mod unification;
 
-use crate::{ctx::TypeInferenceContext, monomorphization::MonomorphizationTable};
+use crate::ctx::TypeInferenceContext;
+use crate::symbol_table::{
+  GenericFunction, GenericStruct, GenericStructField, MonoSymbolTable, TyId,
+};
 use id_arena::Arena;
-use zirael_parser::{ast::monomorphized_symbol::MonomorphizedSymbol, *};
+use zirael_parser::*;
 use zirael_utils::prelude::*;
 
 impl_ast_walker!(TypeInference, {
     ctx: TypeInferenceContext,
-    mono_table: MonomorphizationTable,
     mono_arena: Arena<()>,
-    current_struct_generics: HashMap<Identifier, Type>,
+    current_struct_generics: HashMap<Identifier, TyId>,
     current_item: Option<SymbolId>,
+    sym_table: MonoSymbolTable
 });
 
 impl<'reports> TypeInference<'reports> {
-  pub fn try_monomorphize_named_type(&mut self, ty: &mut Type) {
-    match ty {
-      Type::Named { name, generics } => {
-        if let Some(symbol) = self.symbol_table.lookup_symbol(name) {
-          if let SymbolKind::Struct { generics: generic_params, .. }
-          | SymbolKind::Enum { generics: generic_params, .. } = &symbol.kind
-          {
-            let all_concrete =
-              generics.iter().all(|g| !matches!(g, Type::Variable { .. } | Type::Inferred));
-            if all_concrete && !generic_params.is_empty() {
-              let mut generic_map = HashMap::new();
-              for (g, ty) in generic_params.iter().zip(generics.iter()) {
-                generic_map.insert(g.name, ty.clone());
-              }
-              let monomorphized_id =
-                self.record_monomorphization_with_id(symbol.id, &generic_map, None);
-
-              *ty = Type::MonomorphizedSymbol(MonomorphizedSymbol {
-                id: monomorphized_id,
-                display_ty: Box::new(ty.clone()),
-              });
-            }
-          }
-        }
-      }
-      Type::Reference(inner) => {
-        self.try_monomorphize_named_type(inner);
-      }
-      _ => {}
-    }
-  }
-
   pub fn eq(&self, left: &Type, right: &Type) -> bool {
     self.types_equal(left, right)
   }
@@ -101,60 +68,43 @@ impl<'reports> TypeInference<'reports> {
           && a_generics.iter().zip(b_generics).all(|(a, b)| self.structural_eq(a, b))
       }
 
-      (Type::Variable { name: a_name, .. }, Type::Variable { name: b_name, .. }) => {
-        a_name == b_name
-      }
+      (Type::Variable { id: id_a, .. }, Type::Variable { id: id_b, .. }) => id_a == id_b,
 
       (Type::Inferred, Type::Inferred) | (Type::Error, _) | (_, Type::Error) => true,
 
-      (Type::MonomorphizedSymbol(sym), Type::Named { .. }) => {
-        self.structural_eq(&sym.display_ty, right)
-      }
-
-      (Type::Named { .. }, Type::MonomorphizedSymbol(sym)) => {
-        self.structural_eq(left, &sym.display_ty)
-      }
-
       (Type::MonomorphizedSymbol(sym), Type::MonomorphizedSymbol(sym2)) => {
-        if let (Some(mono1), Some(mono2)) =
-          (self.mono_table.get_entry(sym.id), self.mono_table.get_entry(sym2.id))
-        {
-          if mono1.original_id != mono2.original_id {
+        let Some(mono1) = self.sym_table.get_monomorphized_symbol(*sym) else { return false };
+        let Some(mono2) = self.sym_table.get_monomorphized_symbol(*sym2) else { return false };
+
+        if mono1.original_symbol_id() != mono2.original_symbol_id() {
+          return false;
+        }
+
+        let concrete_types1 = mono1.concrete_types();
+        let concrete_types2 = mono2.concrete_types();
+
+        for (name, value) in concrete_types1 {
+          let Some(mono2_value) = concrete_types2.get(name) else { return false };
+          let value_ty = &self.sym_table[*value];
+          let mono2_value_ty = &self.sym_table[*mono2_value];
+
+          if value_ty != mono2_value_ty {
             return false;
           }
-
-          let concrete_types1 = mono1.concrete_types.clone();
-          let concrete_types2 = mono2.concrete_types.clone();
-
-          for (name, value) in &concrete_types1 {
-            let Some(mono2_value) = concrete_types2.get(name) else { return false };
-            if !self.eq(value, mono2_value) {
-              return false;
-            }
-          }
-
-          true
-        } else {
-          false
         }
+
+        true
       }
 
       _ => false,
     }
-  }
-
-  fn get_generic_type_vars(
-    &mut self,
-    generics: &Vec<GenericParameter>,
-  ) -> HashMap<Identifier, Type> {
-    self.create_generic_mapping(generics)
   }
 }
 
 impl<'reports> AstWalker<'reports> for TypeInference<'reports> {
   fn walk_expr(&mut self, expr: &mut Expr) {
     self.infer_expr(expr);
-    self.try_monomorphize_named_type(&mut expr.ty);
+    self.visit_type(&mut expr.ty);
   }
 
   fn visit_var_decl(&mut self, _var_decl: &mut VarDecl) {
@@ -173,11 +123,7 @@ impl<'reports> AstWalker<'reports> for TypeInference<'reports> {
   fn walk_function(&mut self, func: &mut Function) {
     self.push_scope(ScopeType::Function(func.id));
 
-    self.walk_function_modifiers(&mut func.modifiers);
-    self.walk_function_signature(&mut func.signature);
-
-    let method_generic_type_vars = self.get_generic_type_vars(&func.signature.generics);
-
+    let method_generic_type_vars = self.create_generic_mapping(&func.signature.generics);
     let struct_generic_type_vars = self.get_generics_for_method(func).unwrap_or_else(HashMap::new);
 
     let all_generic_type_vars =
@@ -202,7 +148,7 @@ impl<'reports> AstWalker<'reports> for TypeInference<'reports> {
       }
     }
 
-    if let Some(body) = &mut func.body {
+    let body_ty = if let Some(body) = &mut func.body {
       self.ctx.set_function_return_type(func.signature.return_type.clone());
 
       let body_ty = self.infer_expr_with_expected(body, Some(&func.signature.return_type));
@@ -214,36 +160,61 @@ impl<'reports> AstWalker<'reports> for TypeInference<'reports> {
       if !self.eq(&body_ty, &func.signature.return_type) {
         self.return_type_mismatch(&func.signature.return_type, &body_ty, func.span.clone());
       }
-    }
 
+      body_ty
+    } else {
+      Type::Void
+    };
+
+    let sym_id = self.current_item.unwrap();
+    let generic_function = GenericFunction::new(sym_id, func.name, func.signature.clone())
+      .with_generics(func.signature.generics.clone())
+      .with_body_type(self.sym_table.intern_type(body_ty));
+    self.sym_table.add_generic_function(sym_id, generic_function);
+
+    self.ctx.clear_generics();
     self.pop_scope();
   }
 
   fn walk_struct_declaration(&mut self, _struct: &mut StructDeclaration) {
     self.push_scope(ScopeType::Struct(_struct.id));
 
-    let struct_generic_type_vars = self.get_generic_type_vars(&_struct.generics);
+    let struct_generic_type_vars = self.create_generic_mapping(&_struct.generics);
 
     self.current_struct_generics = struct_generic_type_vars.clone();
 
+    let mut fields = vec![];
     for field in &mut _struct.fields {
       if !struct_generic_type_vars.is_empty() {
         self.substitute_type_with_map(&mut field.ty, &struct_generic_type_vars);
       }
       self.walk_struct_field(field);
+
+      fields.push(GenericStructField {
+        name: field.name,
+        ty: self.sym_table.intern_type(field.ty.clone()),
+      });
     }
 
     for item in &mut _struct.methods {
       self.walk_item(item);
     }
 
+    let sym_id = self.current_item.unwrap();
+    let generic_struct = GenericStruct::new(sym_id, _struct.name)
+      .with_generics(_struct.generics.clone())
+      .with_fields(fields);
+
+    self.sym_table.add_generic_struct(sym_id, generic_struct);
+
     self.current_struct_generics.clear();
+    self.ctx.clear_generics();
     self.pop_scope();
   }
 
   fn walk_enum_declaration(&mut self, _enum: &mut EnumDeclaration) {
     self.push_scope(ScopeType::Enum(_enum.id));
-    let enum_generic_type_vars = self.get_generic_type_vars(&_enum.generics);
+    let enum_generic_type_vars = self.create_generic_mapping(&_enum.generics);
     self.current_struct_generics = enum_generic_type_vars.clone();
 
     for variant in &mut _enum.variants {
@@ -262,6 +233,7 @@ impl<'reports> AstWalker<'reports> for TypeInference<'reports> {
     }
 
     self.current_struct_generics.clear();
+    self.ctx.clear_generics();
     self.pop_scope();
   }
 
@@ -276,8 +248,7 @@ impl<'reports> AstWalker<'reports> for TypeInference<'reports> {
   }
 
   fn walk_struct_field(&mut self, field: &mut StructField) {
-    self.try_monomorphize_named_type(&mut field.ty);
-
+    self.visit_type(&mut field.ty);
     self.visit_struct_field(field);
     self.walk_type(&mut field.ty);
 
@@ -287,31 +258,6 @@ impl<'reports> AstWalker<'reports> for TypeInference<'reports> {
   }
 
   fn visit_type(&mut self, ty: &mut Type) {
-    match ty {
-      Type::Named { name, .. } => {
-        if let Some(symbol) = self.symbol_table.lookup_symbol(name) {
-          if let Some(item) = self.current_item {
-            debug!("Adding relation: {:?} -> {:?} (name: {})", item, symbol.id, resolve(name));
-            self.symbol_table.new_relation(
-              SymbolRelationNode::Symbol(item),
-              SymbolRelationNode::Symbol(symbol.canonical_symbol),
-            )
-          } else {
-            debug!("No current_item set when visiting type: {}", resolve(name));
-          }
-        } else {
-          if !self.ctx.is_generic_parameter(*name) {
-            let report = ReportBuilder::builder(
-              &format!("couldn't find struct or enum named {}", resolve(name).dimmed().bold()),
-              ReportKind::Error,
-            )
-            .label("not found", name.span().clone());
-
-            self.reports.add(self.processed_file.unwrap(), report);
-          }
-        }
-      }
-      _ => {}
-    }
+    self.try_to_symbol(ty);
   }
 }

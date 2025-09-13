@@ -1,7 +1,6 @@
 mod expr;
 pub mod item;
 mod keyword;
-pub mod monomorphized_symbol;
 mod operator;
 mod path;
 mod stmt;

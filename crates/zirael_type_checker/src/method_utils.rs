@@ -1,7 +1,8 @@
 use crate::TypeInference;
+use crate::symbol_table::TyId;
 use std::collections::HashMap;
-use zirael_parser::{Function, GenericParameter, Parameter, Type};
-use zirael_utils::prelude::{Identifier, warn, resolve};
+use zirael_parser::{Function, GenericParameter, Parameter, SymbolKind, Type};
+use zirael_utils::prelude::{Identifier, resolve, warn};
 
 impl<'reports> TypeInference<'reports> {
   /// Get the self type for a method based on its parent structure
@@ -17,17 +18,14 @@ impl<'reports> TypeInference<'reports> {
     };
 
     match &struct_symbol.kind {
-      zirael_parser::SymbolKind::Struct { generics, .. } | 
-      zirael_parser::SymbolKind::Enum { generics, .. } => {
+      zirael_parser::SymbolKind::Struct { generics, .. }
+      | zirael_parser::SymbolKind::Enum { generics, .. } => {
         let generic_types = generics
           .iter()
           .map(|g| Type::Named { name: g.name, generics: vec![] })
           .collect::<Vec<_>>();
 
-        Some(Type::Named { 
-          name: struct_symbol.name, 
-          generics: generic_types 
-        })
+        Some(Type::Named { name: struct_symbol.name, generics: generic_types })
       }
       zirael_parser::SymbolKind::TypeExtension { ty, .. } => {
         if ty.is_primitive() {
@@ -48,7 +46,7 @@ impl<'reports> TypeInference<'reports> {
     }
   }
 
-  pub fn get_generics_for_method(&mut self, func: &Function) -> Option<HashMap<Identifier, Type>> {
+  pub fn get_generics_for_method(&mut self, func: &Function) -> Option<HashMap<Identifier, TyId>> {
     let func_symbol = self.symbol_table.lookup_symbol(&func.name)?;
     let struct_symbol_id = self.symbol_table.is_a_child_of_symbol(func_symbol.id)?;
     let struct_symbol = match self.symbol_table.get_symbol(struct_symbol_id) {
@@ -60,8 +58,7 @@ impl<'reports> TypeInference<'reports> {
     };
 
     match &struct_symbol.kind {
-      zirael_parser::SymbolKind::Struct { generics, .. } | 
-      zirael_parser::SymbolKind::Enum { generics, .. } => {
+      SymbolKind::Struct { generics, .. } | SymbolKind::Enum { generics, .. } => {
         if !generics.is_empty() {
           Some(self.create_generic_mapping(generics))
         } else {
@@ -77,9 +74,9 @@ impl<'reports> TypeInference<'reports> {
 
   pub fn merge_generic_maps(
     &self,
-    struct_generics: &HashMap<Identifier, Type>,
-    method_generics: &HashMap<Identifier, Type>,
-  ) -> HashMap<Identifier, Type> {
+    struct_generics: &HashMap<Identifier, TyId>,
+    method_generics: &HashMap<Identifier, TyId>,
+  ) -> HashMap<Identifier, TyId> {
     let mut merged = struct_generics.clone();
     merged.extend(method_generics.clone());
     merged
@@ -89,7 +86,7 @@ impl<'reports> TypeInference<'reports> {
     &mut self,
     param: &Parameter,
     struct_type: &mut Option<Type>,
-    struct_generics: &HashMap<Identifier, Type>,
+    struct_generics: &HashMap<Identifier, TyId>,
   ) -> Type {
     match struct_type {
       Some(struct_ty) => {

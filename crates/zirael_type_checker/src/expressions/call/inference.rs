@@ -1,10 +1,10 @@
 use crate::TypeInference;
+use crate::symbol_table::{MonomorphizedFunction, MonomorphizedSymbol, TyId};
 use std::collections::HashMap;
 use zirael_parser::{
-  CallInfo, Expr, ExprKind, Path, Type, SymbolKind,
+  CallInfo, Expr, ExprKind, FunctionSignature, MonomorphizationId, Path, SymbolId, SymbolKind, Type,
 };
-use zirael_utils::prelude::{Identifier, resolve};
-use crate::monomorphization::MonomorphizationData;
+use zirael_utils::prelude::{Identifier, Span, resolve};
 
 impl<'reports> TypeInference<'reports> {
   pub fn infer_call(
@@ -38,41 +38,38 @@ impl<'reports> TypeInference<'reports> {
 
     self.infer_argument_types(args);
 
-    let generic_mapping = match self.resolve_generics(&signature, args, type_annotations, &callee.span) {
-      Ok(mapping) => mapping,
-      Err(()) => return Type::Error,
-    };
+    let generic_mapping =
+      match self.resolve_generics(&signature, args, type_annotations, &callee.span) {
+        Ok(mapping) => mapping,
+        Err(()) => return Type::Error,
+      };
 
     let concrete_signature = self.create_concrete_signature(signature.clone(), &generic_mapping);
     let param_types_to_check = self.get_parameter_types_to_check(&concrete_signature);
     let param_types = self.extract_parameter_types(param_types_to_check);
-    
+
     if !self.validate_argument_types(args, &param_types) {
       return Type::Error;
     }
 
     let monomorphized_id = self.create_monomorphization_if_needed(
       sym_id,
+      sym.name,
       &signature,
       &generic_mapping,
       &concrete_signature,
     );
 
-    *call_info = Some(CallInfo {
-      original_symbol: sym_id,
-      monomorphized_id,
-      concrete_types: generic_mapping,
-    });
+    *call_info =
+      Some(CallInfo { original_symbol: sym_id, monomorphized_id, concrete_types: generic_mapping });
 
     concrete_signature.return_type
   }
 
-  fn extract_symbol_from_callee(&self, callee: &Expr) -> Option<zirael_parser::SymbolId> {
+  fn extract_symbol_from_callee(&self, callee: &Expr) -> Option<SymbolId> {
     match &callee.kind {
       ExprKind::Identifier(_, Some(sym_id)) => Some(*sym_id),
-      ExprKind::Path(Path { segments, .. }) => {
-        segments.last().and_then(|seg| seg.symbol_id)
-      }
+      ExprKind::Path(Path { segments, .. }) => segments.last().and_then(|seg| seg.symbol_id),
       _ => None,
     }
   }
@@ -81,7 +78,7 @@ impl<'reports> TypeInference<'reports> {
     &mut self,
     symbol_kind: &SymbolKind,
     call_span: &zirael_utils::prelude::Span,
-  ) -> Option<zirael_parser::FunctionSignature> {
+  ) -> Option<FunctionSignature> {
     match symbol_kind {
       SymbolKind::Function { signature, .. } => Some(signature.clone()),
       _ => {
@@ -93,12 +90,12 @@ impl<'reports> TypeInference<'reports> {
 
   fn resolve_generics(
     &mut self,
-    signature: &zirael_parser::FunctionSignature,
+    signature: &FunctionSignature,
     args: &[Expr],
     type_annotations: &[Type],
-    call_span: &zirael_utils::prelude::Span,
-  ) -> Result<HashMap<Identifier, Type>, ()> {
-    let mut generic_mapping = HashMap::new();
+    call_span: &Span,
+  ) -> Result<HashMap<Identifier, TyId>, ()> {
+    let mut generic_mapping: HashMap<Identifier, TyId> = HashMap::new();
 
     if !type_annotations.is_empty() {
       generic_mapping = self.create_mapping_from_annotations(&signature.generics, type_annotations);
@@ -106,7 +103,7 @@ impl<'reports> TypeInference<'reports> {
       let param_types_to_check = self.get_parameter_types_to_check(signature);
       let param_types = self.extract_parameter_types(param_types_to_check);
       let arg_types: Vec<Type> = args.iter().map(|arg| arg.ty.clone()).collect();
-      
+
       generic_mapping = self.infer_generic_mappings(&signature.generics, &param_types, &arg_types);
     }
 
@@ -120,7 +117,7 @@ impl<'reports> TypeInference<'reports> {
       } else {
         "unknown".to_string()
       };
-      
+
       self.report_unresolved_generics(
         &unresolved,
         &function_name,
@@ -135,9 +132,9 @@ impl<'reports> TypeInference<'reports> {
 
   fn create_concrete_signature(
     &mut self,
-    mut signature: zirael_parser::FunctionSignature,
-    generic_mapping: &HashMap<Identifier, Type>,
-  ) -> zirael_parser::FunctionSignature {
+    mut signature: FunctionSignature,
+    generic_mapping: &HashMap<Identifier, TyId>,
+  ) -> FunctionSignature {
     for param in &mut signature.parameters {
       self.substitute_type_with_map(&mut param.ty, generic_mapping);
     }
@@ -149,19 +146,22 @@ impl<'reports> TypeInference<'reports> {
 
   fn create_monomorphization_if_needed(
     &mut self,
-    symbol_id: zirael_parser::SymbolId,
-    original_signature: &zirael_parser::FunctionSignature,
-    generic_mapping: &HashMap<Identifier, Type>,
-    concrete_signature: &zirael_parser::FunctionSignature,
-  ) -> Option<zirael_parser::MonomorphizationId> {
+    symbol_id: SymbolId,
+    name: Identifier,
+    original_signature: &FunctionSignature,
+    generic_mapping: &HashMap<Identifier, TyId>,
+    concrete_signature: &FunctionSignature,
+  ) -> Option<MonomorphizationId> {
     if !original_signature.generics.is_empty() && !generic_mapping.is_empty() {
-      Some(self.record_monomorphization_with_id(
-        symbol_id,
-        generic_mapping,
-        Some(MonomorphizationData::Signature(concrete_signature.clone())),
-      ))
+      let mono =
+        MonomorphizedFunction::new(symbol_id, name, "TODO".to_string(), concrete_signature.clone())
+          .with_concrete_types(generic_mapping.clone());
+
+      Some(self.sym_table.add_monomorphized_symbol(MonomorphizedSymbol::Function(mono)))
     } else {
       None
     }
   }
 }
+
+pub struct FunctionMonomorphizer {}

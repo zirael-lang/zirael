@@ -93,16 +93,18 @@ impl<'ctx> CompilationUnit<'ctx> {
     MemoryAnalysis::new(symbols, reports, sources).walk_modules(&mut result.modules);
     let inference = &mut TypeInference::new(symbols, reports, sources);
     inference.walk_modules(&mut result.modules);
+
     reports.print(sources);
 
     let mut hir = lower_ast_to_hir(
       &mut result.modules,
       symbols,
       reports,
-      inference.mono_table.clone(),
       self.info.ty == PackageType::Library,
       self.info.mode,
     );
+    reports.print(sources);
+
     // let ir = &mut lower_hir_to_ir(
     //   &mut hir,
     //   symbols,

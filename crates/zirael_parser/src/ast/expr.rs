@@ -1,3 +1,4 @@
+use crate::ty::TyId;
 use crate::{
   AstId, Type,
   ast::{
@@ -78,7 +79,7 @@ pub type MonomorphizationId = Id<()>;
 pub struct CallInfo {
   pub original_symbol: SymbolId,
   pub monomorphized_id: Option<MonomorphizationId>,
-  pub concrete_types: HashMap<Identifier, Type>,
+  pub concrete_types: HashMap<Identifier, TyId>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

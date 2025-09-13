@@ -41,6 +41,10 @@ impl TypeInferenceContext {
   pub fn is_generic_parameter(&self, name: Identifier) -> bool {
     self.generic_params.contains_key(&name)
   }
+  
+  pub fn clear_generics(&mut self) {
+    self.generic_params.clear();
+  }
 
   pub fn next_type_var_id(&mut self) -> usize {
     let id = self.next_type_var_id;

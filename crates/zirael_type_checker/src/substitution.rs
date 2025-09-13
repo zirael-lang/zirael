@@ -1,7 +1,9 @@
 use crate::TypeInference;
 use std::collections::HashMap;
-use zirael_parser::{GenericParameter, Type};
-use zirael_utils::prelude::Identifier;
+use zirael_parser::{GenericParameter, SymbolRelationNode, Type};
+use zirael_utils::ident_table::resolve;
+use zirael_utils::prelude::{Colorize, Identifier, ReportBuilder, ReportKind, debug};
+use crate::symbol_table::TyId;
 
 impl<'reports> TypeInference<'reports> {
   pub fn substitute_generic_params(
@@ -12,13 +14,13 @@ impl<'reports> TypeInference<'reports> {
   ) {
     let mut param_map = HashMap::new();
     for (param, concrete) in params.iter().zip(generics.iter()) {
-      param_map.insert(param.name, concrete.clone());
+      param_map.insert(param.name, self.sym_table.intern_type(concrete.clone()));
     }
 
     self.substitute_type_with_map(ty, &param_map);
   }
 
-  pub fn substitute_type_with_map(&mut self, ty: &mut Type, param_map: &HashMap<Identifier, Type>) {
+  pub fn substitute_type_with_map(&mut self, ty: &mut Type, param_map: &HashMap<Identifier, TyId>) {
     if param_map.is_empty() {
       return;
     }
@@ -26,7 +28,7 @@ impl<'reports> TypeInference<'reports> {
     match ty {
       Type::Named { name, generics } if generics.is_empty() => {
         if let Some(concrete) = param_map.get(name) {
-          *ty = concrete.clone();
+          *ty = Type::Id(concrete.clone());
         }
       }
       Type::Named { name: _, generics } => {
@@ -50,8 +52,41 @@ impl<'reports> TypeInference<'reports> {
         self.substitute_type_with_map(return_type, param_map);
       }
       _ => {}
-    }
+    };
 
-    self.try_monomorphize_named_type(ty);
+    self.try_to_symbol(ty);
+  }
+
+  pub fn try_to_symbol(&mut self, ty: &mut Type) {
+    if let Type::Named { name, generics } = ty {
+      println!("{} {:?}", name, self.ctx.generic_params);
+      if self.ctx.is_generic_parameter(*name) {
+        return;
+      }
+
+      if let Some(symbol) = self.symbol_table.lookup_symbol(name) {
+        if let Some(item) = self.current_item {
+          debug!("Adding relation: {:?} -> {:?} (name: {})", item, symbol.id, resolve(name));
+          self.symbol_table.new_relation(
+            SymbolRelationNode::Symbol(item),
+            SymbolRelationNode::Symbol(symbol.canonical_symbol),
+          );
+
+          *ty = Type::Symbol(symbol.id);
+        } else {
+          debug!("No current_item set when visiting type: {}", resolve(name));
+        }
+      } else {
+        if !self.ctx.is_generic_parameter(*name) {
+          let report = ReportBuilder::builder(
+            &format!("couldn't find struct or enum named {}", resolve(name).dimmed().bold()),
+            ReportKind::Error,
+          )
+          .label("not found", name.span().clone());
+
+          self.reports.add(self.processed_file.unwrap(), report);
+        }
+      }
+    }
   }
 }

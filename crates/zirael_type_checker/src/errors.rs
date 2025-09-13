@@ -10,8 +10,7 @@ impl<'reports> TypeInference<'reports> {
   }
 
   pub fn simple_error(&mut self, message: &str, label: &str, span: Span) {
-    let report = ReportBuilder::builder(message, ReportKind::Error)
-      .label(label, span);
+    let report = ReportBuilder::builder(message, ReportKind::Error).label(label, span);
     self.reports.add(self.file_id(), report);
   }
 
@@ -23,12 +22,17 @@ impl<'reports> TypeInference<'reports> {
     self.reports.add(self.file_id(), report);
   }
 
-  pub fn error_with_suggestions(&mut self, message: &str, labels: Vec<(String, Span)>, suggestions: Vec<String>) {
+  pub fn error_with_suggestions(
+    &mut self,
+    message: &str,
+    labels: Vec<(String, Span)>,
+    suggestions: Vec<String>,
+  ) {
     let mut report = ReportBuilder::builder(message, ReportKind::Error);
     for (label_text, span) in labels {
       report = report.label(&label_text, span);
     }
-    let _ = suggestions; 
+    let _ = suggestions;
     self.reports.add(self.file_id(), report);
   }
 
@@ -36,7 +40,13 @@ impl<'reports> TypeInference<'reports> {
     self.error_with_suggestions(message, labels, suggestions);
   }
 
-  pub fn type_mismatch_with_context(&mut self, expected: &Type, found: &Type, span: Span, context: &str) {
+  pub fn type_mismatch_with_context(
+    &mut self,
+    expected: &Type,
+    found: &Type,
+    span: Span,
+    context: &str,
+  ) {
     let message = format!(
       "type mismatch in {}: expected {}, found {}",
       context,
@@ -85,7 +95,9 @@ impl<'reports> TypeInference<'reports> {
         };
         format!("'{}{}", resolve(name), bounds_str)
       }
-      Type::MonomorphizedSymbol(sym) => self.format_type(&sym.display_ty),
+      Type::MonomorphizedSymbol(sym) => format!("monomorphized<{}>", sym.index()),
+      Type::Symbol(sym) => format!("symbol<{}>", sym.index()),
+      Type::Id(ty_id) => format!("type_id<{}>", ty_id.index()),
       Type::Error => "error".bright_red().bold().to_string(),
     }
     .dimmed()

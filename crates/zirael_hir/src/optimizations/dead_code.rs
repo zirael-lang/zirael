@@ -4,7 +4,7 @@ use crate::hir::{
   lowering::AstLowering,
 };
 use zirael_parser::Symbol;
-use zirael_utils::prelude::{Colorize as _, resolve};
+use zirael_utils::prelude::{Colorize as _, resolve, warn};
 
 impl<'reports> AstLowering<'reports> {
   /// Checks if an expression statement has no side effects and its result is unused.
@@ -52,7 +52,9 @@ impl<'reports> AstLowering<'reports> {
     }
 
     let is_unused = if let Some(generics) = self.symbol_table.get_generics_for_symbol(symbol) {
-      if !generics.is_empty() { !self.mono_table.has_entries(symbol.id) } else { !symbol.is_used }
+      warn!("update this {}", file!());
+      // if !generics.is_empty() { !self.mono_table.has_entries(symbol.id) } else { !symbol.is_used }
+      false
     } else {
       !symbol.is_used
     };

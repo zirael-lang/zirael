@@ -188,27 +188,6 @@ impl SymbolTable {
     self.read(|table| table.symbols.get(symbol_id).and_then(|symbol| symbol.imported_from))
   }
 
-  pub fn get_imported_symbols(&self, scope: ScopeId) -> Vec<(SymbolId, ScopeId)> {
-    self.read(|table| {
-      table
-        .scopes_arena
-        .get(scope)
-        .map(|scope| {
-          scope
-            .symbols
-            .values()
-            .filter_map(|&symbol_id| {
-              table
-                .symbols
-                .get(symbol_id)
-                .and_then(|symbol| symbol.imported_from.map(|source| (symbol_id, source)))
-            })
-            .collect()
-        })
-        .unwrap_or_default()
-    })
-  }
-
   pub fn find_module_by_source(&self, source_file: SourceFileId) -> Option<ScopeId> {
     self.read(|table| {
       table
@@ -327,17 +306,6 @@ impl SymbolTable {
     })
   }
 
-  pub fn get_unused_symbols(&self) -> Vec<(SymbolId, Symbol)> {
-    self.read(|table| {
-      table
-        .symbols
-        .iter()
-        .filter(|(_, symbol)| !symbol.is_used)
-        .map(|(id, symbol)| (id, symbol.clone()))
-        .collect()
-    })
-  }
-
   pub fn is_ancestor_scope(&self, ancestor: ScopeId, descendant: ScopeId) -> bool {
     self.read(|table| {
       let mut current = Some(descendant);
@@ -383,59 +351,10 @@ impl SymbolTable {
     })
   }
 
-  pub fn get_c_identifier(&self, id: SymbolId) -> Option<String> {
-    self.read(|table| {
-      table.symbols.get(id).map(|symbol| {
-        if let SymbolKind::Temporary { .. } = &symbol.kind {
-          format!("__zirael_temp_{}", id.index())
-        } else {
-          let base_name = resolve(&symbol.name);
-          format!("__zirael_{base_name}")
-        }
-      })
-    })
-  }
-
-  pub fn get_temporaries_by_lifetime(
-    &self,
-    lifetime: TemporaryLifetime,
-  ) -> Vec<(SymbolId, Symbol)> {
-    self.read(|table| {
-      table
-        .symbols
-        .iter()
-        .filter(|(_, symbol)| {
-          matches!(&symbol.kind, SymbolKind::Temporary { lifetime: temp_lifetime, .. }
-                            if temp_lifetime == &lifetime)
-        })
-        .map(|(id, symbol)| (id, symbol.clone()))
-        .collect()
-    })
-  }
-
   pub fn clear(&self) {
     self.write(|table| {
       *table = SymbolTableImpl::default();
     });
-  }
-
-  pub fn insert_temporary(
-    &self,
-    ty: Type,
-    lifetime: TemporaryLifetime,
-    span: Option<Span>,
-  ) -> Result<SymbolId, SymbolTableError> {
-    let temp_name = self.write(|table| {
-      let temp_count = table
-        .symbols
-        .iter()
-        .filter(|(_, s)| matches!(s.kind, SymbolKind::Temporary { .. }))
-        .count();
-      get_or_intern(&format!("__temp_{temp_count}"), None)
-    });
-
-    let kind = SymbolKind::Temporary { ty, lifetime };
-    self.insert(temp_name, kind, span, None)
   }
 
   pub fn find_similar_symbol(

@@ -1,4 +1,5 @@
 use id_arena::Id;
+use std::collections::HashMap;
 use zirael_utils::prelude::{Identifier, Mode, Span};
 
 mod relations;
@@ -63,10 +64,6 @@ pub enum SymbolKind {
     parent_enum: SymbolId,
     data: EnumVariantData,
   },
-  Temporary {
-    ty: Type,
-    lifetime: TemporaryLifetime,
-  },
 }
 
 impl SymbolKind {
@@ -79,7 +76,6 @@ impl SymbolKind {
       Self::Struct { .. } => "struct",
       Self::Enum { .. } => "enum",
       Self::EnumVariant { .. } => "enum variant",
-      Self::Temporary { .. } => "temporary",
       Self::TypeExtension { .. } => "type extension",
       Self::MatchBinding { .. } => "match binding",
     }

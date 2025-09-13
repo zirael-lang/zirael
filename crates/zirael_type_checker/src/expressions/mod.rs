@@ -1,18 +1,18 @@
 use std::collections::HashMap;
 use zirael_parser::{
-  EnumVariantData, Expr, ExprKind, Literal, MatchArm, Path, Pattern, PatternField, SymbolId, SymbolKind, Type,
-  UnaryOp, VarDecl, WalkerContext,
+  AstWalker, EnumVariantData, Expr, ExprKind, Literal, MatchArm, Path, Pattern, PatternField,
+  SymbolId, SymbolKind, Type, UnaryOp, VarDecl, WalkerContext,
 };
 use zirael_utils::prelude::{
   Color, Colorize, Identifier, ReportBuilder, ReportKind, Span, debug, resolve, warn,
 };
-
-use crate::{
-  TypeInference, unification::UnificationResult,
-};
+use crate::symbol_table::TyId;
+use crate::TypeInference;
 
 mod binary;
-mod fields;
+mod block_inference;
+mod call;
+// mod fields;
 
 impl<'reports> TypeInference<'reports> {
   pub(crate) fn expect_type(
@@ -42,7 +42,7 @@ impl<'reports> TypeInference<'reports> {
     let mut valid = true;
     for (i, (arg, param_type)) in args.iter_mut().zip(params.iter()).enumerate() {
       let _arg_type = self.infer_expr(arg);
-      self.try_monomorphize_named_type(&mut arg.ty);
+      self.visit_type(&mut arg.ty);
       if !self.expect_type(param_type, &mut arg.ty, &arg.span, &format!("argument {}", i + 1)) {
         valid = false;
       }
@@ -79,23 +79,24 @@ impl<'reports> TypeInference<'reports> {
       }
       ExprKind::Paren(expr) => self.infer_expr_with_expected(expr, expected_type),
       ExprKind::StructInit { name, fields, call_info } => {
-        self.infer_struct_init(name, fields, call_info)
+        // self.infer_struct_init(name, fields, call_info)
+        Type::Void
       }
-      ExprKind::FieldAccess(fields) => self.infer_field_access(fields),
-      ExprKind::IndexAccess(expr, index) => self.infer_index_access(expr, index),
-      ExprKind::MethodCall { chain, call } => self.infer_method_call(
-        chain,
-        &mut call.args,
-        &mut call.call_info,
-        &mut call.type_annotations,
-      ),
-      ExprKind::StaticCall { callee, call } => self.infer_static_call_with_expected(
-        callee,
-        &mut call.args,
-        &mut call.call_info,
-        &mut call.type_annotations,
-        expected_type,
-      ),
+      // ExprKind::FieldAccess(fields) => self.infer_field_access(fields),
+      // ExprKind::IndexAccess(expr, index) => self.infer_index_access(expr, index),
+      // ExprKind::MethodCall { chain, call } => self.infer_method_call(
+      //   chain,
+      //   &mut call.args,
+      //   &mut call.call_info,
+      //   &mut call.type_annotations,
+      // ),
+      // ExprKind::StaticCall { callee, call } => self.infer_static_call_with_expected(
+      //   callee,
+      //   &mut call.args,
+      //   &mut call.call_info,
+      //   &mut call.type_annotations,
+      //   expected_type,
+      // ),
       ExprKind::Ternary { true_expr, false_expr, condition } => {
         self.infer_ternary_with_expected(condition, true_expr, false_expr, expected_type)
       }
@@ -123,19 +124,22 @@ impl<'reports> TypeInference<'reports> {
 
     self.expect_type(&Type::Bool, &condition_ty, &condition.span, "ternary condition");
 
-    match self.unify_types(&true_ty, &false_ty) {
-      UnificationResult::Identical(ty) => ty,
-      UnificationResult::Unified(ty) => {
-        true_expr.ty = ty.clone();
-        false_expr.ty = ty.clone();
-        self.update_expr_recursively(true_expr, &ty);
-        self.update_expr_recursively(false_expr, &ty);
-        ty
-      }
-      UnificationResult::Incompatible => {
-        self.ternary_error(&true_ty, &false_ty, true_expr, false_expr)
-      }
-    }
+    // match self.unify_types(&true_ty, &false_ty) {
+    //   UnificationResult::Identical(ty) => ty,
+    //   UnificationResult::Unified(ty) => {
+    //     true_expr.ty = ty.clone();
+    //     false_expr.ty = ty.clone();
+    //     self.update_expr_recursively(true_expr, &ty);
+    //     self.update_expr_recursively(false_expr, &ty);
+    //     ty
+    //   }
+    //   UnificationResult::Incompatible => {
+    //     self.ternary_error(&true_ty, &false_ty, true_expr, false_expr)
+    //   }
+    // }
+
+    warn!("TODO: add unification for ternary operator");
+    true_ty
   }
 
   fn ternary_error(
@@ -221,20 +225,23 @@ impl<'reports> TypeInference<'reports> {
 
     self.expect_type(&Type::Bool, &condition_ty, &condition.span, "ternary condition");
 
-    match self.unify_types(&true_ty, &false_ty) {
-      UnificationResult::Identical(ty) => ty,
-      UnificationResult::Unified(ty) => {
-        true_expr.ty = ty.clone();
-        false_expr.ty = ty.clone();
-        self.update_expr_recursively(true_expr, &ty);
-        self.update_expr_recursively(false_expr, &ty);
-        ty
-      }
-      UnificationResult::Incompatible => {
-        self.ternary_error(&true_ty, &false_ty, true_expr, false_expr);
-        Type::Error
-      }
-    }
+    // match self.unify_types(&true_ty, &false_ty) {
+    //   UnificationResult::Identical(ty) => ty,
+    //   UnificationResult::Unified(ty) => {
+    //     true_expr.ty = ty.clone();
+    //     false_expr.ty = ty.clone();
+    //     self.update_expr_recursively(true_expr, &ty);
+    //     self.update_expr_recursively(false_expr, &ty);
+    //     ty
+    //   }
+    //   UnificationResult::Incompatible => {
+    //     self.ternary_error(&true_ty, &false_ty, true_expr, false_expr);
+    //     Type::Error
+    //   }
+    // }
+
+    warn!("TODO: add unification for ternary operator");
+    true_ty
   }
 
   pub fn infer_variable(&mut self, decl: &mut VarDecl) -> Type {
@@ -317,12 +324,12 @@ impl<'reports> TypeInference<'reports> {
     &mut self,
     expected: &Type,
     actual: &Type,
-    mapping: &mut HashMap<Identifier, Type>,
+    mapping: &mut HashMap<Identifier, TyId>,
   ) {
     match (expected, actual) {
       (Type::Named { name, generics }, concrete_type) => {
         if generics.is_empty() && self.ctx.is_generic_parameter(*name) {
-          mapping.insert(*name, concrete_type.clone());
+          mapping.insert(*name, self.sym_table.intern_type(concrete_type.clone()));
         } else if !generics.is_empty() {
           if let Type::Named { name: a_name, generics: a_generics } = concrete_type {
             if name == a_name && generics.len() == a_generics.len() {
@@ -335,7 +342,7 @@ impl<'reports> TypeInference<'reports> {
       }
 
       (Type::Variable { name, .. }, concrete_type) => {
-        mapping.insert(*name, concrete_type.clone());
+        mapping.insert(*name, self.sym_table.intern_type(concrete_type.clone()));
       }
 
       (Type::Pointer(e_inner), Type::Pointer(a_inner)) => {
@@ -387,35 +394,37 @@ impl<'reports> TypeInference<'reports> {
 
     let mut unified_type = arm_types[0].clone();
     for (i, arm_ty) in arm_types.iter().enumerate().skip(1) {
-      match self.unify_types(&unified_type, arm_ty) {
-        UnificationResult::Identical(_) => {}
-        UnificationResult::Unified(new_unified) => {
-          unified_type = new_unified;
-        }
-        UnificationResult::Incompatible => {
-          let report = ReportBuilder::builder(
-            format!(
-              "mismatched types in match arms: expected {}, found {}",
-              self.format_type(&unified_type),
-              self.format_type(arm_ty)
-            ),
-            ReportKind::Error,
-          )
-          .label_color_custom(
-            &format!("this arm returns {}", self.format_type(&unified_type)),
-            Span::new(arms[0].span.start, arms[0].span.end),
-            Color::BrightGreen,
-          )
-          .label_color_custom(
-            &format!("this arm returns {}", self.format_type(arm_ty)),
-            Span::new(arms[i].span.start, arms[i].span.end),
-            Color::BrightRed,
-          )
-          .note("all match arms must return the same type");
+      // match self.unify_types(&unified_type, arm_ty) {
+      //   UnificationResult::Identical(_) => {}
+      //   UnificationResult::Unified(new_unified) => {
+      //     unified_type = new_unified;
+      //   }
+      //   UnificationResult::Incompatible => {
+      //     let report = ReportBuilder::builder(
+      //       format!(
+      //         "mismatched types in match arms: expected {}, found {}",
+      //         self.format_type(&unified_type),
+      //         self.format_type(arm_ty)
+      //       ),
+      //       ReportKind::Error,
+      //     )
+      //     .label_color_custom(
+      //       &format!("this arm returns {}", self.format_type(&unified_type)),
+      //       Span::new(arms[0].span.start, arms[0].span.end),
+      //       Color::BrightGreen,
+      //     )
+      //     .label_color_custom(
+      //       &format!("this arm returns {}", self.format_type(arm_ty)),
+      //       Span::new(arms[i].span.start, arms[i].span.end),
+      //       Color::BrightRed,
+      //     )
+      //     .note("all match arms must return the same type");
+      //
+      //     self.reports.add(self.processed_file.unwrap(), report);
+      //   }
+      // }
 
-          self.reports.add(self.processed_file.unwrap(), report);
-        }
-      }
+      warn!("add unification for match arms");
     }
 
     unified_type

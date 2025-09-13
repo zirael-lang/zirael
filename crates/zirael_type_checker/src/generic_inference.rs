@@ -1,7 +1,8 @@
 use crate::TypeInference;
 use std::collections::HashMap;
-use zirael_parser::{GenericParameter, Type};
-use zirael_utils::prelude::{resolve, Identifier, Span};
+use zirael_parser::{AstWalker, GenericParameter, Type};
+use zirael_utils::prelude::{Identifier, Span, resolve};
+use crate::symbol_table::TyId;
 
 impl<'reports> TypeInference<'reports> {
   pub fn infer_generic_mappings(
@@ -9,13 +10,13 @@ impl<'reports> TypeInference<'reports> {
     generic_params: &[GenericParameter],
     param_types: &[Type],
     arg_types: &[Type],
-  ) -> HashMap<Identifier, Type> {
+  ) -> HashMap<Identifier, TyId> {
     let mut mapping = HashMap::new();
-    
+
     for (param_ty, arg_ty) in param_types.iter().zip(arg_types.iter()) {
       self.infer_generic_types(param_ty, arg_ty, &mut mapping);
     }
-    
+
     mapping
   }
 
@@ -24,21 +25,15 @@ impl<'reports> TypeInference<'reports> {
     generics: &[GenericParameter],
     mapping: &HashMap<Identifier, Type>,
   ) -> bool {
-    generics.iter().all(|g| {
-      mapping.get(&g.name)
-        .map_or(false, |ty| self.is_concrete_type(ty))
-    })
+    generics.iter().all(|g| mapping.get(&g.name).map_or(false, |ty| self.is_concrete_type(ty)))
   }
 
   pub fn get_unresolved_generics<'a>(
     &self,
     generics: &'a [GenericParameter],
-    mapping: &HashMap<Identifier, Type>,
+    mapping: &HashMap<Identifier, TyId>,
   ) -> Vec<&'a GenericParameter> {
-    generics
-      .iter()
-      .filter(|g| !mapping.contains_key(&g.name))
-      .collect()
+    generics.iter().filter(|g| !mapping.contains_key(&g.name)).collect()
   }
 
   /// Validate that type annotations match generic parameter count
@@ -68,15 +63,15 @@ impl<'reports> TypeInference<'reports> {
     &mut self,
     generics: &[GenericParameter],
     type_annotations: &[Type],
-  ) -> HashMap<Identifier, Type> {
+  ) -> HashMap<Identifier, TyId> {
     let mut mapping = HashMap::new();
-    
+
     for (generic, annotation) in generics.iter().zip(type_annotations.iter()) {
       let mut resolved_annotation = annotation.clone();
-      self.try_monomorphize_named_type(&mut resolved_annotation);
-      mapping.insert(generic.name, resolved_annotation);
+      self.visit_type(&mut resolved_annotation);
+      mapping.insert(generic.name, self.sym_table.intern_type(resolved_annotation));
     }
-    
+
     mapping
   }
 
@@ -87,11 +82,7 @@ impl<'reports> TypeInference<'reports> {
     call_span: &Span,
     has_annotations: bool,
   ) {
-    let generics_list = unresolved
-      .iter()
-      .map(|g| resolve(&g.name))
-      .collect::<Vec<_>>()
-      .join(", ");
+    let generics_list = unresolved.iter().map(|g| resolve(&g.name)).collect::<Vec<_>>().join(", ");
 
     let suggestion = if !has_annotations {
       format!(
@@ -119,7 +110,7 @@ impl<'reports> TypeInference<'reports> {
   pub fn apply_generic_substitutions(
     &mut self,
     param_types: &mut [Type],
-    mapping: &HashMap<Identifier, Type>,
+    mapping: &HashMap<Identifier, TyId>,
   ) {
     for param_ty in param_types.iter_mut() {
       self.substitute_type_with_map(param_ty, mapping);

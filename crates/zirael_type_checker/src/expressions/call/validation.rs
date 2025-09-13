@@ -1,5 +1,5 @@
 use crate::TypeInference;
-use zirael_parser::{Expr, FunctionSignature, Parameter, SymbolKind, Type};
+use zirael_parser::{AstWalker, Expr, FunctionSignature, Parameter, SymbolKind, Type};
 use zirael_utils::prelude::Span;
 
 impl<'reports> TypeInference<'reports> {
@@ -17,11 +17,7 @@ impl<'reports> TypeInference<'reports> {
 
     if args.len() != expected_count {
       self.simple_error(
-        &format!(
-          "wrong number of arguments: expected {}, found {}",
-          expected_count,
-          args.len()
-        ),
+        &format!("wrong number of arguments: expected {}, found {}", expected_count, args.len()),
         "in this call",
         call_span.clone(),
       );
@@ -31,13 +27,9 @@ impl<'reports> TypeInference<'reports> {
     }
   }
 
-  pub fn validate_argument_types(
-    &mut self,
-    args: &[Expr],
-    param_types: &[Type],
-  ) -> bool {
+  pub fn validate_argument_types(&mut self, args: &[Expr], param_types: &[Type]) -> bool {
     let mut all_valid = true;
-    
+
     for (i, (arg, param_type)) in args.iter().zip(param_types.iter()).enumerate() {
       if !self.types_equal(&arg.ty, param_type) {
         self.type_mismatch_with_context(
@@ -49,7 +41,7 @@ impl<'reports> TypeInference<'reports> {
         all_valid = false;
       }
     }
-    
+
     all_valid
   }
 
@@ -57,32 +49,21 @@ impl<'reports> TypeInference<'reports> {
     &self,
     signature: &'a FunctionSignature,
   ) -> &'a [Parameter] {
-    if signature.is_static() {
-      &signature.parameters[..]
-    } else {
-      &signature.parameters[1..]
-    }
+    if signature.is_static() { &signature.parameters[..] } else { &signature.parameters[1..] }
   }
 
-  pub fn extract_parameter_types(
-    &self,
-    params: &[Parameter],
-  ) -> Vec<Type> {
+  pub fn extract_parameter_types(&self, params: &[Parameter]) -> Vec<Type> {
     params.iter().map(|p| p.ty.clone()).collect()
   }
 
   pub fn infer_argument_types(&mut self, args: &mut [Expr]) {
     for arg in args.iter_mut() {
       self.infer_expr(arg);
-      self.try_monomorphize_named_type(&mut arg.ty);
+      self.visit_type(&mut arg.ty);
     }
   }
 
-  pub fn validate_callable_symbol(
-    &mut self,
-    symbol_kind: &SymbolKind,
-    call_span: &Span,
-  ) -> bool {
+  pub fn validate_callable_symbol(&mut self, symbol_kind: &SymbolKind, call_span: &Span) -> bool {
     match symbol_kind {
       SymbolKind::Function { .. } => true,
       _ => {

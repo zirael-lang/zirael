@@ -80,7 +80,9 @@ impl Sources {
   }
 
   pub fn all(&self) -> Vec<(SourceFileId, SourceFile)> {
-    self.read(|sources| sources.arena.iter().map(|(id, source)| (id, source.clone())).collect())
+    self.read(|sources| {
+      sources.arena.iter().map(|(id, source)| (id.clone(), source.clone())).collect()
+    })
   }
 
   pub fn add_static(&self, content: &'static str, path: PathBuf) -> SourceFileId {

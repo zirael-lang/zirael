@@ -1,4 +1,5 @@
 use crate::TypeInference;
+use crate::symbol_table::TyId;
 use std::collections::HashMap;
 use zirael_parser::{GenericParameter, Type};
 use zirael_utils::prelude::Identifier;
@@ -29,7 +30,9 @@ impl<'reports> TypeInference<'reports> {
   pub fn has_generics(&self, ty: &Type) -> bool {
     match ty {
       Type::Variable { .. } => true,
-      Type::Named { generics, .. } => !generics.is_empty() || generics.iter().any(|g| self.has_generics(g)),
+      Type::Named { generics, .. } => {
+        !generics.is_empty() || generics.iter().any(|g| self.has_generics(g))
+      }
       Type::Reference(inner) | Type::Pointer(inner) => self.has_generics(inner),
       Type::Array(inner, _) => self.has_generics(inner),
       Type::Function { params, return_type } => {
@@ -43,10 +46,16 @@ impl<'reports> TypeInference<'reports> {
     generics.iter().all(|g| self.is_concrete_type(g))
   }
 
-  pub fn create_generic_mapping(&mut self, params: &[GenericParameter]) -> HashMap<Identifier, Type> {
+  pub fn create_generic_mapping(
+    &mut self,
+    params: &[GenericParameter],
+  ) -> HashMap<Identifier, TyId> {
     params
       .iter()
-      .map(|p| (p.name, self.ctx.fresh_type_var(Some(p.name))))
+      .map(|p| {
+        let ty = self.ctx.fresh_type_var(Some(p.name));
+        (p.name, self.sym_table.intern_type(ty))
+      })
       .collect()
   }
 
@@ -68,9 +77,7 @@ impl<'reports> TypeInference<'reports> {
       (a, b) if self.both_numeric(a, b) => true,
       (Type::Reference(a), Type::Reference(b)) => self.comparable_for_equality(a, b),
       (Type::Pointer(a), Type::Pointer(b)) => self.comparable_for_equality(a, b),
-      (Type::Bool, Type::Bool) |
-      (Type::Char, Type::Char) |
-      (Type::String, Type::String) => true,
+      (Type::Bool, Type::Bool) | (Type::Char, Type::Char) | (Type::String, Type::String) => true,
       _ => false,
     }
   }

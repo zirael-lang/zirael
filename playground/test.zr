@@ -4,6 +4,13 @@ struct Math {
     }
 }
 
+fn identity<T>(value: T): T {
+    value
+}
+
 fn main() {
     var _x = Math::add(10, 5);
+
+    var _y = identity<int>(42);
+    var _z = identity<string>("Hello, World!");
 }

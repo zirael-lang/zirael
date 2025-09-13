@@ -1,6 +1,8 @@
+use std::any::TypeId;
 use zirael_utils::prelude::*;
 
-use crate::ast::monomorphized_symbol::MonomorphizedSymbol;
+use crate::{MonomorphizationId, SymbolId};
+use crate::ty::TyId;
 
 pub type TypeVarId = u32;
 
@@ -20,7 +22,9 @@ pub enum Type {
   Function { params: Vec<Type>, return_type: Box<Type> },
   Named { name: Identifier, generics: Vec<Type> },
 
-  MonomorphizedSymbol(MonomorphizedSymbol),
+  MonomorphizedSymbol(MonomorphizationId),
+  Symbol(SymbolId),
+  Id(TyId),
 
   Variable { id: usize, name: Identifier },
   BoundedVariable { id: usize, name: Identifier, bounds: Vec<TraitBound> },
@@ -49,7 +53,7 @@ impl Type {
   pub fn is_primitive(&self) -> bool {
     matches!(self, Self::String | Self::Char | Self::Int | Self::Uint | Self::Float | Self::Bool)
   }
-  
+
   pub fn is_bool(&self) -> bool {
     matches!(self, Self::Bool)
   }

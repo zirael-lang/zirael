@@ -14,13 +14,13 @@ clap = { workspace = true }
 colored = { workspace = true }
 env_logger = { workspace = true }
 fs-err = { workspace = true }
-id-arena = { workspace = true }
 lasso = { workspace = true }
 log = { workspace = true }
 once_cell = { workspace = true }
 parking_lot = { workspace = true }
 rayon = { workspace = true }
 serde = { workspace = true }
+id-arena = { workspace = true }
 
 [lints]
 workspace = true
