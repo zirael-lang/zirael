@@ -31,7 +31,7 @@ impl<'reports> TypeInference<'reports> {
     let mut all_valid = true;
 
     for (i, (arg, param_type)) in args.iter().zip(param_types.iter()).enumerate() {
-      if !self.types_equal(&arg.ty, param_type) {
+      if !self.eq(&arg.ty, param_type) {
         self.type_mismatch_with_context(
           param_type,
           &arg.ty,

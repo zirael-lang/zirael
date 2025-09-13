@@ -9,10 +9,6 @@ impl<'reports> TypeInference<'reports> {
     &self.symbol_table
   }
 
-  pub fn types_equal(&self, left: &Type, right: &Type) -> bool {
-    self.structural_eq(left, right)
-  }
-
   /// Check if a type is concrete (no type variables or inferred types)
   pub fn is_concrete_type(&self, ty: &Type) -> bool {
     match ty {
@@ -73,7 +69,7 @@ impl<'reports> TypeInference<'reports> {
 
   pub fn comparable_for_equality(&self, left: &Type, right: &Type) -> bool {
     match (left, right) {
-      (a, b) if self.types_equal(a, b) => true,
+      (a, b) if a == b => true,
       (a, b) if self.both_numeric(a, b) => true,
       (Type::Reference(a), Type::Reference(b)) => self.comparable_for_equality(a, b),
       (Type::Pointer(a), Type::Pointer(b)) => self.comparable_for_equality(a, b),

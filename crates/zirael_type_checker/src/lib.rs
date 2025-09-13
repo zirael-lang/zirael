@@ -5,6 +5,7 @@ mod expressions;
 mod generic_inference;
 mod method_utils;
 //mod structs;
+mod eq;
 mod substitution;
 mod symbol_table;
 mod type_operations;
@@ -24,82 +25,6 @@ impl_ast_walker!(TypeInference, {
     current_item: Option<SymbolId>,
     sym_table: MonoSymbolTable
 });
-
-impl<'reports> TypeInference<'reports> {
-  pub fn eq(&self, left: &Type, right: &Type) -> bool {
-    self.types_equal(left, right)
-  }
-
-  fn structural_eq(&self, left: &Type, right: &Type) -> bool {
-    match (left, right) {
-      (Type::String, Type::String)
-      | (Type::Char, Type::Char)
-      | (Type::Int, Type::Int)
-      | (Type::Float, Type::Float)
-      | (Type::Bool, Type::Bool)
-      | (Type::Void, Type::Void)
-      | (Type::Never, Type::Never) => true,
-
-      (Type::Never, _) | (_, Type::Never) => true,
-
-      (Type::Pointer(a), Type::Pointer(b)) | (Type::Reference(a), Type::Reference(b)) => {
-        self.structural_eq(a, b)
-      }
-
-      (Type::Array(a_ty, a_len), Type::Array(b_ty, b_len)) => {
-        self.structural_eq(a_ty, b_ty) && a_len == b_len
-      }
-
-      (
-        Type::Function { params: a_params, return_type: a_ret },
-        Type::Function { params: b_params, return_type: b_ret },
-      ) => {
-        a_params.len() == b_params.len()
-          && a_params.iter().zip(b_params).all(|(a, b)| self.structural_eq(a, b))
-          && self.structural_eq(a_ret, b_ret)
-      }
-
-      (
-        Type::Named { name: a_name, generics: a_generics },
-        Type::Named { name: b_name, generics: b_generics },
-      ) => {
-        a_name == b_name
-          && a_generics.len() == b_generics.len()
-          && a_generics.iter().zip(b_generics).all(|(a, b)| self.structural_eq(a, b))
-      }
-
-      (Type::Variable { id: id_a, .. }, Type::Variable { id: id_b, .. }) => id_a == id_b,
-
-      (Type::Inferred, Type::Inferred) | (Type::Error, _) | (_, Type::Error) => true,
-
-      (Type::MonomorphizedSymbol(sym), Type::MonomorphizedSymbol(sym2)) => {
-        let Some(mono1) = self.sym_table.get_monomorphized_symbol(*sym) else { return false };
-        let Some(mono2) = self.sym_table.get_monomorphized_symbol(*sym2) else { return false };
-
-        if mono1.original_symbol_id() != mono2.original_symbol_id() {
-          return false;
-        }
-
-        let concrete_types1 = mono1.concrete_types();
-        let concrete_types2 = mono2.concrete_types();
-
-        for (name, value) in concrete_types1 {
-          let Some(mono2_value) = concrete_types2.get(name) else { return false };
-          let value_ty = &self.sym_table[*value];
-          let mono2_value_ty = &self.sym_table[*mono2_value];
-
-          if value_ty != mono2_value_ty {
-            return false;
-          }
-        }
-
-        true
-      }
-
-      _ => false,
-    }
-  }
-}
 
 impl<'reports> AstWalker<'reports> for TypeInference<'reports> {
   fn walk_expr(&mut self, expr: &mut Expr) {

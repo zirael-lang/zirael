@@ -64,6 +64,10 @@ impl MonoSymbolTable {
     id
   }
 
+  pub fn lookup(&self, ty: &Ty) -> Option<TyId> {
+    self.cache.get(ty).copied()
+  }
+
   pub fn get(&self, id: TyId) -> Option<&Ty> {
     self.arena.get(id)
   }

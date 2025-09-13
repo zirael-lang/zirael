@@ -63,7 +63,7 @@ impl<'reports> TypeInference<'reports> {
   pub fn infer_if_stmt(&mut self, if_stmt: &mut If) -> Type {
     let condition_type = self.infer_expr(&mut if_stmt.condition);
     
-    if !self.types_equal(&condition_type, &Type::Bool) {
+    if !self.eq(&condition_type, &Type::Bool) {
       self.type_mismatch_with_context(
         &Type::Bool,
         &condition_type,
@@ -130,7 +130,7 @@ impl<'reports> TypeInference<'reports> {
         (Type::Never, Type::Never) => Type::Never,
         (Type::Never, other) | (other, Type::Never) => other.clone(),
         (then_ty, else_ty) => {
-          if self.types_equal(then_ty, else_ty) {
+          if self.eq(then_ty, else_ty) {
             then_ty.clone()
           } else {
             self.multi_label_error(

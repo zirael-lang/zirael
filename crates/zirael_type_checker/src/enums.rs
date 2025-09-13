@@ -81,7 +81,7 @@ impl<'reports> TypeInference<'reports> {
           self.infer_generic_types(&field.ty, &expr_type, &mut generic_mapping);
         }
 
-        if enum_generics.is_empty() && !self.eq(&field.ty, &expr_type) {
+        if enum_generics.is_empty() && !self.eq_types_readonly(&field.ty, &expr_type) {
           self.type_mismatch(&field.ty, &expr_type, field_expr.span.clone());
         }
       } else {
@@ -114,7 +114,7 @@ impl<'reports> TypeInference<'reports> {
         let mut type_mismatches = Vec::new();
         for (field_name, expr_type) in &field_types {
           if let Some(field) = monomorphized_fields.iter().find(|f| &f.name == field_name) {
-            if !self.eq(&field.ty, expr_type) {
+            if !self.eq_types_readonly(&field.ty, expr_type) {
               if let Some(field_expr) = fields.get(field_name) {
                 type_mismatches.push((
                   field.ty.clone(),
