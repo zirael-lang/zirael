@@ -21,7 +21,7 @@ pub enum HirPattern {
 #[derive(Debug, Clone)]
 pub struct HirPatternField {
   pub name: Identifier,
-  pub symbol_id: Option<SymbolId>,
+  pub symbol_id: SymbolId,
   pub pattern: Option<Box<HirPattern>>,
   pub span: Span,
   pub ty: Type,

@@ -3,56 +3,12 @@ mod interner;
 
 use id_arena::{Arena, Id};
 use std::collections::HashMap;
-use zirael_parser::{MonomorphizationId, SymbolId};
+use zirael_parser::{FunctionSignature, GenericParameter, MonomorphizationId, SymbolId};
 
 pub use generic::*;
 pub use interner::*;
 pub use zirael_parser::ty::*;
-use zirael_utils::prelude::Identifier;
-
-pub type FunctionId = id_arena::Id<GenericFunction>;
-pub type StructId = id_arena::Id<GenericStruct>;
-pub type EnumId = id_arena::Id<GenericEnum>;
-
-#[derive(Clone, Debug)]
-pub enum GenericSymbol {
-  Function(GenericFunction),
-  Struct(GenericStruct),
-  Enum(GenericEnum),
-}
-
-#[derive(Clone, Debug)]
-pub enum MonomorphizedSymbol {
-  Function(MonomorphizedFunction),
-  Struct(MonomorphizedStruct),
-  Enum(MonomorphizedEnum),
-}
-
-impl MonomorphizedSymbol {
-  pub fn original_symbol_id(&self) -> SymbolId {
-    match self {
-      MonomorphizedSymbol::Function(f) => f.original_symbol_id,
-      MonomorphizedSymbol::Struct(s) => s.original_symbol_id,
-      MonomorphizedSymbol::Enum(e) => e.original_symbol_id,
-    }
-  }
-
-  pub fn name(&self) -> &Identifier {
-    match self {
-      MonomorphizedSymbol::Function(f) => &f.name,
-      MonomorphizedSymbol::Struct(s) => &s.name,
-      MonomorphizedSymbol::Enum(e) => &e.name,
-    }
-  }
-
-  pub fn concrete_types(&self) -> &HashMap<Identifier, TyId> {
-    match self {
-      MonomorphizedSymbol::Function(f) => &f.concrete_types,
-      MonomorphizedSymbol::Struct(s) => &s.concrete_types,
-      MonomorphizedSymbol::Enum(e) => &e.concrete_types,
-    }
-  }
-}
+use zirael_utils::prelude::{Identifier, Span};
 
 #[derive(Clone, Debug, Default)]
 pub struct MonoSymbolTable {
@@ -67,7 +23,7 @@ pub struct MonoSymbolTable {
   pub type_cache: HashMap<(SymbolId, Vec<TyId>), TyId>,
 
   // Interner
-  arena: Arena<Ty>,
+  pub arena: Arena<Ty>,
   cache: HashMap<Ty, TyId>,
 }
 
@@ -76,8 +32,20 @@ impl MonoSymbolTable {
     &mut self,
     symbol_id: SymbolId,
     function: GenericFunction,
+    is_used: bool,
+    span: Span,
   ) -> Id<GenericSymbol> {
-    let generic_id = self.generic_symbols.alloc(GenericSymbol::Function(function));
+    let generic_symbol = GenericSymbol::function(
+      function.symbol_id,
+      function.name,
+      function.signature,
+      function.generics,
+      function.is_extern,
+      function.body_type,
+      is_used,
+      span,
+    );
+    let generic_id = self.generic_symbols.alloc(generic_symbol);
     self.symbol_to_generic.insert(symbol_id, generic_id);
     self.generic_to_symbol.insert(generic_id, symbol_id);
     generic_id
@@ -87,41 +55,67 @@ impl MonoSymbolTable {
     &mut self,
     symbol_id: SymbolId,
     struct_def: GenericStruct,
+    is_used: bool,
+    span: Span,
   ) -> Id<GenericSymbol> {
-    let generic_id = self.generic_symbols.alloc(GenericSymbol::Struct(struct_def));
+    let generic_symbol = GenericSymbol::struct_def(
+      struct_def.symbol_id,
+      struct_def.name,
+      struct_def.generics,
+      struct_def.fields,
+      is_used,
+      span,
+    );
+    let generic_id = self.generic_symbols.alloc(generic_symbol);
     self.symbol_to_generic.insert(symbol_id, generic_id);
     self.generic_to_symbol.insert(generic_id, symbol_id);
     generic_id
+  }
+
+  pub fn add_generic_value(
+    &mut self,
+    name: Identifier,
+    symbol_id: SymbolId,
+    ty: TyId,
+    is_used: bool,
+    span: Span,
+  ) {
+    let generic_symbol = GenericSymbol::value(symbol_id, name, ty, is_used, span);
+    let generic_id = self.generic_symbols.alloc(generic_symbol);
+    self.symbol_to_generic.insert(symbol_id, generic_id);
+    self.generic_to_symbol.insert(generic_id, symbol_id);
   }
 
   pub fn add_generic_enum(
     &mut self,
     symbol_id: SymbolId,
     enum_def: GenericEnum,
+    is_used: bool,
+    span: Span,
   ) -> Id<GenericSymbol> {
-    let generic_id = self.generic_symbols.alloc(GenericSymbol::Enum(enum_def));
+    let generic_symbol = GenericSymbol::enum_def(
+      enum_def.symbol_id,
+      enum_def.name,
+      enum_def.generics,
+      enum_def.variants,
+      is_used,
+      span,
+    );
+
+    let generic_id = self.generic_symbols.alloc(generic_symbol);
     self.symbol_to_generic.insert(symbol_id, generic_id);
     self.generic_to_symbol.insert(generic_id, symbol_id);
     generic_id
   }
 
-  pub fn add_monomorphized_symbol(&mut self, mut symbol: MonomorphizedSymbol) -> MonomorphizationId {
-    let id = self.mono_ids.alloc_with_id(|id| {
-      symbol = match &mut symbol {
-        MonomorphizedSymbol::Function(f) => {
-          f.mono_id = Some(id);
-
-          MonomorphizedSymbol::Function(f.clone())
-        }
-        MonomorphizedSymbol::Struct(s) => {
-          s.mono_id = id;
-          MonomorphizedSymbol::Struct(s.clone())
-        }
-        MonomorphizedSymbol::Enum(e) => {
-          e.mono_id = id;
-          MonomorphizedSymbol::Enum(e.clone())
-        }
-      };
+  pub fn add_monomorphized_symbol(
+    &mut self,
+    mut symbol: MonomorphizedSymbol,
+  ) -> MonomorphizationId {
+    let id = self.mono_ids.alloc_with_id(|id| match &mut symbol.kind {
+      MonomorphizedSymbolKind::Function { mono_id, .. } => *mono_id = Some(id),
+      MonomorphizedSymbolKind::Struct { mono_id, .. } => *mono_id = id,
+      MonomorphizedSymbolKind::EnumVariant { mono_id, .. } => *mono_id = id,
     });
 
     self.monomorphized_symbols.insert(id, symbol);
@@ -138,9 +132,12 @@ impl MonoSymbolTable {
   pub fn get_monomorphized_function(
     &self,
     mono_id: MonomorphizationId,
-  ) -> Option<&MonomorphizedFunction> {
+  ) -> Option<(&MonomorphizedSymbolBase, &FunctionSignature, &String, bool)> {
     match self.monomorphized_symbols.get(&mono_id) {
-      Some(MonomorphizedSymbol::Function(f)) => Some(f),
+      Some(MonomorphizedSymbol {
+        base,
+        kind: MonomorphizedSymbolKind::Function { signature, mangled_name, is_extern, .. },
+      }) => Some((base, signature, mangled_name, *is_extern)),
       _ => None,
     }
   }
@@ -148,16 +145,25 @@ impl MonoSymbolTable {
   pub fn get_monomorphized_struct(
     &self,
     mono_id: MonomorphizationId,
-  ) -> Option<&MonomorphizedStruct> {
+  ) -> Option<(&MonomorphizedSymbolBase, &String, &Vec<MonomorphizedStructField>)> {
     match self.monomorphized_symbols.get(&mono_id) {
-      Some(MonomorphizedSymbol::Struct(s)) => Some(s),
+      Some(MonomorphizedSymbol {
+        base,
+        kind: MonomorphizedSymbolKind::Struct { mangled_name, fields, .. },
+      }) => Some((base, mangled_name, fields)),
       _ => None,
     }
   }
 
-  pub fn get_monomorphized_enum(&self, mono_id: MonomorphizationId) -> Option<&MonomorphizedEnum> {
+  pub fn get_monomorphized_enum_variant(
+    &self,
+    mono_id: MonomorphizationId,
+  ) -> Option<(&MonomorphizedSymbolBase, SymbolId, &Vec<MonomorphizedStructField>)> {
     match self.monomorphized_symbols.get(&mono_id) {
-      Some(MonomorphizedSymbol::Enum(e)) => Some(e),
+      Some(MonomorphizedSymbol {
+        base,
+        kind: MonomorphizedSymbolKind::EnumVariant { symbol_id, fields, .. },
+      }) => Some((base, *symbol_id, fields)),
       _ => None,
     }
   }
@@ -166,23 +172,40 @@ impl MonoSymbolTable {
     self.symbol_to_generic.get(&symbol_id).and_then(|&id| self.generic_symbols.get(id))
   }
 
-  pub fn get_generic_function(&self, symbol_id: SymbolId) -> Option<&GenericFunction> {
+  pub fn get_generic_function(
+    &self,
+    symbol_id: SymbolId,
+  ) -> Option<(&GenericSymbolBase, &FunctionSignature, &Vec<GenericParameter>, bool, &Option<TyId>)>
+  {
     match self.get_generic_symbol(symbol_id) {
-      Some(GenericSymbol::Function(f)) => Some(f),
+      Some(GenericSymbol {
+        base,
+        kind: GenericSymbolKind::Function { signature, generics, is_extern, body_type },
+      }) => Some((base, signature, generics, *is_extern, body_type)),
       _ => None,
     }
   }
 
-  pub fn get_generic_struct(&self, symbol_id: SymbolId) -> Option<&GenericStruct> {
+  pub fn get_generic_struct(
+    &self,
+    symbol_id: SymbolId,
+  ) -> Option<(&GenericSymbolBase, &Vec<GenericParameter>, &Vec<GenericStructField>)> {
     match self.get_generic_symbol(symbol_id) {
-      Some(GenericSymbol::Struct(s)) => Some(s),
+      Some(GenericSymbol { base, kind: GenericSymbolKind::Struct { generics, fields } }) => {
+        Some((base, generics, fields))
+      }
       _ => None,
     }
   }
 
-  pub fn get_generic_enum(&self, symbol_id: SymbolId) -> Option<&GenericEnum> {
+  pub fn get_generic_enum(
+    &self,
+    symbol_id: SymbolId,
+  ) -> Option<(&GenericSymbolBase, &Vec<GenericParameter>, &Vec<GenericEnumVariant>)> {
     match self.get_generic_symbol(symbol_id) {
-      Some(GenericSymbol::Enum(e)) => Some(e),
+      Some(GenericSymbol { base, kind: GenericSymbolKind::Enum { generics, variants } }) => {
+        Some((base, generics, variants))
+      }
       _ => None,
     }
   }
@@ -195,12 +218,12 @@ impl MonoSymbolTable {
 
   pub fn get_mono_generics(&self, symbol_id: MonomorphizationId) -> Option<Vec<Ty>> {
     let generic = self.get_monomorphized_symbol(symbol_id)?;
-    let ids = match generic {
-      MonomorphizedSymbol::Function(f) => f.concrete_types.values().cloned().collect::<Vec<_>>(),
-      MonomorphizedSymbol::Struct(s) => s.concrete_types.values().cloned().collect::<Vec<_>>(),
-      MonomorphizedSymbol::Enum(e) => e.concrete_types.values().cloned().collect::<Vec<_>>(),
-    };
+    let ids = generic.concrete_types().values().cloned().collect::<Vec<_>>();
 
     Some(ids.iter().filter_map(|id| self.arena.get(*id)).cloned().collect::<Vec<_>>())
+  }
+
+  pub fn has_mono_variant(&self, symbol_id: SymbolId) -> bool {
+    self.symbol_to_generic.get(&symbol_id).is_some()
   }
 }

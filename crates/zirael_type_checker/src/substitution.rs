@@ -1,9 +1,9 @@
 use crate::TypeInference;
+use crate::symbol_table::TyId;
 use std::collections::HashMap;
 use zirael_parser::{GenericParameter, SymbolRelationNode, Type};
 use zirael_utils::ident_table::resolve;
 use zirael_utils::prelude::{Colorize, Identifier, ReportBuilder, ReportKind, debug};
-use crate::symbol_table::TyId;
 
 impl<'reports> TypeInference<'reports> {
   pub fn substitute_generic_params(
@@ -59,7 +59,6 @@ impl<'reports> TypeInference<'reports> {
 
   pub fn try_to_symbol(&mut self, ty: &mut Type) {
     if let Type::Named { name, generics } = ty {
-      println!("{} {:?}", name, self.ctx.generic_params);
       if self.ctx.is_generic_parameter(*name) {
         return;
       }

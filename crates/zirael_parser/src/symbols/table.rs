@@ -92,6 +92,19 @@ impl SymbolTable {
     writer(&mut self.0.write())
   }
 
+  pub fn print_symbols(&self) {
+    self.read(|table| {
+      for (id, symbol) in table.symbols.iter() {
+        println!(
+          "Symbol ID: {:?}, Name: {}, Kind: {:?}",
+          id,
+          resolve(&symbol.name),
+          symbol.kind.name()
+        );
+      }
+    });
+  }
+
   pub fn insert(
     &self,
     name: Identifier,

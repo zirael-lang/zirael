@@ -1,3 +1,5 @@
+use crate::TypeInference;
+use crate::symbol_table::TyId;
 use std::collections::HashMap;
 use zirael_parser::{
   AstWalker, EnumVariantData, Expr, ExprKind, Literal, MatchArm, Path, Pattern, PatternField,
@@ -6,8 +8,6 @@ use zirael_parser::{
 use zirael_utils::prelude::{
   Color, Colorize, Identifier, ReportBuilder, ReportKind, Span, debug, resolve, warn,
 };
-use crate::symbol_table::TyId;
-use crate::TypeInference;
 
 mod binary;
 mod block_inference;
@@ -28,26 +28,6 @@ impl<'reports> TypeInference<'reports> {
     } else {
       true
     }
-  }
-
-  fn check_call_args(&mut self, params: &[Type], args: &mut [Expr], span: &Span) -> bool {
-    if args.len() != params.len() {
-      self.error(
-        &format!("wrong number of arguments: expected {}, found {}", params.len(), args.len()),
-        vec![("in this call".to_string(), span.clone())],
-        vec![],
-      );
-      return false;
-    }
-    let mut valid = true;
-    for (i, (arg, param_type)) in args.iter_mut().zip(params.iter()).enumerate() {
-      let _arg_type = self.infer_expr(arg);
-      self.visit_type(&mut arg.ty);
-      if !self.expect_type(param_type, &mut arg.ty, &arg.span, &format!("argument {}", i + 1)) {
-        valid = false;
-      }
-    }
-    valid
   }
 
   pub fn infer_expr(&mut self, expr: &mut Expr) -> Type {

@@ -4,7 +4,7 @@ use crate::hir::{
 };
 use zirael_parser::{BinaryOp, Literal, UnaryOp};
 
-impl<'reports> AstLowering<'reports> {
+impl<'reports, 'mono> AstLowering<'reports, 'mono> {
   pub fn try_to_constant_fold(&mut self, expr: HirExprKind) -> HirExprKind {
     if !self.can_be_folded(&expr) {
       return expr;

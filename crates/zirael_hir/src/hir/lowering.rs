@@ -9,10 +9,11 @@ use crate::hir::{
 use id_arena::Arena;
 use std::collections::HashMap;
 use zirael_parser::{ast::item::Item, *};
+use zirael_type_checker::{GenericEnumData, GenericSymbolKind, MonoSymbolTable};
 use zirael_utils::prelude::*;
 
-pub struct AstLowering<'reports> {
-  pub symbol_table: SymbolTable,
+pub struct AstLowering<'reports, 'mono> {
+  pub symbol_table: &'mono MonoSymbolTable,
   reports: Reports<'reports>,
   processed_file: Option<SourceFileId>,
   pub folded_vars: HashMap<SymbolId, HirExprKind>,
@@ -21,15 +22,15 @@ pub struct AstLowering<'reports> {
   pub mode: Mode,
 }
 
-impl<'reports> AstLowering<'reports> {
+impl<'reports, 'mono> AstLowering<'reports, 'mono> {
   pub fn new(
-    symbol_table: &SymbolTable,
+    symbol_table: &'mono MonoSymbolTable,
     reports: &Reports<'reports>,
     is_library: bool,
     mode: Mode,
   ) -> Self {
     Self {
-      symbol_table: symbol_table.clone(),
+      symbol_table,
       reports: reports.clone(),
       processed_file: None,
       folded_vars: HashMap::new(),
@@ -37,16 +38,6 @@ impl<'reports> AstLowering<'reports> {
       is_library,
       mode,
     }
-  }
-
-  fn lower_type(&mut self, ty: Type) -> Type {
-    if let Type::Named { name, .. } = &ty {
-      if let Some(symbol) = self.symbol_table.lookup_symbol(name) {
-        self.symbol_for_mode_check(&symbol, *name.span());
-      }
-    }
-
-    ty
   }
 
   fn is_enum_variant_constructor(&self, name_expr: &Expr) -> bool {
@@ -66,8 +57,12 @@ impl<'reports> AstLowering<'reports> {
       _ => return false,
     };
 
-    let symbol = self.symbol_table.get_symbol_unchecked(&symbol_id);
-    matches!(symbol.kind, SymbolKind::EnumVariant { .. })
+    let symbol = self.symbol_table.get_generic_symbol(symbol_id);
+    let Some(symbol) = symbol else {
+      return false;
+    };
+
+    matches!(symbol.kind, GenericSymbolKind::EnumVariant { .. })
   }
 
   fn get_variant_field_order(&self, name_expr: &Expr) -> Option<Vec<Identifier>> {
@@ -83,9 +78,13 @@ impl<'reports> AstLowering<'reports> {
       _ => return None,
     };
 
-    let symbol = self.symbol_table.get_symbol_unchecked(&symbol_id);
-    if let SymbolKind::EnumVariant { data, .. } = &symbol.kind {
-      if let EnumVariantData::Struct(fields) = data {
+    let symbol = self.symbol_table.get_generic_symbol(symbol_id);
+    let Some(symbol) = symbol else {
+      return None;
+    };
+
+    if let GenericSymbolKind::EnumVariant { data, .. } = &symbol.kind {
+      if let GenericEnumData::Struct(fields) = data {
         return Some(fields.iter().map(|f| f.name).collect());
       }
     }
@@ -93,12 +92,23 @@ impl<'reports> AstLowering<'reports> {
   }
 
   fn lower_identifier(&mut self, symbol_id: SymbolId) -> HirExprKind {
-    let symbol = self.symbol_table.get_symbol_unchecked(&symbol_id);
-    self.symbol_for_mode_check(&symbol, *symbol.name.span());
+    let symbol = self.symbol_table.get_generic_symbol(symbol_id);
 
-    if let SymbolKind::EnumVariant { data, .. } = &symbol.kind {
+    let Some(symbol) = symbol else {
+      self.error(
+        &format!("Symbol not found in generic symbol table {:?}", symbol_id),
+        vec![],
+        vec![],
+      );
+      return HirExprKind::Error;
+    };
+
+    // TODO: implement mode checking
+    // self.symbol_for_mode_check(&symbol, *symbol.name.span());
+
+    if let GenericSymbolKind::EnumVariant { data, .. } = &symbol.kind {
       match data {
-        EnumVariantData::Unit => HirExprKind::Call {
+        GenericEnumData::Unit => HirExprKind::Call {
           callee: Box::new(HirExpr {
             kind: HirExprKind::Symbol(symbol_id),
             ty: Type::Inferred,
@@ -108,7 +118,7 @@ impl<'reports> AstLowering<'reports> {
           args: vec![],
           call_info: None,
         },
-        EnumVariantData::Struct(_) => HirExprKind::Symbol(symbol_id),
+        GenericEnumData::Struct(_) => HirExprKind::Symbol(symbol_id),
       }
     } else {
       HirExprKind::Symbol(symbol_id)
@@ -136,18 +146,12 @@ impl<'reports> AstLowering<'reports> {
     }
   }
 
+  fn lower_type(&self, ty: Type) -> Type {
+    ty
+  }
+
   pub fn lower_modules(&mut self, lexed_modules: &mut Vec<LexedModule>) -> Vec<HirModule> {
     lexed_modules.iter_mut().map(|module| self.lower_module(module)).collect()
-  }
-
-  fn push_scope(&mut self, scope_type: ScopeType) {
-    let _ = self.symbol_table.push_scope(scope_type);
-  }
-
-  fn pop_scope(&mut self) {
-    if let Err(err) = self.symbol_table.pop_scope() {
-      self.error(&format!("Failed to pop scope: {err:?}"), vec![], vec![]);
-    }
   }
 
   fn lower_module(&mut self, lexed_module: &mut LexedModule) -> HirModule {
@@ -155,13 +159,11 @@ impl<'reports> AstLowering<'reports> {
     let id = lexed_module.id.as_file().unwrap();
     self.processed_file = Some(id);
 
-    self.push_scope(ScopeType::Module(id));
     for item in &mut lexed_module.ast.items {
       if let Some(hir_item) = self.lower_item(item) {
         hir_module.items.insert(hir_item.symbol_id, hir_item);
       }
     }
-    self.pop_scope();
 
     hir_module
   }
@@ -172,21 +174,28 @@ impl<'reports> AstLowering<'reports> {
     }
 
     let symbol_id = item.symbol_id.unwrap();
-    let sym = self.symbol_table.get_symbol_unchecked(&symbol_id);
-    if self.try_unused_symbol(&sym) {
+    let sym = self.symbol_table.get_generic_symbol(symbol_id);
+    let Some(sym) = sym else {
+      self.error(
+        &format!("Symbol not found in generic symbol table {:?}", symbol_id),
+        vec![],
+        vec![],
+      );
+      return None;
+    };
+
+    if self.try_unused_symbol(sym) {
       return None;
     }
 
-    if sym.mode_specific.is_some_and(|mode| mode == self.mode) {
-      return None;
-    }
+    // TODO: implement
+    // if sym.mode_specific.is_some_and(|mode| mode == self.mode) {
+    //   return None;
+    // }
 
     match &mut item.kind {
       ItemKind::Function(func) => {
-        self.push_scope(ScopeType::Function(func.id));
-
         let hir_function = self.lower_function(func, symbol_id);
-        self.pop_scope();
         Some(HirItem {
           symbol_id,
           kind: HirItemKind::Function(hir_function),
@@ -195,9 +204,7 @@ impl<'reports> AstLowering<'reports> {
         })
       }
       ItemKind::Struct(struct_def) => {
-        self.push_scope(ScopeType::Struct(struct_def.id));
         let hir_struct = self.lower_struct(struct_def, symbol_id);
-        self.pop_scope();
         Some(HirItem {
           symbol_id,
           kind: HirItemKind::Struct(hir_struct),
@@ -206,9 +213,7 @@ impl<'reports> AstLowering<'reports> {
         })
       }
       ItemKind::TypeExtension(ty_ext) => {
-        self.push_scope(ScopeType::TypeExtension(ty_ext.id));
         let ty_ext = self.lower_ty_ext(ty_ext, symbol_id);
-        self.pop_scope();
 
         Some(HirItem {
           symbol_id,
@@ -218,9 +223,7 @@ impl<'reports> AstLowering<'reports> {
         })
       }
       ItemKind::Enum(enum_def) => {
-        self.push_scope(ScopeType::Enum(enum_def.id));
         let hir_enum = self.lower_enum(enum_def, symbol_id);
-        self.pop_scope();
 
         Some(HirItem {
           symbol_id,
@@ -329,21 +332,12 @@ impl<'reports> AstLowering<'reports> {
       ExprKind::Identifier(_name, Some(symbol_id)) => HirExprKind::Symbol(*symbol_id),
 
       ExprKind::Identifier(name, None) => {
-        if let Some(symbol) = self.symbol_table.lookup_symbol(name) {
-          HirExprKind::Symbol(symbol.id)
-        } else {
-          self.error("Unresolved identifier", vec![], vec![]);
-          HirExprKind::Error
-        }
+        self.error(&format!("Unresolved identifier: {}", name), vec![], vec![]);
+        HirExprKind::Error
       }
-
       ExprKind::FieldAccess(fields) => {
         let base = &mut fields[0].clone();
-        let sym_id = if let Some((_, symbol_id)) = self.symbol_table.symbol_from_expr(base) {
-          FieldSymbol::Symbol(symbol_id)
-        } else {
-          FieldSymbol::Expr(Box::new(self.lower_expr_no_constant_fold(base)))
-        };
+        let sym_id = FieldSymbol::Expr(Box::new(self.lower_expr_no_constant_fold(base)));
         fields.remove(0);
 
         let mut indents = vec![];
@@ -384,12 +378,8 @@ impl<'reports> AstLowering<'reports> {
       ExprKind::Identifier(_name, Some(symbol_id)) => HirExprKind::Symbol(*symbol_id),
 
       ExprKind::Identifier(name, None) => {
-        if let Some(symbol) = self.symbol_table.lookup_symbol(name) {
-          HirExprKind::Symbol(symbol.id)
-        } else {
-          self.error("Unresolved identifier", vec![], vec![]);
-          HirExprKind::Error
-        }
+        self.error(&format!("Unresolved identifier: {}", name), vec![], vec![]);
+        HirExprKind::Error
       }
 
       ExprKind::Literal(literal) => HirExprKind::Literal(literal.clone()),
@@ -448,251 +438,243 @@ impl<'reports> AstLowering<'reports> {
   }
 
   fn lower_expr_impl(&mut self, ast_expr: &mut Expr, context: ExprContext) -> HirExpr {
-    let hir_kind = match &mut ast_expr.kind {
-      ExprKind::Literal(lit) => HirExprKind::Literal(lit.clone()),
+    let hir_kind =
+      match &mut ast_expr.kind {
+        ExprKind::Literal(lit) => HirExprKind::Literal(lit.clone()),
 
-      ExprKind::Identifier(_name, Some(symbol_id)) => self.lower_identifier(*symbol_id),
+        ExprKind::Identifier(_name, Some(symbol_id)) => self.lower_identifier(*symbol_id),
 
-      ExprKind::Identifier(name, None) => {
-        if let Some(symbol) = self.symbol_table.lookup_symbol(name) {
-          self.lower_identifier(symbol.id)
-        } else {
-          self.error("Unresolved identifier", vec![], vec![]);
+        ExprKind::Identifier(name, None) => {
+          self.error(&format!("Unresolved identifier in expression: {}", name), vec![], vec![]);
           HirExprKind::Error
         }
-      }
 
-      ExprKind::Path(path) => {
-        if let Some(last_segment) = path.segments.last() {
-          if let Some(symbol_id) = last_segment.symbol_id {
-            self.lower_identifier(symbol_id)
+        ExprKind::Path(path) => {
+          if let Some(last_segment) = path.segments.last() {
+            if let Some(symbol_id) = last_segment.symbol_id {
+              self.lower_identifier(symbol_id)
+            } else {
+              self.error("Unresolved path", vec![], vec![]);
+              HirExprKind::Error
+            }
           } else {
-            self.error("Unresolved path", vec![], vec![]);
+            self.error("Empty path", vec![], vec![]);
             HirExprKind::Error
           }
-        } else {
-          self.error("Empty path", vec![], vec![]);
+        }
+
+        ExprKind::Binary { left, op, right } => {
+          let left_expr = Box::new(self.lower_expr(left));
+          let right_expr = Box::new(self.lower_expr(right));
+          HirExprKind::Binary { left: left_expr, op: op.clone(), right: right_expr }
+        }
+
+        ExprKind::Ternary { condition, true_expr, false_expr } => {
+          let condition_expr = Box::new(self.lower_expr(condition));
+          let true_expr_hir = Box::new(self.lower_expr(true_expr));
+          let false_expr_hir = Box::new(self.lower_expr(false_expr));
+          HirExprKind::Ternary {
+            condition: condition_expr,
+            true_expr: true_expr_hir,
+            false_expr: false_expr_hir,
+          }
+        }
+
+        ExprKind::Unary(op, operand) => {
+          let operand_expr = Box::new(self.lower_expr(operand));
+          HirExprKind::Unary { op: *op.clone(), operand: operand_expr }
+        }
+
+        ExprKind::Assign(lhs, rhs) => {
+          let lhs_expr = Box::new(self.lower_expr_no_constant_fold(lhs));
+          let rhs_expr = Box::new(self.lower_expr(rhs));
+          HirExprKind::Assign { lhs: lhs_expr, rhs: rhs_expr }
+        }
+
+        ExprKind::AssignOp(lhs, op, rhs) => {
+          let lhs_expr = Box::new(self.lower_expr_no_constant_fold(lhs));
+          let rhs_expr = Box::new(self.lower_expr(rhs));
+          HirExprKind::Assign {
+            lhs: lhs_expr.clone(),
+            rhs: Box::new(HirExpr {
+              kind: HirExprKind::Binary { left: lhs_expr, op: op.clone(), right: rhs_expr },
+              ty: self.lower_type(ast_expr.ty.clone()),
+              span: ast_expr.span,
+              id: ast_expr.id,
+            }),
+          }
+        }
+
+        ExprKind::Call { callee, call, .. } => {
+          let callee_expr = Box::new(self.lower_expr(callee));
+          HirExprKind::Call {
+            callee: callee_expr,
+            args: self.lower_call_args(&mut call.args),
+            call_info: call.call_info.clone(),
+          }
+        }
+
+        ExprKind::StaticCall { callee, call } => {
+          let ExprKind::FieldAccess(fields) = &mut callee.kind else { unreachable!() };
+
+          let expr = self.lower_expr(&mut fields[1]);
+          HirExprKind::Call {
+            callee: Box::new(expr),
+            args: self.lower_call_args(&mut call.args),
+            call_info: call.call_info.clone(),
+          }
+        }
+
+        ExprKind::MethodCall { chain, call } => {
+          if chain.len() < 2 {
+            self.error("Invalid method call chain", vec![], vec![]);
+            return HirExpr {
+              kind: HirExprKind::Error,
+              ty: self.lower_type(ast_expr.ty.clone()),
+              span: ast_expr.span,
+              id: ast_expr.id,
+            };
+          }
+
+          let receiver = self.lower_expr(&mut chain[0]);
+          let method_expr = self.lower_expr(chain.last_mut().unwrap());
+          let method = self.symbol_table.get_generic_symbol(
+            if let HirExprKind::Symbol(id) = method_expr.kind { id } else { unreachable!() },
+          );
+          let GenericSymbolKind::Function { signature, .. } = &method.unwrap().kind else {
+            unreachable!()
+          };
+
+          let mut method_args = vec![if signature.parameters.first().unwrap().ty.is_reference() {
+            HirExpr {
+              kind: HirExprKind::Unary { op: UnaryOp::Ref, operand: Box::new(receiver) },
+              ty: self.lower_type(Type::Inferred),
+              span: Default::default(),
+              id: self.ast_id_arena.alloc(()),
+            }
+          } else {
+            receiver
+          }];
+          method_args.extend(self.lower_call_args(&mut call.args));
+
+          HirExprKind::Call {
+            callee: Box::new(method_expr),
+            args: method_args,
+            call_info: call.call_info.clone(),
+          }
+        }
+
+        ExprKind::StructInit { name, fields, call_info } => {
+          let is_enum_variant = self.is_enum_variant_constructor(name);
+
+          if is_enum_variant {
+            let callee = Box::new(self.lower_expr(name));
+            let mut field_values = Vec::new();
+
+            if let Some(field_order) = self.get_variant_field_order(name) {
+              for field_name in field_order {
+                if let Some(field_expr) = fields.get_mut(&field_name) {
+                  field_values.push(self.lower_expr(field_expr));
+                }
+              }
+            }
+
+            HirExprKind::Call { callee, args: field_values, call_info: call_info.clone() }
+          } else {
+            let name_expr = Box::new(self.lower_expr(name));
+
+            let mut fields_map = HashMap::new();
+            for (ident, val) in fields {
+              fields_map.insert(*ident, self.lower_expr(val));
+            }
+
+            HirExprKind::StructInit {
+              name: name_expr,
+              fields: fields_map,
+              call_info: call_info.clone(),
+            }
+          }
+        }
+
+        ExprKind::FieldAccess(fields) => {
+          let base = &mut fields[0].clone();
+          let sym_id = FieldSymbol::Expr(Box::new(self.lower_expr(base)));
+          fields.remove(0);
+
+          let mut indents = vec![];
+          for field in fields {
+            let (ident, _) = field.as_identifier().unwrap();
+            indents.push((
+              *ident,
+              if field.ty.is_reference() { AccessKind::Pointer } else { AccessKind::Value },
+            ));
+          }
+          let main_access =
+            if base.ty.is_reference() { AccessKind::Pointer } else { AccessKind::Value };
+
+          HirExprKind::FieldAccess { base_field: sym_id, main_access, fields: indents }
+        }
+
+        ExprKind::IndexAccess(object, index) => {
+          let object_expr = Box::new(self.lower_expr(object));
+          let index_expr = Box::new(self.lower_expr(index));
+          HirExprKind::IndexAccess { object: object_expr, index: index_expr }
+        }
+
+        ExprKind::Block(stmts) => {
+          let mut hir_stmts = vec![];
+
+          for stmt in stmts.iter_mut() {
+            match &mut stmt.0 {
+              StmtKind::Expr(expr) => {
+                let lowered_expr = self.lower_expr_stmt(expr);
+
+                if self.is_expr_pointless(&lowered_expr.kind) {
+                  self.result_not_used_error(&lowered_expr);
+                  continue;
+                }
+
+                hir_stmts.push(HirStmt::Expr(lowered_expr));
+              }
+              StmtKind::Return(ret) => {
+                hir_stmts
+                  .push(HirStmt::Return(ret.value.clone().map(|mut e| self.lower_expr(&mut e))));
+                break;
+              }
+              StmtKind::Var(var_stmt) => {
+                let symbol_id = var_stmt.symbol_id.unwrap();
+                let expr = self.lower_expr(&mut var_stmt.value);
+                if self.can_be_folded(&expr.kind) {
+                  let folded = self.try_to_constant_fold(expr.kind.clone());
+                  self.folded_vars.insert(symbol_id, folded);
+                }
+
+                hir_stmts.push(HirStmt::Var { symbol_id, init: expr });
+              }
+              StmtKind::If(if_stmt) => {
+                let hir_if = self.lower_if_stmt(if_stmt);
+                hir_stmts.push(HirStmt::Expr(hir_if));
+              }
+            }
+          }
+
+          HirExprKind::Block(hir_stmts)
+        }
+        ExprKind::Paren(inner) => {
+          return self.lower_expr(inner);
+        }
+
+        ExprKind::Match { scrutinee, arms } => {
+          let scrutinee_expr = Box::new(self.lower_expr(scrutinee));
+          let hir_arms = arms.iter_mut().map(|arm| self.lower_match_arm(arm)).collect();
+          HirExprKind::Match { scrutinee: scrutinee_expr, arms: hir_arms }
+        }
+
+        ExprKind::CouldntParse(_) => {
+          self.error("Could not parse expression", vec![], vec![]);
           HirExprKind::Error
         }
-      }
-
-      ExprKind::Binary { left, op, right } => {
-        let left_expr = Box::new(self.lower_expr(left));
-        let right_expr = Box::new(self.lower_expr(right));
-        HirExprKind::Binary { left: left_expr, op: op.clone(), right: right_expr }
-      }
-
-      ExprKind::Ternary { condition, true_expr, false_expr } => {
-        let condition_expr = Box::new(self.lower_expr(condition));
-        let true_expr_hir = Box::new(self.lower_expr(true_expr));
-        let false_expr_hir = Box::new(self.lower_expr(false_expr));
-        HirExprKind::Ternary {
-          condition: condition_expr,
-          true_expr: true_expr_hir,
-          false_expr: false_expr_hir,
-        }
-      }
-
-      ExprKind::Unary(op, operand) => {
-        let operand_expr = Box::new(self.lower_expr(operand));
-        HirExprKind::Unary { op: *op.clone(), operand: operand_expr }
-      }
-
-      ExprKind::Assign(lhs, rhs) => {
-        let lhs_expr = Box::new(self.lower_expr_no_constant_fold(lhs));
-        let rhs_expr = Box::new(self.lower_expr(rhs));
-        HirExprKind::Assign { lhs: lhs_expr, rhs: rhs_expr }
-      }
-
-      ExprKind::AssignOp(lhs, op, rhs) => {
-        let lhs_expr = Box::new(self.lower_expr_no_constant_fold(lhs));
-        let rhs_expr = Box::new(self.lower_expr(rhs));
-        HirExprKind::Assign {
-          lhs: lhs_expr.clone(),
-          rhs: Box::new(HirExpr {
-            kind: HirExprKind::Binary { left: lhs_expr, op: op.clone(), right: rhs_expr },
-            ty: self.lower_type(ast_expr.ty.clone()),
-            span: ast_expr.span,
-            id: ast_expr.id,
-          }),
-        }
-      }
-
-      ExprKind::Call { callee, call, .. } => {
-        let callee_expr = Box::new(self.lower_expr(callee));
-        HirExprKind::Call {
-          callee: callee_expr,
-          args: self.lower_call_args(&mut call.args),
-          call_info: call.call_info.clone(),
-        }
-      }
-
-      ExprKind::StaticCall { callee, call } => {
-        let ExprKind::FieldAccess(fields) = &mut callee.kind else { unreachable!() };
-
-        let expr = self.lower_expr(&mut fields[1]);
-        HirExprKind::Call {
-          callee: Box::new(expr),
-          args: self.lower_call_args(&mut call.args),
-          call_info: call.call_info.clone(),
-        }
-      }
-
-      ExprKind::MethodCall { chain, call } => {
-        if chain.len() < 2 {
-          self.error("Invalid method call chain", vec![], vec![]);
-          return HirExpr {
-            kind: HirExprKind::Error,
-            ty: self.lower_type(ast_expr.ty.clone()),
-            span: ast_expr.span,
-            id: ast_expr.id,
-          };
-        }
-
-        let receiver = self.lower_expr(&mut chain[0]);
-        let method_expr = self.lower_expr(chain.last_mut().unwrap());
-        let method =
-          self.symbol_table.get_symbol_unchecked(
-            &if let HirExprKind::Symbol(id) = method_expr.kind { id } else { unreachable!() },
-          );
-        let SymbolKind::Function { signature, .. } = method.kind else { unreachable!() };
-
-        let mut method_args = vec![if signature.parameters.first().unwrap().ty.is_reference() {
-          HirExpr {
-            kind: HirExprKind::Unary { op: UnaryOp::Ref, operand: Box::new(receiver) },
-            ty: self.lower_type(Type::Inferred),
-            span: Default::default(),
-            id: self.ast_id_arena.alloc(()),
-          }
-        } else {
-          receiver
-        }];
-        method_args.extend(self.lower_call_args(&mut call.args));
-
-        HirExprKind::Call {
-          callee: Box::new(method_expr),
-          args: method_args,
-          call_info: call.call_info.clone(),
-        }
-      }
-
-      ExprKind::StructInit { name, fields, call_info } => {
-        let is_enum_variant = self.is_enum_variant_constructor(name);
-
-        if is_enum_variant {
-          let callee = Box::new(self.lower_expr(name));
-          let mut field_values = Vec::new();
-
-          if let Some(field_order) = self.get_variant_field_order(name) {
-            for field_name in field_order {
-              if let Some(field_expr) = fields.get_mut(&field_name) {
-                field_values.push(self.lower_expr(field_expr));
-              }
-            }
-          }
-
-          HirExprKind::Call { callee, args: field_values, call_info: call_info.clone() }
-        } else {
-          let name_expr = Box::new(self.lower_expr(name));
-
-          let mut fields_map = HashMap::new();
-          for (ident, val) in fields {
-            fields_map.insert(*ident, self.lower_expr(val));
-          }
-
-          HirExprKind::StructInit {
-            name: name_expr,
-            fields: fields_map,
-            call_info: call_info.clone(),
-          }
-        }
-      }
-
-      ExprKind::FieldAccess(fields) => {
-        let base = &mut fields[0].clone();
-        let sym_id = if let Some((_, symbol_id)) = self.symbol_table.symbol_from_expr(base) {
-          FieldSymbol::Symbol(symbol_id)
-        } else {
-          FieldSymbol::Expr(Box::new(self.lower_expr(base)))
-        };
-        fields.remove(0);
-
-        let mut indents = vec![];
-        for field in fields {
-          let (ident, _) = field.as_identifier().unwrap();
-          indents.push((
-            *ident,
-            if field.ty.is_reference() { AccessKind::Pointer } else { AccessKind::Value },
-          ));
-        }
-        let main_access =
-          if base.ty.is_reference() { AccessKind::Pointer } else { AccessKind::Value };
-
-        HirExprKind::FieldAccess { base_field: sym_id, main_access, fields: indents }
-      }
-
-      ExprKind::IndexAccess(object, index) => {
-        let object_expr = Box::new(self.lower_expr(object));
-        let index_expr = Box::new(self.lower_expr(index));
-        HirExprKind::IndexAccess { object: object_expr, index: index_expr }
-      }
-
-      ExprKind::Block(stmts) => {
-        self.push_scope(ScopeType::Block(ast_expr.id));
-        let mut hir_stmts = vec![];
-
-        for stmt in stmts.iter_mut() {
-          match &mut stmt.0 {
-            StmtKind::Expr(expr) => {
-              let lowered_expr = self.lower_expr_stmt(expr);
-
-              if self.is_expr_pointless(&lowered_expr.kind) {
-                self.result_not_used_error(&lowered_expr);
-                continue;
-              }
-
-              hir_stmts.push(HirStmt::Expr(lowered_expr));
-            }
-            StmtKind::Return(ret) => {
-              hir_stmts
-                .push(HirStmt::Return(ret.value.clone().map(|mut e| self.lower_expr(&mut e))));
-              break;
-            }
-            StmtKind::Var(var_stmt) => {
-              let symbol_id = var_stmt.symbol_id.unwrap();
-              let expr = self.lower_expr(&mut var_stmt.value);
-              if self.can_be_folded(&expr.kind) {
-                let folded = self.try_to_constant_fold(expr.kind.clone());
-                self.folded_vars.insert(symbol_id, folded);
-              }
-
-              hir_stmts.push(HirStmt::Var { symbol_id, init: expr });
-            }
-            StmtKind::If(if_stmt) => {
-              let hir_if = self.lower_if_stmt(if_stmt);
-              hir_stmts.push(HirStmt::Expr(hir_if));
-            }
-          }
-        }
-
-        self.pop_scope();
-        HirExprKind::Block(hir_stmts)
-      }
-      ExprKind::Paren(inner) => {
-        return self.lower_expr(inner);
-      }
-
-      ExprKind::Match { scrutinee, arms } => {
-        let scrutinee_expr = Box::new(self.lower_expr(scrutinee));
-        let hir_arms = arms.iter_mut().map(|arm| self.lower_match_arm(arm)).collect();
-        HirExprKind::Match { scrutinee: scrutinee_expr, arms: hir_arms }
-      }
-
-      ExprKind::CouldntParse(_) => {
-        self.error("Could not parse expression", vec![], vec![]);
-        HirExprKind::Error
-      }
-    };
+      };
 
     HirExpr {
       kind: if context == ExprContext::Stmt && self.is_expr_pointless(&hir_kind) {
@@ -744,40 +726,30 @@ impl<'reports> AstLowering<'reports> {
     match pattern {
       Pattern::Wildcard => HirPattern::Wildcard,
       Pattern::Identifier(name) => {
-        if let Some(symbol) = self.symbol_table.lookup_symbol(name) {
-          HirPattern::Identifier(symbol.id)
-        } else {
-          self.error("Unresolved pattern identifier", vec![], vec![]);
-          HirPattern::Wildcard
-        }
+        self.error(&format!("Unresolved pattern identifier: {}", name), vec![], vec![]);
+        HirPattern::Wildcard
       }
       Pattern::Literal(lit) => HirPattern::Literal(lit.clone()),
-      Pattern::EnumVariant { path, fields, resolved_variant } => {
+      Pattern::EnumVariant { path: _, fields, resolved_variant } => {
         let hir_fields = fields
           .as_mut()
           .map(|fields| fields.iter_mut().map(|field| self.lower_pattern_field(field)).collect());
 
         HirPattern::EnumVariant { symbol_id: resolved_variant.unwrap(), fields: hir_fields }
       }
-      Pattern::Struct { name, fields } => {
-        if let Some(symbol) = self.symbol_table.lookup_symbol(name) {
-          let hir_fields = fields.iter_mut().map(|field| self.lower_pattern_field(field)).collect();
-          HirPattern::Struct { symbol_id: symbol.id, fields: hir_fields }
-        } else {
-          self.error("Unresolved struct in pattern", vec![], vec![]);
-          HirPattern::Wildcard
-        }
+      Pattern::Struct { name, fields: _ } => {
+        self.error(&format!("Unresolved struct in pattern: {}", name), vec![], vec![]);
+        HirPattern::Wildcard
       }
     }
   }
 
   fn lower_pattern_field(&mut self, field: &mut PatternField) -> HirPatternField {
-    let symbol_id = self.symbol_table.lookup_symbol(&field.name).map(|s| s.id);
     let pattern = field.pattern.as_mut().map(|pat| Box::new(self.lower_pattern(pat)));
 
     HirPatternField {
       name: field.name,
-      symbol_id,
+      symbol_id: field.sym_id.unwrap(),
       pattern,
       span: field.span,
       ty: self.lower_type(field.ty.clone().unwrap()),
@@ -787,7 +759,6 @@ impl<'reports> AstLowering<'reports> {
   fn lower_if_stmt(&mut self, if_stmt: &mut If) -> HirExpr {
     let condition = Box::new(self.lower_expr(&mut if_stmt.condition));
 
-    self.push_scope(ScopeType::Block(if_stmt.then_branch_id));
     let then_branch_stmts = if_stmt
       .then_branch
       .iter_mut()
@@ -814,7 +785,6 @@ impl<'reports> AstLowering<'reports> {
         }
       })
       .collect::<Vec<_>>();
-    self.pop_scope();
 
     let then_branch = Box::new(HirExpr {
       kind: HirExprKind::Block(then_branch_stmts),
@@ -826,7 +796,6 @@ impl<'reports> AstLowering<'reports> {
     let else_branch = if let Some(ref mut else_branch) = if_stmt.else_branch {
       match else_branch {
         ElseBranch::Block(stmts, block_id) => {
-          self.push_scope(ScopeType::Block(*block_id));
           let else_stmts = stmts
             .iter_mut()
             .map(|stmt| match &mut stmt.0 {
@@ -852,7 +821,6 @@ impl<'reports> AstLowering<'reports> {
               }
             })
             .collect::<Vec<_>>();
-          self.pop_scope();
 
           Some(Box::new(HirExpr {
             kind: HirExprKind::Block(else_stmts),
@@ -878,7 +846,7 @@ impl<'reports> AstLowering<'reports> {
 
 pub fn lower_ast_to_hir<'reports>(
   lexed_modules: &mut Vec<LexedModule>,
-  symbol_table: &SymbolTable,
+  symbol_table: &MonoSymbolTable,
   reports: &Reports<'reports>,
   is_library: bool,
   mode: Mode,

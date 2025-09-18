@@ -11,12 +11,14 @@ mod symbol_table;
 mod type_operations;
 
 use crate::ctx::TypeInferenceContext;
-use crate::symbol_table::{
+pub use crate::symbol_table::{
   GenericFunction, GenericStruct, GenericStructField, MonoSymbolTable, TyId,
 };
 use id_arena::Arena;
 use zirael_parser::*;
 use zirael_utils::prelude::*;
+
+pub use symbol_table::*;
 
 impl_ast_walker!(TypeInference, {
     ctx: TypeInferenceContext,
@@ -32,8 +34,30 @@ impl<'reports> AstWalker<'reports> for TypeInference<'reports> {
     self.visit_type(&mut expr.ty);
   }
 
-  fn visit_var_decl(&mut self, _var_decl: &mut VarDecl) {
-    self.infer_variable(_var_decl);
+  fn visit_var_decl(&mut self, var_decl: &mut VarDecl) {
+    let ty = self.sym_table.intern_type(var_decl.ty.clone());
+    let sym = self.symbol_table.get_symbol_unchecked(&var_decl.symbol_id.unwrap());
+    self.sym_table.add_generic_value(
+      var_decl.name,
+      var_decl.symbol_id.unwrap(),
+      ty,
+      sym.is_used,
+      var_decl.span,
+    );
+
+    self.infer_variable(var_decl);
+  }
+
+  fn visit_parameter(&mut self, param: &mut Parameter) {
+    let ty = self.sym_table.intern_type(param.ty.clone());
+    let sym = self.symbol_table.get_symbol_unchecked(&param.symbol_id.unwrap());
+    self.sym_table.add_generic_value(
+      param.name,
+      param.symbol_id.unwrap(),
+      ty,
+      sym.is_used,
+      param.span,
+    );
   }
 
   fn visit_item(&mut self, _item: &mut Item) {
@@ -45,7 +69,7 @@ impl<'reports> AstWalker<'reports> for TypeInference<'reports> {
     }
   }
 
-  fn walk_function(&mut self, func: &mut Function) {
+  fn walk_function(&mut self, func: &mut Function, sym_id: SymbolId) {
     self.push_scope(ScopeType::Function(func.id));
 
     let method_generic_type_vars = self.create_generic_mapping(&func.signature.generics);
@@ -73,6 +97,10 @@ impl<'reports> AstWalker<'reports> for TypeInference<'reports> {
       }
     }
 
+    for param in &mut func.signature.parameters {
+      self.visit_parameter(param);
+    }
+
     let body_ty = if let Some(body) = &mut func.body {
       self.ctx.set_function_return_type(func.signature.return_type.clone());
 
@@ -95,13 +123,14 @@ impl<'reports> AstWalker<'reports> for TypeInference<'reports> {
     let generic_function = GenericFunction::new(sym_id, func.name, func.signature.clone())
       .with_generics(func.signature.generics.clone())
       .with_body_type(self.sym_table.intern_type(body_ty));
-    self.sym_table.add_generic_function(sym_id, generic_function);
+    let sym = self.symbol_table.get_symbol_unchecked(&sym_id);
+    self.sym_table.add_generic_function(sym_id, generic_function, sym.is_used, func.span);
 
     self.ctx.clear_generics();
     self.pop_scope();
   }
 
-  fn walk_struct_declaration(&mut self, _struct: &mut StructDeclaration) {
+  fn walk_struct_declaration(&mut self, _struct: &mut StructDeclaration, sym_id: SymbolId) {
     self.push_scope(ScopeType::Struct(_struct.id));
 
     let struct_generic_type_vars = self.create_generic_mapping(&_struct.generics);
@@ -125,12 +154,12 @@ impl<'reports> AstWalker<'reports> for TypeInference<'reports> {
       self.walk_item(item);
     }
 
-    let sym_id = self.current_item.unwrap();
     let generic_struct = GenericStruct::new(sym_id, _struct.name)
       .with_generics(_struct.generics.clone())
       .with_fields(fields);
 
-    self.sym_table.add_generic_struct(sym_id, generic_struct);
+    let sym = self.symbol_table.get_symbol_unchecked(&sym_id);
+    self.sym_table.add_generic_struct(sym_id, generic_struct, sym.is_used, _struct.span);
 
     self.current_struct_generics.clear();
     self.ctx.clear_generics();

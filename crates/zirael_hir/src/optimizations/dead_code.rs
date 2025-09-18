@@ -4,9 +4,10 @@ use crate::hir::{
   lowering::AstLowering,
 };
 use zirael_parser::Symbol;
+use zirael_type_checker::GenericSymbol;
 use zirael_utils::prelude::{Colorize as _, resolve, warn};
 
-impl<'reports> AstLowering<'reports> {
+impl<'reports, 'mono> AstLowering<'reports, 'mono> {
   /// Checks if an expression statement has no side effects and its result is unused.
   /// Such expressions are typically pointless as statements.
   ///
@@ -40,8 +41,8 @@ impl<'reports> AstLowering<'reports> {
     self.warn("expression result is not used", vec![("here".to_owned(), expr.span)], vec![]);
   }
 
-  pub fn try_unused_symbol(&mut self, symbol: &Symbol) -> bool {
-    let name = resolve(&symbol.name);
+  pub fn try_unused_symbol(&mut self, symbol: &GenericSymbol) -> bool {
+    let name = resolve(&symbol.name());
 
     if name == "main" || name.starts_with('_') {
       return false;
@@ -51,18 +52,20 @@ impl<'reports> AstLowering<'reports> {
       return false;
     }
 
-    let is_unused = if let Some(generics) = self.symbol_table.get_generics_for_symbol(symbol) {
-      warn!("update this {}", file!());
-      // if !generics.is_empty() { !self.mono_table.has_entries(symbol.id) } else { !symbol.is_used }
-      false
+    let is_unused = if let Some(generics) = symbol.generics() {
+      if !generics.is_empty() {
+        !self.symbol_table.has_mono_variant(symbol.base.symbol_id)
+      } else {
+        !symbol.base.is_used
+      }
     } else {
-      !symbol.is_used
+      !symbol.base.is_used
     };
 
     if is_unused {
       self.warn(
         &format!("symbol {} is never used", name.dimmed().bold()),
-        vec![("declared here".to_owned(), symbol.source_location.unwrap())],
+        vec![("declared here".to_owned(), symbol.base.span)],
         vec!["prefix it with _ to remove this warning".to_owned()],
       );
       return true;

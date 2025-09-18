@@ -47,19 +47,15 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
       self.walk_attribute(attr);
     }
 
-    self.walk_item_kind(&mut item.kind);
-  }
-
-  fn walk_item_kind(&mut self, kind: &mut ItemKind) {
-    match kind {
-      ItemKind::Function(func) => self.walk_function(func),
-      ItemKind::Struct(_struct) => self.walk_struct_declaration(_struct),
+    match &mut item.kind {
+      ItemKind::Function(func) => self.walk_function(func, item.symbol_id.unwrap()),
+      ItemKind::Struct(_struct) => self.walk_struct_declaration(_struct, item.symbol_id.unwrap()),
       ItemKind::Enum(enum_decl) => self.walk_enum_declaration(enum_decl),
       ItemKind::Import(import, _) => self.walk_import_kind(import),
       ItemKind::TypeExtension(ty_ext) => self.walk_type_extension(ty_ext),
     }
   }
-
+  
   fn walk_import_kind(&mut self, import: &mut ImportKind) {
     self.visit_import_kind(import);
     match import {
@@ -68,7 +64,7 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
     }
   }
 
-  fn walk_function(&mut self, func: &mut Function) {
+  fn walk_function(&mut self, func: &mut Function, _sym_id: SymbolId) {
     self.visit_function(func);
     self.push_scope(ScopeType::Function(func.id));
 
@@ -143,7 +139,7 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
     self.pop_scope();
   }
 
-  fn walk_struct_declaration(&mut self, _struct: &mut StructDeclaration) {
+  fn walk_struct_declaration(&mut self, _struct: &mut StructDeclaration, _sym_id: SymbolId) {
     self.visit_struct_declaration(_struct);
 
     self.push_scope(ScopeType::Struct(_struct.id));

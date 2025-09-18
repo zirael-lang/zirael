@@ -2,7 +2,8 @@ use crate::TypeInference;
 use crate::symbol_table::{MonomorphizedFunction, MonomorphizedSymbol, TyId};
 use std::collections::HashMap;
 use zirael_parser::{
-  CallInfo, Expr, ExprKind, FunctionSignature, MonomorphizationId, Path, SymbolId, SymbolKind, Type,
+  CallInfo, Expr, ExprKind, Function, FunctionModifiers, FunctionSignature, MonomorphizationId,
+  Path, SymbolId, SymbolKind, Type,
 };
 use zirael_utils::prelude::{Identifier, Span, resolve};
 
@@ -23,12 +24,12 @@ impl<'reports> TypeInference<'reports> {
       Ok(symbol) => symbol,
       Err(_) => return Type::Error,
     };
-    let signature = match self.extract_function_signature(&sym.kind, &callee.span) {
+    let (signature, modifiers) = match self.extract_function_signature(&sym.kind, &callee.span) {
       Some(sig) => sig,
       None => return Type::Error,
     };
 
-    if !self.validate_argument_count(&signature, args, &callee.span) {
+    if !self.validate_argument_count(signature, args, &callee.span) {
       return Type::Error;
     }
 
@@ -52,13 +53,19 @@ impl<'reports> TypeInference<'reports> {
       return Type::Error;
     }
 
-    let monomorphized_id = self.create_monomorphization_if_needed(
-      sym_id,
-      sym.name,
-      &signature,
-      &generic_mapping,
-      &concrete_signature,
-    );
+    let monomorphized_id = if !signature.generics.is_empty() && !generic_mapping.is_empty() {
+      Some(self.sym_table.add_monomorphized_symbol(MonomorphizedSymbol::function(
+        sym_id,
+        sym.name,
+        "TODO".to_string(),
+        concrete_signature.clone(),
+        generic_mapping.clone(),
+        modifiers.is_extern,
+        None,
+      )))
+    } else {
+      None
+    };
 
     *call_info =
       Some(CallInfo { original_symbol: sym_id, monomorphized_id, concrete_types: generic_mapping });
@@ -74,13 +81,13 @@ impl<'reports> TypeInference<'reports> {
     }
   }
 
-  fn extract_function_signature(
+  fn extract_function_signature<'a>(
     &mut self,
-    symbol_kind: &SymbolKind,
-    call_span: &zirael_utils::prelude::Span,
-  ) -> Option<FunctionSignature> {
+    symbol_kind: &'a SymbolKind,
+    call_span: &Span,
+  ) -> Option<(&'a FunctionSignature, &'a FunctionModifiers)> {
     match symbol_kind {
-      SymbolKind::Function { signature, .. } => Some(signature.clone()),
+      SymbolKind::Function { signature, modifiers } => Some((signature, modifiers)),
       _ => {
         self.validate_callable_symbol(symbol_kind, call_span);
         None
@@ -142,25 +149,6 @@ impl<'reports> TypeInference<'reports> {
     self.substitute_type_with_map(&mut signature.return_type, generic_mapping);
 
     signature
-  }
-
-  fn create_monomorphization_if_needed(
-    &mut self,
-    symbol_id: SymbolId,
-    name: Identifier,
-    original_signature: &FunctionSignature,
-    generic_mapping: &HashMap<Identifier, TyId>,
-    concrete_signature: &FunctionSignature,
-  ) -> Option<MonomorphizationId> {
-    if !original_signature.generics.is_empty() && !generic_mapping.is_empty() {
-      let mono =
-        MonomorphizedFunction::new(symbol_id, name, "TODO".to_string(), concrete_signature.clone())
-          .with_concrete_types(generic_mapping.clone());
-
-      Some(self.sym_table.add_monomorphized_symbol(MonomorphizedSymbol::Function(mono)))
-    } else {
-      None
-    }
   }
 }
 

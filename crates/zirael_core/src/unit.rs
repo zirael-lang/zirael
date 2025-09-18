@@ -98,7 +98,7 @@ impl<'ctx> CompilationUnit<'ctx> {
 
     let mut hir = lower_ast_to_hir(
       &mut result.modules,
-      symbols,
+      &mut inference.sym_table,
       reports,
       self.info.ty == PackageType::Library,
       self.info.mode,

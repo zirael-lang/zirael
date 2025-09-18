@@ -13,7 +13,7 @@ impl<'reports> TypeInference<'reports> {
     expected_type: Option<&Type>,
   ) -> Type {
     self.push_scope(ScopeType::Block(id));
-    
+
     if stmts.is_empty() {
       self.pop_scope();
       return Type::Void;
@@ -43,6 +43,7 @@ impl<'reports> TypeInference<'reports> {
         }
         StmtKind::Var(var) => {
           self.infer_variable(var);
+
           Type::Void
         }
         StmtKind::If(if_stmt) => {
@@ -55,14 +56,14 @@ impl<'reports> TypeInference<'reports> {
         }
       };
     }
-    
+
     self.pop_scope();
     block_type
   }
 
   pub fn infer_if_stmt(&mut self, if_stmt: &mut If) -> Type {
     let condition_type = self.infer_expr(&mut if_stmt.condition);
-    
+
     if !self.eq(&condition_type, &Type::Bool) {
       self.type_mismatch_with_context(
         &Type::Bool,
@@ -73,9 +74,8 @@ impl<'reports> TypeInference<'reports> {
     }
 
     let then_type = self.infer_block_type(&mut if_stmt.then_branch);
-    let else_type = if_stmt.else_branch.as_mut().map(|else_branch| {
-      self.infer_else_branch(else_branch)
-    });
+    let else_type =
+      if_stmt.else_branch.as_mut().map(|else_branch| self.infer_else_branch(else_branch));
 
     self.combine_branch_types(then_type, else_type)
   }
