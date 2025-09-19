@@ -9,7 +9,9 @@ use crate::hir::{
 use id_arena::Arena;
 use std::collections::HashMap;
 use zirael_parser::{ast::item::Item, *};
-use zirael_type_checker::{GenericEnumData, GenericSymbolKind, MonoSymbolTable};
+use zirael_type_checker::{
+  GenericEnumData, GenericSymbol, GenericSymbolKind, MonoSymbolTable, MonomorphizedSymbolKind,
+};
 use zirael_utils::prelude::*;
 
 pub struct AstLowering<'reports, 'mono> {
@@ -20,6 +22,7 @@ pub struct AstLowering<'reports, 'mono> {
   ast_id_arena: Arena<()>,
   pub is_library: bool,
   pub mode: Mode,
+  pub current_items: Vec<HirItem>,
 }
 
 impl<'reports, 'mono> AstLowering<'reports, 'mono> {
@@ -37,6 +40,7 @@ impl<'reports, 'mono> AstLowering<'reports, 'mono> {
       ast_id_arena: Arena::new(),
       is_library,
       mode,
+      current_items: Vec::new(),
     }
   }
 
@@ -155,15 +159,16 @@ impl<'reports, 'mono> AstLowering<'reports, 'mono> {
   }
 
   fn lower_module(&mut self, lexed_module: &mut LexedModule) -> HirModule {
-    let mut hir_module = HirModule { items: HashMap::new(), id: lexed_module.file().unwrap() };
+    let mut hir_module = HirModule { items: Vec::new(), id: lexed_module.file().unwrap() };
     let id = lexed_module.id.as_file().unwrap();
     self.processed_file = Some(id);
 
+    self.current_items = vec![];
     for item in &mut lexed_module.ast.items {
-      if let Some(hir_item) = self.lower_item(item) {
-        hir_module.items.insert(hir_item.symbol_id, hir_item);
-      }
+      self.lower_item(item);
     }
+
+    hir_module.items.extend(self.current_items.drain(..));
 
     hir_module
   }
@@ -188,12 +193,16 @@ impl<'reports, 'mono> AstLowering<'reports, 'mono> {
       return None;
     }
 
+    if let None = self.handle_monomorphized_variants(symbol_id, &sym, item) {
+      return None;
+    }
+
     // TODO: implement
     // if sym.mode_specific.is_some_and(|mode| mode == self.mode) {
     //   return None;
     // }
 
-    match &mut item.kind {
+    let item = match &mut item.kind {
       ItemKind::Function(func) => {
         let hir_function = self.lower_function(func, symbol_id);
         Some(HirItem {
@@ -233,7 +242,58 @@ impl<'reports, 'mono> AstLowering<'reports, 'mono> {
         })
       }
       ItemKind::Import(..) => None,
+    };
+
+    if let Some(item) = &item {
+      self.current_items.push(item.clone());
+    };
+
+    item
+  }
+
+  fn handle_monomorphized_variants(
+    &mut self,
+    symbol_id: SymbolId,
+    sym: &GenericSymbol,
+    item: &mut Item,
+  ) -> Option<()> {
+    if let Some(variants) = self.symbol_table.get_mono_variants(symbol_id) {
+      debug!("Found {:?} mono variants for symbol {}", variants, sym.base.name);
+
+      for id in variants {
+        let symbol = self.symbol_table.get_monomorphized_symbol(id);
+
+        if let Some(symbol) = symbol {
+          match (&mut item.kind.clone(), &symbol.kind) {
+            (ItemKind::Function(func), MonomorphizedSymbolKind::Function { signature, .. }) => {
+              func.signature = signature.clone();
+
+              // TODO: might need to substitute types in function's body
+              let hir_function = self.lower_function(func, symbol_id);
+              let hir_item = HirItem {
+                symbol_id,
+                kind: HirItemKind::Function(hir_function),
+                span: item.span,
+                attrs: item.attributes.clone(),
+              };
+
+              self.current_items.push(hir_item);
+            }
+            _ => warn!("not available right now"),
+          }
+        } else {
+          self.error(
+            &format!("Couldn't find a monomorphized version of a symbol {:?}", symbol_id),
+            vec![],
+            vec![],
+          );
+        }
+      }
+
+      return None;
     }
+
+    Some(())
   }
 
   fn lower_ty_ext(

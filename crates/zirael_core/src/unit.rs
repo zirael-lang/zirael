@@ -103,6 +103,12 @@ impl<'ctx> CompilationUnit<'ctx> {
       self.info.ty == PackageType::Library,
       self.info.mode,
     );
+    for module in &mut hir {
+      for item in &module.items {
+        println!("{:?} \n\n", item.kind)
+      }
+    }
+
     reports.print(sources);
 
     // let ir = &mut lower_hir_to_ir(

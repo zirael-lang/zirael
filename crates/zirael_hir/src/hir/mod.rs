@@ -8,7 +8,7 @@ pub mod lowering;
 
 #[derive(Debug, Clone)]
 pub struct HirModule {
-  pub items: HashMap<SymbolId, HirItem>,
+  pub items: Vec<HirItem>,
   pub id: SourceFileId,
 }
 
