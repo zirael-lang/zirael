@@ -1,6 +1,6 @@
 use crate::hir::{
   ExprContext, HirBody, HirEnum, HirFunction, HirFunctionSignature, HirItem, HirItemKind,
-  HirModule, HirParam, HirStruct, HirTypeExtension, HirVariant,
+  HirModule, HirParam, HirStruct, HirTypeExtension, HirVariant, OriginalItemId,
   expr::{
     AccessKind, FieldSymbol, HirExpr, HirExprKind, HirMatchArm, HirPattern, HirPatternField,
     HirStmt,
@@ -202,53 +202,41 @@ impl<'reports, 'mono> AstLowering<'reports, 'mono> {
     //   return None;
     // }
 
-    let item = match &mut item.kind {
+    let kind = match &mut item.kind {
       ItemKind::Function(func) => {
         let hir_function = self.lower_function(func, symbol_id);
-        Some(HirItem {
-          symbol_id,
-          kind: HirItemKind::Function(hir_function),
-          span: item.span,
-          attrs: item.attributes.clone(),
-        })
+        Some(HirItemKind::Function(hir_function))
       }
       ItemKind::Struct(struct_def) => {
         let hir_struct = self.lower_struct(struct_def, symbol_id);
-        Some(HirItem {
-          symbol_id,
-          kind: HirItemKind::Struct(hir_struct),
-          span: item.span,
-          attrs: item.attributes.clone(),
-        })
+        Some(HirItemKind::Struct(hir_struct))
       }
       ItemKind::TypeExtension(ty_ext) => {
         let ty_ext = self.lower_ty_ext(ty_ext, symbol_id);
 
-        Some(HirItem {
-          symbol_id,
-          kind: HirItemKind::TypeExtension(ty_ext),
-          span: item.span,
-          attrs: item.attributes.clone(),
-        })
+        Some(HirItemKind::TypeExtension(ty_ext))
       }
       ItemKind::Enum(enum_def) => {
         let hir_enum = self.lower_enum(enum_def, symbol_id);
 
-        Some(HirItem {
-          symbol_id,
-          kind: HirItemKind::Enum(hir_enum),
-          span: item.span,
-          attrs: item.attributes.clone(),
-        })
+        Some(HirItemKind::Enum(hir_enum))
       }
       ItemKind::Import(..) => None,
     };
 
-    if let Some(item) = &item {
+    if let Some(kind) = &kind {
+      let item = HirItem {
+        symbol_id,
+        kind: kind.clone(),
+        span: item.span,
+        attrs: item.attributes.clone(),
+        original_item_id: OriginalItemId::Symbol(symbol_id),
+      };
       self.current_items.push(item.clone());
-    };
-
-    item
+      Some(item)
+    } else {
+      None
+    }
   }
 
   fn handle_monomorphized_variants(
@@ -275,6 +263,7 @@ impl<'reports, 'mono> AstLowering<'reports, 'mono> {
                 kind: HirItemKind::Function(hir_function),
                 span: item.span,
                 attrs: item.attributes.clone(),
+                original_item_id: OriginalItemId::Mono(symbol.mono_id()?),
               };
 
               self.current_items.push(hir_item);

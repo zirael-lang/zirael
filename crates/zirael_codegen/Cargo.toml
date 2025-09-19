@@ -1,0 +1,12 @@
+[package]
+name = "zirael_codegen"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+zirael_hir = { workspace = true }
+
+[lints]
+workspace = true
