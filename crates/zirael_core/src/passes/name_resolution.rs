@@ -1,7 +1,7 @@
 use crate::prelude::{WalkerContext, warn};
 use zirael_parser::{
-  AstWalker, CallInfo, Expr, ExprKind, MatchArm, Path, PathSegment, Pattern, ScopeType, Symbol,
-  SymbolId, SymbolKind, SymbolRelationNode, SymbolTable, impl_ast_walker, item::Item,
+  AstWalker, CallInfo, Expr, ExprKind, MatchArm, OriginalSymbolId, Path, PathSegment, Pattern,
+  ScopeType, Symbol, SymbolId, SymbolKind, SymbolTable, impl_ast_walker, item::Item,
 };
 use zirael_utils::prelude::*;
 
@@ -236,11 +236,9 @@ impl<'reports> NameResolution<'reports> {
   fn find_method_by_name(&self, methods: &[SymbolId], name: &Identifier) -> Option<SymbolId> {
     methods
       .iter()
-      .find(|&&method_id| {
-        match self.symbol_table.get_symbol(method_id) {
-          Ok(method_symbol) => method_symbol.name == *name,
-          Err(_) => false,
-        }
+      .find(|&&method_id| match self.symbol_table.get_symbol(method_id) {
+        Ok(method_symbol) => method_symbol.name == *name,
+        Err(_) => false,
       })
       .copied()
   }
@@ -248,11 +246,9 @@ impl<'reports> NameResolution<'reports> {
   fn find_variant_by_name(&self, variants: &[SymbolId], name: &Identifier) -> Option<SymbolId> {
     variants
       .iter()
-      .find(|&&variant_id| {
-        match self.symbol_table.get_symbol(variant_id) {
-          Ok(variant_symbol) => variant_symbol.name == *name,
-          Err(_) => false,
-        }
+      .find(|&&variant_id| match self.symbol_table.get_symbol(variant_id) {
+        Ok(variant_symbol) => variant_symbol.name == *name,
+        Err(_) => false,
       })
       .copied()
   }
@@ -288,11 +284,8 @@ impl<'reports> NameResolution<'reports> {
     }
 
     let enum_segment = &mut path.segments[0];
-    let enum_id = self.resolve_identifier(
-      &enum_segment.identifier,
-      enum_segment.span,
-      ExpectedSymbol::Enum,
-    )?;
+    let enum_id =
+      self.resolve_identifier(&enum_segment.identifier, enum_segment.span, ExpectedSymbol::Enum)?;
     enum_segment.symbol_id = Some(enum_id);
 
     let enum_symbol = match self.symbol_table.get_symbol(enum_id) {
@@ -327,8 +320,8 @@ impl<'reports> NameResolution<'reports> {
       *ident_sym_id = Some(id);
 
       self.symbol_table.new_relation(
-        SymbolRelationNode::Symbol(self.current_item.unwrap()),
-        SymbolRelationNode::Symbol(id),
+        OriginalSymbolId::Symbol(self.current_item.unwrap()),
+        OriginalSymbolId::Symbol(id),
       );
     }
   }
@@ -347,8 +340,8 @@ impl<'reports> AstWalker<'reports> for NameResolution<'reports> {
           *ident_sym_id = Some(id);
 
           self.symbol_table.new_relation(
-            SymbolRelationNode::Symbol(self.current_item.unwrap()),
-            SymbolRelationNode::Symbol(id),
+            OriginalSymbolId::Symbol(self.current_item.unwrap()),
+            OriginalSymbolId::Symbol(id),
           );
           self.symbol_table.mark_used(id).expect("invalid symbol id");
         }
@@ -356,16 +349,16 @@ impl<'reports> AstWalker<'reports> for NameResolution<'reports> {
       ExprKind::Path(path) => {
         if let Some(id) = self.resolve_path(path, ExpectedSymbol::Function) {
           self.symbol_table.new_relation(
-            SymbolRelationNode::Symbol(self.current_item.unwrap()),
-            SymbolRelationNode::Symbol(id),
+            OriginalSymbolId::Symbol(self.current_item.unwrap()),
+            OriginalSymbolId::Symbol(id),
           );
           self.symbol_table.mark_used(id).expect("invalid symbol id");
 
           if let Some(parent) = self.symbol_table.is_a_child_of_symbol(id) {
             self.symbol_table.mark_used(parent).expect("invalid symbol id");
             self.symbol_table.new_relation(
-              SymbolRelationNode::Symbol(self.current_item.unwrap()),
-              SymbolRelationNode::Symbol(parent),
+              OriginalSymbolId::Symbol(self.current_item.unwrap()),
+              OriginalSymbolId::Symbol(parent),
             );
           }
         }
@@ -391,16 +384,16 @@ impl<'reports> AstWalker<'reports> for NameResolution<'reports> {
           *ident_sym_id = Some(id);
 
           self.symbol_table.new_relation(
-            SymbolRelationNode::Symbol(self.current_item.unwrap()),
-            SymbolRelationNode::Symbol(id),
+            OriginalSymbolId::Symbol(self.current_item.unwrap()),
+            OriginalSymbolId::Symbol(id),
           );
         }
       }
       ExprKind::Path(path) => {
         if let Some(id) = self.resolve_path_for_construction(path) {
           self.symbol_table.new_relation(
-            SymbolRelationNode::Symbol(self.current_item.unwrap()),
-            SymbolRelationNode::Symbol(id),
+            OriginalSymbolId::Symbol(self.current_item.unwrap()),
+            OriginalSymbolId::Symbol(id),
           );
 
           let symbol = match self.symbol_table.get_symbol(id) {

@@ -12,12 +12,12 @@ pub struct SymbolRelations {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd, Copy)]
-pub enum SymbolRelationNode {
+pub enum OriginalSymbolId {
   Symbol(SymbolId),
   Monomorphization(MonomorphizationId),
 }
 
-impl fmt::Display for SymbolRelationNode {
+impl fmt::Display for OriginalSymbolId {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     match self {
       Self::Symbol(id) => write!(f, "Symbol({id:?})"),
@@ -29,14 +29,14 @@ impl fmt::Display for SymbolRelationNode {
 #[derive(Debug, Clone)]
 pub struct SymbolRelationEntry {
   /// symbol that uses the referred
-  pub referer: SymbolRelationNode,
+  pub referer: OriginalSymbolId,
   /// symbol that is being referred
-  pub referred: SymbolRelationNode,
+  pub referred: OriginalSymbolId,
 }
 
 #[derive(Debug, Clone)]
 pub struct CycleInfo {
-  pub cycle_nodes: Vec<SymbolRelationNode>,
+  pub cycle_nodes: Vec<OriginalSymbolId>,
   pub all_edges: Vec<SymbolRelationEntry>,
 }
 
@@ -144,16 +144,16 @@ impl CycleInfo {
     }
   }
 
-  fn get_name(&self, node: &SymbolRelationNode) -> String {
+  fn get_name(&self, node: &OriginalSymbolId) -> String {
     match node {
-      SymbolRelationNode::Symbol(sym) => format!("S{:?}", sym.index()),
-      SymbolRelationNode::Monomorphization(mono) => format!("M{:?}", mono.index()),
+      OriginalSymbolId::Symbol(sym) => format!("S{:?}", sym.index()),
+      OriginalSymbolId::Monomorphization(mono) => format!("M{:?}", mono.index()),
     }
   }
 }
 
 impl SymbolRelationEntry {
-  pub fn new(referer: SymbolRelationNode, referred: SymbolRelationNode) -> Self {
+  pub fn new(referer: OriginalSymbolId, referred: OriginalSymbolId) -> Self {
     Self { referer, referred }
   }
 }
@@ -169,12 +169,12 @@ impl SymbolRelations {
     Self { entries: Vec::new() }
   }
 
-  pub fn entry(&mut self, referer: SymbolRelationNode, referred: SymbolRelationNode) {
+  pub fn entry(&mut self, referer: OriginalSymbolId, referred: OriginalSymbolId) {
     self.entries.push(SymbolRelationEntry::new(referer, referred));
   }
 
-  pub fn build_graph(&self) -> Result<Vec<SymbolRelationNode>> {
-    let mut graph = DiGraphMap::<SymbolRelationNode, (), RandomState>::new();
+  pub fn build_graph(&self) -> Result<Vec<OriginalSymbolId>> {
+    let mut graph = DiGraphMap::<OriginalSymbolId, (), RandomState>::new();
 
     for entry in &self.entries {
       graph.add_node(entry.referer);
@@ -195,8 +195,8 @@ impl SymbolRelations {
 
   fn analyze_cycle(
     &self,
-    graph: &DiGraphMap<SymbolRelationNode, (), RandomState>,
-    cycle_node: SymbolRelationNode,
+    graph: &DiGraphMap<OriginalSymbolId, (), RandomState>,
+    cycle_node: OriginalSymbolId,
   ) -> CycleInfo {
     let cycle_nodes = self.find_cycle_nodes(graph, cycle_node);
 
@@ -205,9 +205,9 @@ impl SymbolRelations {
 
   fn find_cycle_nodes(
     &self,
-    graph: &DiGraphMap<SymbolRelationNode, (), RandomState>,
-    start_node: SymbolRelationNode,
-  ) -> Vec<SymbolRelationNode> {
+    graph: &DiGraphMap<OriginalSymbolId, (), RandomState>,
+    start_node: OriginalSymbolId,
+  ) -> Vec<OriginalSymbolId> {
     let mut visited = HashSet::new();
     let mut path = Vec::new();
     let mut cycle = Vec::new();
@@ -218,11 +218,11 @@ impl SymbolRelations {
 
   fn dfs_find_cycle(
     &self,
-    graph: &DiGraphMap<SymbolRelationNode, (), RandomState>,
-    node: SymbolRelationNode,
-    visited: &mut HashSet<SymbolRelationNode>,
-    path: &mut Vec<SymbolRelationNode>,
-    cycle: &mut Vec<SymbolRelationNode>,
+    graph: &DiGraphMap<OriginalSymbolId, (), RandomState>,
+    node: OriginalSymbolId,
+    visited: &mut HashSet<OriginalSymbolId>,
+    path: &mut Vec<OriginalSymbolId>,
+    cycle: &mut Vec<OriginalSymbolId>,
   ) -> bool {
     if let Some(pos) = path.iter().position(|&n| n == node) {
       cycle.extend_from_slice(&path[pos..]);
@@ -247,8 +247,8 @@ impl SymbolRelations {
     false
   }
 
-  pub fn build_graph_with_detailed_errors(&self) -> Result<Vec<SymbolRelationNode>> {
-    let mut graph = DiGraphMap::<SymbolRelationNode, (), RandomState>::new();
+  pub fn build_graph_with_detailed_errors(&self) -> Result<Vec<OriginalSymbolId>> {
+    let mut graph = DiGraphMap::<OriginalSymbolId, (), RandomState>::new();
 
     for entry in &self.entries {
       graph.add_node(entry.referer);

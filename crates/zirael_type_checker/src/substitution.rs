@@ -1,7 +1,7 @@
 use crate::TypeInference;
 use crate::symbol_table::TyId;
 use std::collections::HashMap;
-use zirael_parser::{GenericParameter, SymbolRelationNode, Type};
+use zirael_parser::{GenericParameter, OriginalSymbolId, Type};
 use zirael_utils::ident_table::resolve;
 use zirael_utils::prelude::{Colorize, Identifier, ReportBuilder, ReportKind, debug};
 
@@ -67,8 +67,8 @@ impl<'reports> TypeInference<'reports> {
         if let Some(item) = self.current_item {
           debug!("Adding relation: {:?} -> {:?} (name: {})", item, symbol.id, resolve(name));
           self.symbol_table.new_relation(
-            SymbolRelationNode::Symbol(item),
-            SymbolRelationNode::Symbol(symbol.canonical_symbol),
+            OriginalSymbolId::Symbol(item),
+            OriginalSymbolId::Symbol(symbol.canonical_symbol),
           );
 
           *ty = Type::Symbol(symbol.id);

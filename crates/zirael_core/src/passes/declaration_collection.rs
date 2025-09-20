@@ -1,4 +1,5 @@
 use crate::prelude::{ReportKind, WalkerContext, debug};
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use zirael_parser::{
   Ast, AstId, AstWalker, AttributeValue, Dependencies, ElseBranch, ExpectedAttribute, If,
@@ -16,7 +17,7 @@ use zirael_utils::{
 
 impl_ast_walker!(DeclarationCollection, {
     packages: Dependencies,
-    used_externals: Vec<String>,
+    used_externals: HashSet<String>,
     mode: Mode
 });
 
@@ -84,7 +85,7 @@ impl<'reports> DeclarationCollection<'reports> {
             self.process_path_import(&path.with_extension("zr"), span, current_file_id);
           }
 
-          self.used_externals.push(name.clone());
+          self.used_externals.insert(name);
         } else {
           self.error(
             &format!("couldn't find package: {}", name.dimmed().bold()),

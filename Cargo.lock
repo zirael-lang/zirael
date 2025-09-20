@@ -1489,6 +1489,9 @@ name = "zirael_codegen"
 version = "0.1.0"
 dependencies = [
  "zirael_hir",
+ "zirael_parser",
+ "zirael_type_checker",
+ "zirael_utils",
 ]
 
 [[package]]
@@ -1498,6 +1501,7 @@ dependencies = [
  "anyhow",
  "fs-err",
  "zirael_c_compiler",
+ "zirael_codegen",
  "zirael_hir",
  "zirael_parser",
  "zirael_type_checker",

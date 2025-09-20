@@ -1,6 +1,6 @@
 use crate::hir::{
   ExprContext, HirBody, HirEnum, HirFunction, HirFunctionSignature, HirItem, HirItemKind,
-  HirModule, HirParam, HirStruct, HirTypeExtension, HirVariant, OriginalItemId,
+  HirModule, HirParam, HirStruct, HirTypeExtension, HirVariant,
   expr::{
     AccessKind, FieldSymbol, HirExpr, HirExprKind, HirMatchArm, HirPattern, HirPatternField,
     HirStmt,
@@ -230,7 +230,7 @@ impl<'reports, 'mono> AstLowering<'reports, 'mono> {
         kind: kind.clone(),
         span: item.span,
         attrs: item.attributes.clone(),
-        original_item_id: OriginalItemId::Symbol(symbol_id),
+        original_item_id: OriginalSymbolId::Symbol(symbol_id),
       };
       self.current_items.push(item.clone());
       Some(item)
@@ -263,7 +263,7 @@ impl<'reports, 'mono> AstLowering<'reports, 'mono> {
                 kind: HirItemKind::Function(hir_function),
                 span: item.span,
                 attrs: item.attributes.clone(),
-                original_item_id: OriginalItemId::Mono(symbol.mono_id()?),
+                original_item_id: OriginalSymbolId::Monomorphization(symbol.mono_id()?),
               };
 
               self.current_items.push(hir_item);

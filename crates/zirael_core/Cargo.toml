@@ -14,6 +14,7 @@ zirael_utils = { workspace = true }
 anyhow = { workspace = true }
 zirael_c_compiler = { workspace = true }
 fs-err = { workspace = true }
+zirael_codegen = { workspace = true }
 
 [lints]
 workspace = true

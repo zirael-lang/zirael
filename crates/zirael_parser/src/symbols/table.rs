@@ -2,7 +2,7 @@ use crate::{
   GenericParameter, Type,
   symbols::{
     Scope, ScopeId, ScopeType, Symbol, SymbolId, SymbolKind, TemporaryLifetime,
-    relations::{SymbolRelationNode, SymbolRelations},
+    relations::{OriginalSymbolId, SymbolRelations},
   },
 };
 use id_arena::Arena;
@@ -418,7 +418,7 @@ impl SymbolTable {
     })
   }
 
-  pub fn new_relation(&self, referrer: SymbolRelationNode, referred: SymbolRelationNode) {
+  pub fn new_relation(&self, referrer: OriginalSymbolId, referred: OriginalSymbolId) {
     if referrer == referred {
       return;
     }
@@ -428,7 +428,7 @@ impl SymbolTable {
     });
   }
 
-  pub fn build_symbol_relations(&self) -> Result<Vec<SymbolRelationNode>> {
+  pub fn build_symbol_relations(&self) -> Result<Vec<OriginalSymbolId>> {
     self.read(|table| table.symbol_relations.build_graph())
   }
 
@@ -452,7 +452,7 @@ impl SymbolTable {
         if methods.contains(&symbol_id) {
           table
             .symbol_relations
-            .entry(SymbolRelationNode::Symbol(symbol_id), SymbolRelationNode::Symbol(struct_id));
+            .entry(OriginalSymbolId::Symbol(symbol_id), OriginalSymbolId::Symbol(struct_id));
           return Some(struct_id);
         }
       }

@@ -3,9 +3,7 @@ use crate::prelude::{Colorize as _, CompilationUnit, FILE_EXTENSION, error};
 use anyhow::Result;
 use anyhow::bail;
 use std::path::PathBuf;
-use zirael_utils::prelude::{
-  CheckConfig, CompilationInfo, PackageType, info,
-};
+use zirael_utils::prelude::{CheckConfig, CompilationInfo, PackageType, info};
 
 pub fn check_project(config: &CheckConfig) -> Result<()> {
   let context = Context::new();
@@ -35,7 +33,7 @@ pub fn check_project(config: &CheckConfig) -> Result<()> {
       },
     );
 
-    let (_, _) = unit.check();
+    let _ = unit.check();
   }
 
   info!(
@@ -72,7 +70,7 @@ pub fn check_project(config: &CheckConfig) -> Result<()> {
     },
   );
 
-  let (_, _) = unit.check();
+  let _ = unit.check();
 
   Ok(())
 }

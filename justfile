@@ -25,7 +25,7 @@ fmt:
     dprint fmt
 
 playground args='':
-    cargo run -p zirael playground/test.zr {{ args }} --name playground -o playground/build --type binary --check-only
+    cargo run -p zirael playground/test.zr {{ args }} --name playground -o playground/build --type binary
 
 build-std args='':
     cargo run -p zirael std/src/lib.zr {{ args }} --name std -o std/build --type library
