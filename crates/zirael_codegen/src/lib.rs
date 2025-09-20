@@ -21,5 +21,7 @@ pub fn run_codegen(
   let mut mangling_table = ManglingTable::new(sym_table, symbol_table, sources, name, root);
   mangling_table.mangle_all();
 
-  println!("{:#?}", sym_table.mangled_names);
+  for item in order {
+    println!("{:?}", sym_table.mangled_names.get(&item));
+  }
 }

@@ -14,8 +14,9 @@ use zirael_type_checker::{
 };
 use zirael_utils::prelude::*;
 
-pub struct AstLowering<'reports, 'mono> {
-  pub symbol_table: &'mono MonoSymbolTable,
+pub struct AstLowering<'reports, 'table> {
+  pub symbol_table: &'table MonoSymbolTable,
+  pub sym_table: &'table SymbolTable,
   reports: Reports<'reports>,
   processed_file: Option<SourceFileId>,
   pub folded_vars: HashMap<SymbolId, HirExprKind>,
@@ -23,17 +24,20 @@ pub struct AstLowering<'reports, 'mono> {
   pub is_library: bool,
   pub mode: Mode,
   pub current_items: Vec<HirItem>,
+  pub processed_item: Option<SymbolId>,
 }
 
-impl<'reports, 'mono> AstLowering<'reports, 'mono> {
+impl<'reports, 'table> AstLowering<'reports, 'table> {
   pub fn new(
-    symbol_table: &'mono MonoSymbolTable,
+    symbol_table: &'table MonoSymbolTable,
+    sym_table: &'table SymbolTable,
     reports: &Reports<'reports>,
     is_library: bool,
     mode: Mode,
   ) -> Self {
     Self {
       symbol_table,
+      sym_table,
       reports: reports.clone(),
       processed_file: None,
       folded_vars: HashMap::new(),
@@ -41,6 +45,7 @@ impl<'reports, 'mono> AstLowering<'reports, 'mono> {
       is_library,
       mode,
       current_items: Vec::new(),
+      processed_item: None,
     }
   }
 
@@ -188,6 +193,7 @@ impl<'reports, 'mono> AstLowering<'reports, 'mono> {
       );
       return None;
     };
+    self.processed_item = Some(symbol_id);
 
     if self.try_unused_symbol(sym) {
       return None;
@@ -486,6 +492,17 @@ impl<'reports, 'mono> AstLowering<'reports, 'mono> {
     args.iter_mut().map(|arg| self.lower_expr(arg)).collect()
   }
 
+  fn handle_call_info(&mut self, call_info: &mut Option<CallInfo>) {
+    if let Some(info) = call_info
+      && let Some(mono_id) = info.monomorphized_id
+      && let Some(sym_id) = self.processed_item
+    {
+      self
+        .sym_table
+        .new_relation(OriginalSymbolId::Symbol(sym_id), OriginalSymbolId::Monomorphization(mono_id))
+    }
+  }
+
   fn lower_expr_impl(&mut self, ast_expr: &mut Expr, context: ExprContext) -> HirExpr {
     let hir_kind =
       match &mut ast_expr.kind {
@@ -556,6 +573,7 @@ impl<'reports, 'mono> AstLowering<'reports, 'mono> {
 
         ExprKind::Call { callee, call, .. } => {
           let callee_expr = Box::new(self.lower_expr(callee));
+          self.handle_call_info(&mut call.call_info);
           HirExprKind::Call {
             callee: callee_expr,
             args: self.lower_call_args(&mut call.args),
@@ -565,6 +583,7 @@ impl<'reports, 'mono> AstLowering<'reports, 'mono> {
 
         ExprKind::StaticCall { callee, call } => {
           let ExprKind::FieldAccess(fields) = &mut callee.kind else { unreachable!() };
+          self.handle_call_info(&mut call.call_info);
 
           let expr = self.lower_expr(&mut fields[1]);
           HirExprKind::Call {
@@ -575,6 +594,8 @@ impl<'reports, 'mono> AstLowering<'reports, 'mono> {
         }
 
         ExprKind::MethodCall { chain, call } => {
+          self.handle_call_info(&mut call.call_info);
+
           if chain.len() < 2 {
             self.error("Invalid method call chain", vec![], vec![]);
             return HirExpr {
@@ -614,6 +635,8 @@ impl<'reports, 'mono> AstLowering<'reports, 'mono> {
         }
 
         ExprKind::StructInit { name, fields, call_info } => {
+          self.handle_call_info(call_info);
+
           let is_enum_variant = self.is_enum_variant_constructor(name);
 
           if is_enum_variant {
@@ -896,10 +919,11 @@ impl<'reports, 'mono> AstLowering<'reports, 'mono> {
 pub fn lower_ast_to_hir<'reports>(
   lexed_modules: &mut Vec<LexedModule>,
   symbol_table: &MonoSymbolTable,
+  sym_table: &SymbolTable,
   reports: &Reports<'reports>,
   is_library: bool,
   mode: Mode,
 ) -> Vec<HirModule> {
-  let mut lowering = AstLowering::new(symbol_table, reports, is_library, mode);
+  let mut lowering = AstLowering::new(symbol_table, sym_table, reports, is_library, mode);
   lowering.lower_modules(lexed_modules)
 }
