@@ -3,11 +3,12 @@ use anyhow::Result;
 use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
+use zirael_hir::hir::expr::{FieldSymbol, HirExpr, HirExprKind, HirMatchArm, HirPattern, HirStmt};
 use zirael_hir::hir::{
-  HirEnum, HirFunction, HirItem, HirItemKind, HirModule, HirStruct, HirTypeExtension,
+  HirEnum, HirFunction, HirItem, HirItemKind, HirModule, HirParam, HirStruct, HirTypeExtension,
 };
 use zirael_parser::ty::{Ty, TyId};
-use zirael_parser::{EnumVariantData, OriginalSymbolId, SymbolTable, Type};
+use zirael_parser::{BinaryOp, EnumVariantData, Literal, OriginalSymbolId, SymbolTable, Type};
 use zirael_type_checker::MonoSymbolTable;
 use zirael_utils::prelude::CompilationInfo;
 use zirael_utils::sources::Sources;
@@ -50,9 +51,9 @@ impl<'a> CodeGenerator<'a> {
     fs_err::create_dir_all(&self.compilation_info.write_to)?;
 
     let header_path =
-        self.compilation_info.write_to.join(format!("{}.h", self.compilation_info.name));
+      self.compilation_info.write_to.join(format!("{}.h", self.compilation_info.name));
     let source_path =
-        self.compilation_info.write_to.join(format!("{}.c", self.compilation_info.name));
+      self.compilation_info.write_to.join(format!("{}.c", self.compilation_info.name));
 
     let mut header_gen = Codegen::new();
     let mut source_gen = Codegen::new();
@@ -245,9 +246,7 @@ impl<'a> CodeGenerator<'a> {
       codegen.line(&format!("enum {} {{", mangled_name));
       codegen.indent();
 
-      for (i, variant) in enum_def.variants.iter().enumerate() {
-
-      }
+      for (i, variant) in enum_def.variants.iter().enumerate() {}
 
       codegen.dedent();
       codegen.line("};");
@@ -273,40 +272,7 @@ impl<'a> CodeGenerator<'a> {
     }
   }
 
-  fn generate_function_implementation(
-    &mut self,
-    codegen: &mut Codegen,
-    func: &HirFunction,
-    original_id: &OriginalSymbolId,
-  ) {
-    if let Some(mangled_name) = self.get_mangled_name(original_id) {
-      let impl_key = format!("{}_impl", mangled_name);
-      if !self.generated_symbols.insert(impl_key) {
-        return;
-      }
-
-      let return_type = self.resolve_type_id(&func.signature.return_type);
-      let params = self.build_parameter_list(&func.signature.parameters);
-
-      codegen.line(&format!("{} {}({}) {{", return_type, mangled_name, params));
-      codegen.indent();
-
-      if func.body.is_some() {
-        codegen.line("// TODO: Implement function body");
-        if self.needs_return_statement(&func.signature.return_type) {
-          codegen.line("return;");
-        }
-      } else {
-        codegen.line("// External function - no implementation");
-      }
-
-      codegen.dedent();
-      codegen.line("}");
-      codegen.empty_line();
-    }
-  }
-
-  fn build_parameter_list(&mut self, parameters: &[zirael_hir::hir::HirParam]) -> String {
+  pub fn build_parameter_list(&mut self, parameters: &[HirParam]) -> String {
     if parameters.is_empty() {
       return "void".to_string();
     }
@@ -318,8 +284,8 @@ impl<'a> CodeGenerator<'a> {
       } else {
         let param_type = self.resolve_type_id(&param.ty);
         let param_name = self
-            .get_mangled_name(&OriginalSymbolId::Symbol(param.symbol_id))
-            .unwrap_or_else(|| "param".to_string());
+          .get_mangled_name(&OriginalSymbolId::Symbol(param.symbol_id))
+          .unwrap_or_else(|| "param".to_string());
         params.push(format!("{} {}", param_type, param_name));
       }
     }
@@ -327,14 +293,11 @@ impl<'a> CodeGenerator<'a> {
     params.join(", ")
   }
 
-  fn needs_return_statement(&self, return_type: &TyId) -> bool {
-    !matches!(
-      self.mono_symbol_table.resolve(*return_type),
-      Ty::Void | Ty::Never
-    )
+  pub fn needs_return_statement(&self, return_type: &TyId) -> bool {
+    !matches!(self.mono_symbol_table.resolve(*return_type), Ty::Void | Ty::Never)
   }
 
-  fn get_mangled_name(&self, original_id: &OriginalSymbolId) -> Option<String> {
+  pub fn get_mangled_name(&self, original_id: &OriginalSymbolId) -> Option<String> {
     let mangled_name = self.mono_symbol_table.mangled_names.get(original_id);
     mangled_name.map(|m| {
       if m.module_path.is_empty() {
@@ -345,7 +308,7 @@ impl<'a> CodeGenerator<'a> {
     })
   }
 
-  fn resolve_type_id(&self, ty_id: &TyId) -> String {
+  pub fn resolve_type_id(&self, ty_id: &TyId) -> String {
     let ty = self.mono_symbol_table.resolve(*ty_id);
     self.generate_ty(&ty)
   }
@@ -380,7 +343,7 @@ impl<'a> CodeGenerator<'a> {
         let return_c_type = self.generate_ty(return_type);
         let param_types: Vec<String> = params.iter().map(|p| self.generate_ty(p)).collect();
         let params_str =
-            if param_types.is_empty() { "void".to_string() } else { param_types.join(", ") };
+          if param_types.is_empty() { "void".to_string() } else { param_types.join(", ") };
         format!("{}(*)({})", return_c_type, params_str)
       }
 

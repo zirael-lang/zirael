@@ -10,6 +10,7 @@ use zirael_utils::prelude::CompilationInfo;
 use zirael_utils::sources::Sources;
 
 mod codegen;
+mod expressions;
 mod generator;
 mod mangling_table;
 
@@ -22,12 +23,25 @@ pub fn run_codegen(
   order: Vec<OriginalSymbolId>,
   compilation_info: &CompilationInfo,
 ) -> Result<PathBuf> {
-  let mut mangling_table =
-    ManglingTable::new(sym_table, symbol_table, sources, compilation_info.name.clone(), compilation_info.root.clone());
+  let mut mangling_table = ManglingTable::new(
+    sym_table,
+    symbol_table,
+    sources,
+    compilation_info.name.clone(),
+    compilation_info.root.clone(),
+  );
   mangling_table.mangle_all();
 
-  let mut code_generator =
-    CodeGenerator::new(hir, used_externals, sym_table, symbol_table, sources, order, compilation_info);
+  println!("{:#?}", sym_table.mangled_names);
+  let mut code_generator = CodeGenerator::new(
+    hir,
+    used_externals,
+    sym_table,
+    symbol_table,
+    sources,
+    order,
+    compilation_info,
+  );
 
   code_generator.generate_c_code()
 }

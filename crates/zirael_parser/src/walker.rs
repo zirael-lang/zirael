@@ -55,7 +55,7 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
       ItemKind::TypeExtension(ty_ext) => self.walk_type_extension(ty_ext),
     }
   }
-  
+
   fn walk_import_kind(&mut self, import: &mut ImportKind) {
     self.visit_import_kind(import);
     match import {
@@ -380,12 +380,7 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
 
   fn walk_stmt(&mut self, stmt: &mut Stmt) {
     self.visit_stmt(stmt);
-    self.walk_stmt_kind(&mut stmt.0);
-  }
-
-  fn walk_stmt_kind(&mut self, kind: &mut StmtKind) {
-    self.visit_stmt_kind(kind);
-    match kind {
+    match &mut stmt.0 {
       StmtKind::Expr(expr) => self.walk_expr(expr),
       StmtKind::Var(var_decl) => self.walk_var_decl(var_decl),
       StmtKind::Return(ret) => self.walk_return(ret),

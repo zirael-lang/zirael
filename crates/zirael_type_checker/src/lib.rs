@@ -34,20 +34,6 @@ impl<'reports> AstWalker<'reports> for TypeInference<'reports> {
     self.visit_type(&mut expr.ty);
   }
 
-  fn visit_var_decl(&mut self, var_decl: &mut VarDecl) {
-    let ty = self.sym_table.intern_type(var_decl.ty.clone());
-    let sym = self.symbol_table.get_symbol_unchecked(&var_decl.symbol_id.unwrap());
-    self.sym_table.add_generic_value(
-      var_decl.name,
-      var_decl.symbol_id.unwrap(),
-      ty,
-      sym.is_used,
-      var_decl.span,
-    );
-
-    self.infer_variable(var_decl);
-  }
-
   fn visit_parameter(&mut self, param: &mut Parameter) {
     let ty = self.sym_table.intern_type(param.ty.clone());
     let sym = self.symbol_table.get_symbol_unchecked(&param.symbol_id.unwrap());
@@ -103,9 +89,7 @@ impl<'reports> AstWalker<'reports> for TypeInference<'reports> {
 
     let body_ty = if let Some(body) = &mut func.body {
       self.ctx.set_function_return_type(func.signature.return_type.clone());
-
       let body_ty = self.infer_expr_with_expected(body, Some(&func.signature.return_type));
-
       self.ctx.clear_function_return_type();
 
       self.substitute_type_with_map(&mut func.signature.return_type, &all_generic_type_vars);

@@ -42,8 +42,17 @@ impl<'reports> TypeInference<'reports> {
           return return_type;
         }
         StmtKind::Var(var) => {
-          self.infer_variable(var);
-
+          let ty = self.infer_variable(var);
+          let ty = self.sym_table.intern_type(ty);
+          let sym = self.symbol_table.get_symbol_unchecked(&var.symbol_id.unwrap());
+          self.sym_table.add_generic_value(
+            var.name,
+            var.symbol_id.unwrap(),
+            ty,
+            sym.is_used,
+            var.span,
+          );
+          
           Type::Void
         }
         StmtKind::If(if_stmt) => {
