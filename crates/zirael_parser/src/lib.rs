@@ -14,9 +14,3 @@ pub use module::*;
 pub use symbols::*;
 pub use walker::*;
 pub use zirael_utils::dependency::*;
-
-#[derive(Debug)]
-pub enum MainFunction {
-  Symbol(SymbolId),
-  Mangled(String),
-}

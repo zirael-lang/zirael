@@ -8,7 +8,9 @@ use zirael_hir::hir::{
   HirEnum, HirFunction, HirItem, HirItemKind, HirModule, HirParam, HirStruct, HirTypeExtension,
 };
 use zirael_parser::ty::{Ty, TyId};
-use zirael_parser::{BinaryOp, EnumVariantData, Literal, OriginalSymbolId, SymbolTable, Type};
+use zirael_parser::{
+  BinaryOp, EnumVariantData, Literal, OriginalSymbolId, SymbolId, SymbolTable, Type,
+};
 use zirael_type_checker::MonoSymbolTable;
 use zirael_utils::prelude::CompilationInfo;
 use zirael_utils::sources::Sources;
@@ -23,6 +25,7 @@ pub struct CodeGenerator<'a> {
   pub order: Vec<OriginalSymbolId>,
   pub compilation_info: &'a CompilationInfo,
   pub generated_symbols: HashSet<String>,
+  pub main_function: Option<SymbolId>,
 }
 
 impl<'a> CodeGenerator<'a> {
@@ -34,6 +37,7 @@ impl<'a> CodeGenerator<'a> {
     sources: &'a Sources,
     order: Vec<OriginalSymbolId>,
     compilation_info: &'a CompilationInfo,
+    main_function: Option<SymbolId>,
   ) -> Self {
     Self {
       hir_modules: hir,
@@ -44,6 +48,7 @@ impl<'a> CodeGenerator<'a> {
       order,
       compilation_info,
       generated_symbols: HashSet::new(),
+      main_function,
     }
   }
 
@@ -99,6 +104,17 @@ impl<'a> CodeGenerator<'a> {
     }
 
     self.generate_function_implementations(codegen);
+
+    if let Some(main_id) = self.main_function {
+      if let Some(mangled_name) = self.get_mangled_name(&OriginalSymbolId::Symbol(main_id)) {
+        codegen.line("int main() {");
+        codegen.indent();
+        codegen.line(&format!("{}();", mangled_name));
+        codegen.line("return 0;");
+        codegen.dedent();
+        codegen.line("}");
+      }
+    }
   }
 
   fn generate_forward_declarations(&mut self, codegen: &mut Codegen) {

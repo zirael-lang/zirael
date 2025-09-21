@@ -13,7 +13,7 @@ pub struct CompilationUnit<'ctx> {
   pub context: Context<'ctx>,
   pub module_graph: DependencyGraph,
   pub info: CompilationInfo,
-  pub main_function_id: Option<MainFunction>,
+  pub main_function_id: Option<SymbolId>,
 }
 
 #[derive(Debug)]
@@ -95,7 +95,7 @@ impl<'ctx> CompilationUnit<'ctx> {
     if self.info.ty == PackageType::Binary
       && let Some(main_id) = self.find_main_function(symbols, reports)
     {
-      self.main_function_id = Some(MainFunction::Symbol(main_id));
+      self.main_function_id = Some(main_id);
     }
 
     NameResolution::new(symbols, reports, sources).walk_modules(&mut result.modules);
@@ -132,6 +132,7 @@ impl<'ctx> CompilationUnit<'ctx> {
       self.context.sources(),
       order,
       &self.info,
+      self.main_function_id,
     )?;
 
     Ok(output_path)

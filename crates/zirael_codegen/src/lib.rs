@@ -4,7 +4,7 @@ use anyhow::Result;
 use std::collections::HashSet;
 use std::path::PathBuf;
 use zirael_hir::hir::HirModule;
-use zirael_parser::{OriginalSymbolId, SymbolTable};
+use zirael_parser::{OriginalSymbolId, SymbolId, SymbolTable};
 use zirael_type_checker::MonoSymbolTable;
 use zirael_utils::prelude::CompilationInfo;
 use zirael_utils::sources::Sources;
@@ -22,6 +22,7 @@ pub fn run_codegen(
   sources: &Sources,
   order: Vec<OriginalSymbolId>,
   compilation_info: &CompilationInfo,
+  main_function: Option<SymbolId>,
 ) -> Result<PathBuf> {
   let mut mangling_table = ManglingTable::new(
     sym_table,
@@ -32,7 +33,6 @@ pub fn run_codegen(
   );
   mangling_table.mangle_all();
 
-  println!("{:#?}", sym_table.mangled_names);
   let mut code_generator = CodeGenerator::new(
     hir,
     used_externals,
@@ -41,6 +41,7 @@ pub fn run_codegen(
     sources,
     order,
     compilation_info,
+    main_function
   );
 
   code_generator.generate_c_code()

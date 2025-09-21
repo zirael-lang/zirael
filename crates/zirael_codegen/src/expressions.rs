@@ -244,7 +244,6 @@ impl<'a> CodeGenerator<'a> {
         codegen.line(&format!("{};", expr_code));
       }
       HirStmt::Var { symbol_id, init } => {
-        println!("{:?}", symbol_id);
         let var_name = self.get_symbol_name(*symbol_id);
         let init_code = self.generate_expr(codegen, init);
         let var_type = self.resolve_type_id(&init.ty);
