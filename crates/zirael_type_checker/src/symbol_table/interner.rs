@@ -1,4 +1,4 @@
-use crate::symbol_table::{MonoSymbolTable, TypeSymbolId};
+use crate::symbol_table::{MonoSymbolTable, OriginalSymbolId};
 use id_arena::Arena;
 use std::collections::HashMap;
 use std::ops::Index;
@@ -44,14 +44,19 @@ impl MonoSymbolTable {
         let return_ty = self.resolve(ret_ty).clone();
         Ty::Function(param_tys, Box::new(return_ty))
       }
-      Type::Symbol(sym) => Ty::Symbol(TypeSymbolId::Generic(sym)),
-      Type::MonomorphizedSymbol(mono_id) => Ty::Symbol(TypeSymbolId::Mono(mono_id)),
+      Type::Symbol(sym) => Ty::Symbol(OriginalSymbolId::Symbol(sym)),
+      Type::MonomorphizedSymbol(mono_id) => Ty::Symbol(OriginalSymbolId::Monomorphization(mono_id)),
       Type::Variable { id, name } => Ty::GenericVariable { id, name },
+      Type::Inferred => Ty::Never,
 
       _ => panic!("Unsupported type for interning: {:?}", parsed_type),
     };
 
     self.intern(ty)
+  }
+
+  pub fn inferred(&mut self) -> TyId {
+    self.intern(Ty::Never)
   }
 
   pub fn intern(&mut self, ty: Ty) -> TyId {
@@ -104,7 +109,7 @@ impl MonoSymbolTable {
     self.intern(Ty::Function(params, Box::new(return_ty)))
   }
 
-  pub fn symbol(&mut self, id: TypeSymbolId) -> TyId {
+  pub fn symbol(&mut self, id: OriginalSymbolId) -> TyId {
     self.intern(Ty::Symbol(id))
   }
 

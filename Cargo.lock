@@ -1488,6 +1488,8 @@ dependencies = [
 name = "zirael_codegen"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "fs-err",
  "zirael_hir",
  "zirael_parser",
  "zirael_type_checker",

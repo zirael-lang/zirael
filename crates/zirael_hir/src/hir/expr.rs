@@ -1,5 +1,6 @@
 use std::fmt::Display;
 use zirael_parser::*;
+use zirael_parser::ty::{Ty, TyId};
 use zirael_utils::prelude::*;
 
 #[derive(Debug, Clone)]
@@ -24,13 +25,13 @@ pub struct HirPatternField {
   pub symbol_id: SymbolId,
   pub pattern: Option<Box<HirPattern>>,
   pub span: Span,
-  pub ty: Type,
+  pub ty: TyId,
 }
 
 #[derive(Debug, Clone)]
 pub struct HirExpr {
   pub kind: HirExprKind,
-  pub ty: Type,
+  pub ty: TyId,
   pub span: Span,
   pub id: AstId,
 }

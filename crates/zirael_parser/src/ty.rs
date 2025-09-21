@@ -1,26 +1,8 @@
 use id_arena::Id;
 use zirael_utils::ident_table::Identifier;
-use crate::{MonomorphizationId, SymbolId};
+use crate::{MonomorphizationId, OriginalSymbolId, SymbolId};
 
 pub type TyId = Id<Ty>;
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum TypeSymbolId {
-  Mono(MonomorphizationId),
-  Generic(SymbolId),
-}
-
-impl From<MonomorphizationId> for TypeSymbolId {
-  fn from(id: MonomorphizationId) -> Self {
-    TypeSymbolId::Mono(id)
-  }
-}
-
-impl From<SymbolId> for TypeSymbolId {
-  fn from(id: SymbolId) -> Self {
-    TypeSymbolId::Generic(id)
-  }
-}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Ty {
@@ -39,7 +21,7 @@ pub enum Ty {
   Array(Box<Ty>),
   Function(Vec<Ty>, Box<Ty>),
 
-  Symbol(TypeSymbolId),
+  Symbol(OriginalSymbolId),
 
   GenericVariable { id: usize, name: Identifier },
 }

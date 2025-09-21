@@ -1,7 +1,7 @@
 use crate::TypeInference;
 use crate::symbol_table::MonoSymbolTable;
-use zirael_parser::Type;
-use zirael_parser::ty::{Ty, TyId, TypeSymbolId};
+use zirael_parser::ty::{Ty, TyId};
+use zirael_parser::{OriginalSymbolId, Type};
 
 pub trait IntoTyId {
   fn into_ty_id(self, sym_table: &mut MonoSymbolTable) -> TyId;
@@ -79,8 +79,8 @@ impl<'reports> TypeInference<'reports> {
       }
 
       (Ty::Symbol(a_sym), Ty::Symbol(b_sym)) => match (a_sym, b_sym) {
-        (TypeSymbolId::Generic(a_id), TypeSymbolId::Generic(b_id)) => a_id == b_id,
-        (TypeSymbolId::Mono(a_id), TypeSymbolId::Mono(b_id)) => {
+        (OriginalSymbolId::Symbol(a_id), OriginalSymbolId::Symbol(b_id)) => a_id == b_id,
+        (OriginalSymbolId::Monomorphization(a_id), OriginalSymbolId::Monomorphization(b_id)) => {
           let Some(mono1) = self.sym_table.get_monomorphized_symbol(*a_id) else { return false };
           let Some(mono2) = self.sym_table.get_monomorphized_symbol(*b_id) else { return false };
 

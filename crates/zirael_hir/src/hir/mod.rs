@@ -1,5 +1,6 @@
 use crate::hir::expr::HirExpr;
 use std::collections::HashMap;
+use zirael_parser::ty::{Ty, TyId};
 use zirael_parser::{
   AstId, Attribute, Attributes, EnumVariantData, MonomorphizationId, OriginalSymbolId, StructField,
   SymbolId, Type,
@@ -54,13 +55,13 @@ pub struct HirFunction {
 #[derive(Debug, Clone)]
 pub struct HirFunctionSignature {
   pub parameters: Vec<HirParam>,
-  pub return_type: Type,
+  pub return_type: TyId,
 }
 
 #[derive(Debug, Clone)]
 pub struct HirParam {
   pub symbol_id: SymbolId,
-  pub ty: Type,
+  pub ty: TyId,
   pub is_variadic: bool,
   pub default_value: Option<HirExpr>,
 }

@@ -8,6 +8,7 @@ use crate::hir::{
 };
 use id_arena::Arena;
 use std::collections::HashMap;
+use zirael_parser::ty::{Ty, TyId};
 use zirael_parser::{ast::item::Item, *};
 use zirael_type_checker::{
   GenericEnumData, GenericSymbol, GenericSymbolKind, MonoSymbolTable, MonomorphizedSymbolKind,
@@ -15,7 +16,7 @@ use zirael_type_checker::{
 use zirael_utils::prelude::*;
 
 pub struct AstLowering<'reports, 'table> {
-  pub symbol_table: &'table MonoSymbolTable,
+  pub symbol_table: &'table mut MonoSymbolTable,
   pub sym_table: &'table SymbolTable,
   reports: Reports<'reports>,
   processed_file: Option<SourceFileId>,
@@ -29,7 +30,7 @@ pub struct AstLowering<'reports, 'table> {
 
 impl<'reports, 'table> AstLowering<'reports, 'table> {
   pub fn new(
-    symbol_table: &'table MonoSymbolTable,
+    symbol_table: &'table mut MonoSymbolTable,
     sym_table: &'table SymbolTable,
     reports: &Reports<'reports>,
     is_library: bool,
@@ -120,7 +121,7 @@ impl<'reports, 'table> AstLowering<'reports, 'table> {
         GenericEnumData::Unit => HirExprKind::Call {
           callee: Box::new(HirExpr {
             kind: HirExprKind::Symbol(symbol_id),
-            ty: Type::Inferred,
+            ty: self.symbol_table.inferred(),
             span: Span { start: 0, end: 0 },
             id: self.ast_id_arena.alloc(()),
           }),
@@ -155,8 +156,8 @@ impl<'reports, 'table> AstLowering<'reports, 'table> {
     }
   }
 
-  fn lower_type(&self, ty: Type) -> Type {
-    ty
+  fn lower_type(&mut self, ty: Type) -> TyId {
+    self.symbol_table.intern_type(ty)
   }
 
   pub fn lower_modules(&mut self, lexed_modules: &mut Vec<LexedModule>) -> Vec<HirModule> {
@@ -184,7 +185,7 @@ impl<'reports, 'table> AstLowering<'reports, 'table> {
     }
 
     let symbol_id = item.symbol_id.unwrap();
-    let sym = self.symbol_table.get_generic_symbol(symbol_id);
+    let sym = &self.symbol_table.get_generic_symbol(symbol_id).cloned();
     let Some(sym) = sym else {
       self.error(
         &format!("Symbol not found in generic symbol table {:?}", symbol_id),
@@ -255,7 +256,7 @@ impl<'reports, 'table> AstLowering<'reports, 'table> {
       debug!("Found {:?} mono variants for symbol {}", variants, sym.base.name);
 
       for id in variants {
-        let symbol = self.symbol_table.get_monomorphized_symbol(id);
+        let symbol = self.symbol_table.get_monomorphized_symbol(id).cloned();
 
         if let Some(symbol) = symbol {
           match (&mut item.kind.clone(), &symbol.kind) {
@@ -617,8 +618,8 @@ impl<'reports, 'table> AstLowering<'reports, 'table> {
 
           let mut method_args = vec![if signature.parameters.first().unwrap().ty.is_reference() {
             HirExpr {
-              kind: HirExprKind::Unary { op: UnaryOp::Ref, operand: Box::new(receiver) },
-              ty: self.lower_type(Type::Inferred),
+              kind: HirExprKind::Unary { op: UnaryOp::Ref, operand: Box::new(receiver.clone()) },
+              ty: self.lower_type(Type::Pointer(Box::new(Type::Id(receiver.ty)))),
               span: Default::default(),
               id: self.ast_id_arena.alloc(()),
             }
@@ -918,7 +919,7 @@ impl<'reports, 'table> AstLowering<'reports, 'table> {
 
 pub fn lower_ast_to_hir<'reports>(
   lexed_modules: &mut Vec<LexedModule>,
-  symbol_table: &MonoSymbolTable,
+  symbol_table: &mut MonoSymbolTable,
   sym_table: &SymbolTable,
   reports: &Reports<'reports>,
   is_library: bool,
