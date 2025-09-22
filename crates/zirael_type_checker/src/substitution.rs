@@ -22,6 +22,7 @@ impl<'reports> TypeInference<'reports> {
 
   pub fn substitute_type_with_map(&mut self, ty: &mut Type, param_map: &HashMap<Identifier, TyId>) {
     if param_map.is_empty() {
+      self.try_to_symbol(ty);
       return;
     }
 
@@ -58,34 +59,56 @@ impl<'reports> TypeInference<'reports> {
   }
 
   pub fn try_to_symbol(&mut self, ty: &mut Type) {
-    if let Type::Named { name, generics } = ty {
-      if self.ctx.is_generic_parameter(*name) {
-        return;
+    match ty {
+      Type::Pointer(inner) => {
+        self.try_to_symbol(inner);
       }
+      Type::Reference(inner) => {
+        self.try_to_symbol(inner);
+      }
+      Type::Array(inner, _size) => {
+        self.try_to_symbol(inner);
+      }
+      Type::Function { params, return_type } => {
+        for param in params.iter_mut() {
+          self.try_to_symbol(param);
+        }
+        self.try_to_symbol(return_type);
+      }
+      Type::Named { name, generics } => {
+        if self.ctx.is_generic_parameter(*name) {
+          return;
+        }
 
-      if let Some(symbol) = self.symbol_table.lookup_symbol(name) {
-        if let Some(item) = self.current_item {
-          debug!("Adding relation: {:?} -> {:?} (name: {})", item, symbol.id, resolve(name));
-          self.symbol_table.new_relation(
-            OriginalSymbolId::Symbol(item),
-            OriginalSymbolId::Symbol(symbol.canonical_symbol),
-          );
+        for generic in generics.iter_mut() {
+          self.try_to_symbol(generic);
+        }
 
-          *ty = Type::Symbol(symbol.id);
+        if let Some(symbol) = self.symbol_table.lookup_symbol(name) {
+          if let Some(item) = self.current_item {
+            debug!("Adding relation: {:?} -> {:?} (name: {})", item, symbol.id, resolve(name));
+            self.symbol_table.new_relation(
+              OriginalSymbolId::Symbol(item),
+              OriginalSymbolId::Symbol(symbol.canonical_symbol),
+            );
+
+            *ty = Type::Symbol(symbol.id);
+          } else {
+            debug!("No current_item set when visiting type: {}", resolve(name));
+          }
         } else {
-          debug!("No current_item set when visiting type: {}", resolve(name));
-        }
-      } else {
-        if !self.ctx.is_generic_parameter(*name) {
-          let report = ReportBuilder::builder(
-            &format!("couldn't find struct or enum named {}", resolve(name).dimmed().bold()),
-            ReportKind::Error,
-          )
-          .label("not found", name.span().clone());
+          if !self.ctx.is_generic_parameter(*name) {
+            let report = ReportBuilder::builder(
+              &format!("couldn't find struct or enum named {}", resolve(name).dimmed().bold()),
+              ReportKind::Error,
+            )
+            .label("not found", name.span().clone());
 
-          self.reports.add(self.processed_file.unwrap(), report);
+            self.reports.add(self.processed_file.unwrap(), report);
+          }
         }
       }
-    }
+      _ => {}
+    };
   }
 }

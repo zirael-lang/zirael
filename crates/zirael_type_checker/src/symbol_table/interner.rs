@@ -49,6 +49,9 @@ impl MonoSymbolTable {
       Type::Variable { id, name } => Ty::GenericVariable { id, name },
       Type::Inferred => Ty::Never,
 
+      // we have to handle Error variant, because otherwise it won't let us continue to display errors
+      Type::Error => Ty::Never,
+
       _ => panic!("Unsupported type for interning: {:?}", parsed_type),
     };
 
