@@ -1,5 +1,6 @@
 use crate::TypeInference;
 use crate::symbol_table::TyId;
+use crate::unification::UnificationResult;
 use std::collections::HashMap;
 use zirael_parser::{
   AstWalker, EnumVariantData, Expr, ExprKind, Literal, MatchArm, Path, Pattern, PatternField,
@@ -104,22 +105,19 @@ impl<'reports> TypeInference<'reports> {
 
     self.expect_type(&Type::Bool, &condition_ty, &condition.span, "ternary condition");
 
-    // match self.unify_types(&true_ty, &false_ty) {
-    //   UnificationResult::Identical(ty) => ty,
-    //   UnificationResult::Unified(ty) => {
-    //     true_expr.ty = ty.clone();
-    //     false_expr.ty = ty.clone();
-    //     self.update_expr_recursively(true_expr, &ty);
-    //     self.update_expr_recursively(false_expr, &ty);
-    //     ty
-    //   }
-    //   UnificationResult::Incompatible => {
-    //     self.ternary_error(&true_ty, &false_ty, true_expr, false_expr)
-    //   }
-    // }
-
-    warn!("TODO: add unification for ternary operator");
-    true_ty
+    match self.unify_types(&true_ty, &false_ty) {
+      UnificationResult::Identical(ty) => ty,
+      UnificationResult::Unified(ty) => {
+        true_expr.ty = ty.clone();
+        false_expr.ty = ty.clone();
+        self.update_expr_recursively(true_expr, &ty);
+        self.update_expr_recursively(false_expr, &ty);
+        ty
+      }
+      UnificationResult::Incompatible => {
+        self.ternary_error(&true_ty, &false_ty, true_expr, false_expr)
+      }
+    }
   }
 
   fn ternary_error(
@@ -205,23 +203,20 @@ impl<'reports> TypeInference<'reports> {
 
     self.expect_type(&Type::Bool, &condition_ty, &condition.span, "ternary condition");
 
-    // match self.unify_types(&true_ty, &false_ty) {
-    //   UnificationResult::Identical(ty) => ty,
-    //   UnificationResult::Unified(ty) => {
-    //     true_expr.ty = ty.clone();
-    //     false_expr.ty = ty.clone();
-    //     self.update_expr_recursively(true_expr, &ty);
-    //     self.update_expr_recursively(false_expr, &ty);
-    //     ty
-    //   }
-    //   UnificationResult::Incompatible => {
-    //     self.ternary_error(&true_ty, &false_ty, true_expr, false_expr);
-    //     Type::Error
-    //   }
-    // }
-
-    warn!("TODO: add unification for ternary operator");
-    true_ty
+    match self.unify_types(&true_ty, &false_ty) {
+      UnificationResult::Identical(ty) => ty,
+      UnificationResult::Unified(ty) => {
+        true_expr.ty = ty.clone();
+        false_expr.ty = ty.clone();
+        self.update_expr_recursively(true_expr, &ty);
+        self.update_expr_recursively(false_expr, &ty);
+        ty
+      }
+      UnificationResult::Incompatible => {
+        self.ternary_error(&true_ty, &false_ty, true_expr, false_expr);
+        Type::Error
+      }
+    }
   }
 
   pub fn infer_variable(&mut self, decl: &mut VarDecl) -> Type {
@@ -374,37 +369,35 @@ impl<'reports> TypeInference<'reports> {
 
     let mut unified_type = arm_types[0].clone();
     for (i, arm_ty) in arm_types.iter().enumerate().skip(1) {
-      // match self.unify_types(&unified_type, arm_ty) {
-      //   UnificationResult::Identical(_) => {}
-      //   UnificationResult::Unified(new_unified) => {
-      //     unified_type = new_unified;
-      //   }
-      //   UnificationResult::Incompatible => {
-      //     let report = ReportBuilder::builder(
-      //       format!(
-      //         "mismatched types in match arms: expected {}, found {}",
-      //         self.format_type(&unified_type),
-      //         self.format_type(arm_ty)
-      //       ),
-      //       ReportKind::Error,
-      //     )
-      //     .label_color_custom(
-      //       &format!("this arm returns {}", self.format_type(&unified_type)),
-      //       Span::new(arms[0].span.start, arms[0].span.end),
-      //       Color::BrightGreen,
-      //     )
-      //     .label_color_custom(
-      //       &format!("this arm returns {}", self.format_type(arm_ty)),
-      //       Span::new(arms[i].span.start, arms[i].span.end),
-      //       Color::BrightRed,
-      //     )
-      //     .note("all match arms must return the same type");
-      //
-      //     self.reports.add(self.processed_file.unwrap(), report);
-      //   }
-      // }
+      match self.unify_types(&unified_type, arm_ty) {
+        UnificationResult::Identical(_) => {}
+        UnificationResult::Unified(new_unified) => {
+          unified_type = new_unified;
+        }
+        UnificationResult::Incompatible => {
+          let report = ReportBuilder::builder(
+            format!(
+              "mismatched types in match arms: expected {}, found {}",
+              self.format_type(&unified_type),
+              self.format_type(arm_ty)
+            ),
+            ReportKind::Error,
+          )
+          .label_color_custom(
+            &format!("this arm returns {}", self.format_type(&unified_type)),
+            Span::new(arms[0].span.start, arms[0].span.end),
+            Color::BrightGreen,
+          )
+          .label_color_custom(
+            &format!("this arm returns {}", self.format_type(arm_ty)),
+            Span::new(arms[i].span.start, arms[i].span.end),
+            Color::BrightRed,
+          )
+          .note("all match arms must return the same type");
 
-      warn!("add unification for match arms");
+          self.reports.add(self.processed_file.unwrap(), report);
+        }
+      }
     }
 
     unified_type
@@ -558,12 +551,23 @@ impl<'reports> TypeInference<'reports> {
                 Type::Named { name: parent_symbol.name, generics: vec![] }
               } else {
                 if let Some(expected) = expected_type {
-                  if let Type::Named { name, generics: expected_generics } = expected {
-                    if *name == parent_symbol.name {
-                      return expected.clone();
+                  match expected {
+                    Type::Named { name, .. } => {
+                      if *name == parent_symbol.name {
+                        return expected.clone();
+                      }
                     }
+                    Type::Symbol(symbol_id) => {
+                      if let Ok(expected_symbol) = self.symbol_table.get_symbol(*symbol_id) {
+                        if expected_symbol.name == parent_symbol.name {
+                          return expected.clone();
+                        }
+                      }
+                    }
+                    _ => {}
                   }
                 }
+                
                 self.error(
                   "cannot infer generic enum variant type without context - provide explicit type annotation",
                   vec![("here".to_string(), path.span.clone())],

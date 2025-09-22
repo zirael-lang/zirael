@@ -356,7 +356,7 @@ pub trait AstWalker<'reports>: WalkerContext<'reports> {
           self.walk_type(generic);
         }
       }
-      _ => warn!("Unhandled type: {ty:?}"),
+      _ => {}
     }
   }
 
