@@ -48,22 +48,47 @@ pub enum ExprKind {
   Literal(Literal),
   Identifier(Identifier, Option<SymbolId>),
   Path(Path),
-  Binary { left: Box<Expr>, op: BinaryOp, right: Box<Expr> },
-  Ternary { condition: Box<Expr>, true_expr: Box<Expr>, false_expr: Box<Expr> },
+  Binary {
+    left: Box<Expr>,
+    op: BinaryOp,
+    right: Box<Expr>,
+  },
+  Ternary {
+    condition: Box<Expr>,
+    true_expr: Box<Expr>,
+    false_expr: Box<Expr>,
+  },
   Block(Vec<Stmt>),
   Assign(Box<Expr>, Box<Expr>),
   AssignOp(Box<Expr>, BinaryOp, Box<Expr>),
   Unary(Box<UnaryOp>, Box<Expr>),
   Paren(Box<Expr>),
-  Call { callee: Box<Expr>, call: GenericCall },
+  Call {
+    callee: Box<Expr>,
+    call: GenericCall,
+  },
   FieldAccess(Vec<Expr>),
   IndexAccess(Box<Expr>, Box<Expr>),
   // the last one in the chain is the method to call
-  MethodCall { chain: Vec<Expr>, call: GenericCall },
-  StaticCall { callee: Box<Expr>, call: GenericCall },
-  Match { scrutinee: Box<Expr>, arms: Vec<MatchArm> },
+  MethodCall {
+    chain: Vec<Expr>,
+    call: GenericCall,
+  },
+  StaticCall {
+    callee: Box<Expr>,
+    call: GenericCall,
+  },
+  Match {
+    scrutinee: Box<Expr>,
+    arms: Vec<MatchArm>,
+  },
   CouldntParse(CouldntParse),
-  StructInit { name: Box<Expr>, fields: HashMap<Identifier, Expr>, call_info: Option<CallInfo> },
+  StructInit {
+    name: Box<Expr>,
+    fields: HashMap<Identifier, Expr>,
+    call_info: Option<CallInfo>,
+    type_annotations: Vec<Type>,
+  },
 }
 
 #[derive(Debug, Clone, PartialEq)]

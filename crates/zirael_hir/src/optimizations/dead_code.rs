@@ -4,7 +4,7 @@ use crate::hir::{
   lowering::AstLowering,
 };
 use zirael_parser::Symbol;
-use zirael_type_checker::GenericSymbol;
+use zirael_type_checker::{GenericEnumData, GenericSymbol, GenericSymbolKind};
 use zirael_utils::prelude::{Colorize as _, resolve, warn};
 
 impl<'reports, 'mono> AstLowering<'reports, 'mono> {
@@ -52,14 +52,24 @@ impl<'reports, 'mono> AstLowering<'reports, 'mono> {
       return false;
     }
 
-    let is_unused = if let Some(generics) = symbol.generics() {
-      if !generics.is_empty() {
-        !self.symbol_table.has_mono_variant(symbol.base.symbol_id)
-      } else {
-        !symbol.base.is_used
+    let is_unused = match &symbol.kind {
+      GenericSymbolKind::Enum { generics, variants } if !generics.is_empty() => {
+        let any_variant_used = variants
+          .iter()
+          .any(|v| self.symbol_table.has_mono_variant(v.symbol_id));
+        !any_variant_used
       }
-    } else {
-      !symbol.base.is_used
+      _ => {
+        if let Some(generics) = symbol.generics() {
+          if !generics.is_empty() {
+            !self.symbol_table.has_mono_variant(symbol.base.symbol_id)
+          } else {
+            !symbol.base.is_used
+          }
+        } else {
+          !symbol.base.is_used
+        }
+      }
     };
 
     if is_unused {

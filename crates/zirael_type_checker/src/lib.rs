@@ -1,11 +1,11 @@
 mod ctx;
-//mod enums;
+mod enums;
+mod eq;
 mod errors;
 mod expressions;
 mod generic_inference;
 mod method_utils;
-//mod structs;
-mod eq;
+mod structs;
 mod substitution;
 mod symbol_table;
 mod type_operations;
@@ -36,6 +36,7 @@ impl<'reports> AstWalker<'reports> for TypeInference<'reports> {
   }
 
   fn visit_parameter(&mut self, param: &mut Parameter) {
+    self.visit_type(&mut param.ty);
     let ty = self.sym_table.intern_type(param.ty.clone());
     let sym = self.symbol_table.get_symbol_unchecked(&param.symbol_id.unwrap());
     self.sym_table.add_generic_value(
@@ -95,7 +96,7 @@ impl<'reports> AstWalker<'reports> for TypeInference<'reports> {
       let body_ty = self.infer_expr_with_expected(body, Some(&func.signature.return_type));
       self.ctx.clear_function_return_type();
 
-      if !self.eq(&body_ty, &func.signature.return_type) {
+      if !self.eq(&body.ty, &func.signature.return_type) {
         self.return_type_mismatch(&func.signature.return_type, &body_ty, func.span.clone());
       }
 
@@ -124,9 +125,8 @@ impl<'reports> AstWalker<'reports> for TypeInference<'reports> {
 
     let mut fields = vec![];
     for field in &mut _struct.fields {
-      if !struct_generic_type_vars.is_empty() {
-        self.substitute_type_with_map(&mut field.ty, &struct_generic_type_vars);
-      }
+      self.substitute_type_with_map(&mut field.ty, &struct_generic_type_vars);
+
       self.walk_struct_field(field);
 
       fields.push(GenericStructField {
@@ -134,6 +134,14 @@ impl<'reports> AstWalker<'reports> for TypeInference<'reports> {
         ty: self.sym_table.intern_type(field.ty.clone()),
       });
     }
+    
+    self.symbol_table.modify_symbol(self.current_item.unwrap(), |kind| {
+      if let SymbolKind::Struct { fields: sym_fields, .. } = kind {
+        *sym_fields = _struct.fields.clone();
+      }
+      
+      kind.clone()
+    }).expect("update failed");
 
     for item in &mut _struct.methods {
       self.walk_item(item);
@@ -169,6 +177,56 @@ impl<'reports> AstWalker<'reports> for TypeInference<'reports> {
 
     for item in &mut _enum.methods {
       self.walk_item(item);
+    }
+
+    if let Some(enum_sym_id) = self.current_item {
+      let mut generic_variants = Vec::new();
+      for variant in &_enum.variants {
+        let data = match &variant.data {
+          EnumVariantData::Unit => GenericEnumData::Unit,
+          EnumVariantData::Struct(fields) => {
+            let converted: Vec<GenericStructField> = fields
+              .iter()
+              .map(|f| GenericStructField { name: f.name, ty: self.sym_table.intern_type(f.ty.clone()) })
+              .collect();
+            GenericEnumData::Struct(converted)
+          }
+        };
+        generic_variants.push(GenericEnumVariant { name: variant.name, symbol_id: variant.symbol_id.unwrap(), data });
+      }
+
+      let generic_enum = GenericEnum::new(enum_sym_id, _enum.name)
+        .with_generics(_enum.generics.clone())
+        .with_variants(generic_variants.clone());
+
+  let sym = self.symbol_table.get_symbol(enum_sym_id).expect("enum symbol must exist");
+      self.sym_table.add_generic_enum(enum_sym_id, generic_enum, sym.is_used, _enum.span);
+
+      for variant in &_enum.variants {
+        let data = match &variant.data {
+          EnumVariantData::Unit => GenericEnumData::Unit,
+          EnumVariantData::Struct(fields) => {
+            let converted: Vec<GenericStructField> = fields
+              .iter()
+              .map(|f| GenericStructField { name: f.name, ty: self.sym_table.intern_type(f.ty.clone()) })
+              .collect();
+            GenericEnumData::Struct(converted)
+          }
+        };
+        let variant_symbol_id = variant.symbol_id.unwrap();
+        let variant_sym = self.symbol_table.get_symbol(variant_symbol_id).expect("variant symbol must exist");
+        let variant_generic = GenericSymbol::enum_variant(
+          enum_sym_id,
+          variant.name,
+          variant_symbol_id,
+          data,
+          variant_sym.is_used,
+          variant.span,
+        );
+        let generic_id = self.sym_table.generic_symbols.alloc(variant_generic);
+        self.sym_table.symbol_to_generic.insert(variant_symbol_id, generic_id);
+        self.sym_table.generic_to_symbol.insert(generic_id, variant_symbol_id);
+      }
     }
 
     self.current_struct_generics.clear();

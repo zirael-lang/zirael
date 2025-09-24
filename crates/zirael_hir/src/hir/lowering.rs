@@ -157,6 +157,32 @@ impl<'reports, 'table> AstLowering<'reports, 'table> {
   }
 
   fn lower_type(&mut self, ty: Type) -> TyId {
+    fn normalize(sym_table: &SymbolTable, ty: Type) -> Type {
+      match ty {
+        Type::Pointer(inner) => Type::Pointer(Box::new(normalize(sym_table, *inner))),
+        Type::Reference(inner) => Type::Reference(Box::new(normalize(sym_table, *inner))),
+        Type::Array(inner, size) => Type::Array(Box::new(normalize(sym_table, *inner)), size),
+        Type::Function { params, return_type } => {
+          let params = params.into_iter().map(|p| normalize(sym_table, p)).collect();
+          let return_type = Box::new(normalize(sym_table, *return_type));
+          Type::Function { params, return_type }
+        }
+        Type::Named { name, generics } => {
+          let generics = generics
+            .into_iter()
+            .map(|g| normalize(sym_table, g))
+            .collect::<Vec<_>>();
+          if let Some(symbol) = sym_table.lookup_symbol(&name) {
+            Type::Symbol(symbol.id)
+          } else {
+            Type::Named { name, generics }
+          }
+        }
+        other => other,
+      }
+    }
+
+    let ty = normalize(self.sym_table, ty);
     self.symbol_table.intern_type(ty)
   }
 
@@ -635,7 +661,7 @@ impl<'reports, 'table> AstLowering<'reports, 'table> {
           }
         }
 
-        ExprKind::StructInit { name, fields, call_info } => {
+        ExprKind::StructInit { name, fields, call_info, .. } => {
           self.handle_call_info(call_info);
 
           let is_enum_variant = self.is_enum_variant_constructor(name);

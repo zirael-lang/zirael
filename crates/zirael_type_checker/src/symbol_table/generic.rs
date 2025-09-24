@@ -138,7 +138,7 @@ pub enum MonomorphizedSymbolKind {
     is_extern: bool,
   },
   Struct {
-    mono_id: MonomorphizationId,
+    mono_id: Option<MonomorphizationId>,
     mangled_name: String,
     fields: Vec<MonomorphizedStructField>,
   },
@@ -177,7 +177,7 @@ impl MonomorphizedSymbol {
   pub fn mono_id(&self) -> Option<MonomorphizationId> {
     match &self.kind {
       MonomorphizedSymbolKind::Function { mono_id, .. } => *mono_id,
-      MonomorphizedSymbolKind::Struct { mono_id, .. } => Some(*mono_id),
+      MonomorphizedSymbolKind::Struct { mono_id, .. } => *mono_id,
       MonomorphizedSymbolKind::EnumVariant { mono_id, .. } => Some(*mono_id),
     }
   }
@@ -291,7 +291,7 @@ impl MonomorphizedSymbol {
     mangled_name: String,
     fields: Vec<MonomorphizedStructField>,
     concrete_types: HashMap<Identifier, TyId>,
-    mono_id: MonomorphizationId,
+    mono_id: Option<MonomorphizationId>,
   ) -> Self {
     Self {
       base: MonomorphizedSymbolBase { original_symbol_id, name, concrete_types },

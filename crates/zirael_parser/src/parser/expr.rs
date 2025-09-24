@@ -930,6 +930,8 @@ impl<'a> Parser<'a> {
 
   fn parse_struct_initializer_from_path(&mut self, path: Path) -> Expr {
     let start_span = path.span;
+    let type_annotations = self.parse_type_annotations();
+
     self.expect(TokenKind::BraceOpen);
 
     let mut fields = HashMap::new();
@@ -987,6 +989,7 @@ impl<'a> Parser<'a> {
         name: Box::new(Expr::new(ExprKind::Path(path), start_span, expr_id)),
         call_info: None,
         fields,
+        type_annotations
       },
       start_span.to(end_span),
     )

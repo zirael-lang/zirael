@@ -1,16 +1,9 @@
-struct Math {
-    fn add(a: int, b: int): int {
-        return a + b;
-    }
-}
-
-fn identity<T>(value: T): T {
-    value
+enum Option<T> {
+    Some { value: T },
+    None
 }
 
 fn main() {
-    var _x = Math::add(10, 5);
-
-    var _y = identity<int>(42);
-    var _z = identity<string>("Hello, World!");
+    var _x = Option::Some { value: 42  };
+    var _y: Option<int> = Option::None;
 }

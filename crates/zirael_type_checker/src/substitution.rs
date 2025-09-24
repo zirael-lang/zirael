@@ -1,7 +1,7 @@
 use crate::TypeInference;
-use crate::symbol_table::TyId;
+use crate::symbol_table::{MonomorphizedSymbol, TyId};
 use std::collections::HashMap;
-use zirael_parser::{GenericParameter, OriginalSymbolId, Type};
+use zirael_parser::{GenericParameter, OriginalSymbolId, SymbolKind, Type};
 use zirael_utils::ident_table::resolve;
 use zirael_utils::prelude::{Colorize, Identifier, ReportBuilder, ReportKind, debug};
 
@@ -85,17 +85,15 @@ impl<'reports> TypeInference<'reports> {
         }
 
         if let Some(symbol) = self.symbol_table.lookup_symbol(name) {
-          if let Some(item) = self.current_item {
-            debug!("Adding relation: {:?} -> {:?} (name: {})", item, symbol.id, resolve(name));
+          if self.current_item.is_some() {
+            debug!("Adding relation: {:?} -> {:?} (name: {})", self.current_item.unwrap(), symbol.id, resolve(name));
             self.symbol_table.new_relation(
-              OriginalSymbolId::Symbol(item),
+              OriginalSymbolId::Symbol(self.current_item.unwrap()),
               OriginalSymbolId::Symbol(symbol.canonical_symbol),
             );
-
-            *ty = Type::Symbol(symbol.id);
-          } else {
-            debug!("No current_item set when visiting type: {}", resolve(name));
           }
+
+          *ty = Type::Symbol(symbol.id);
         } else {
           if !self.ctx.is_generic_parameter(*name) {
             let report = ReportBuilder::builder(

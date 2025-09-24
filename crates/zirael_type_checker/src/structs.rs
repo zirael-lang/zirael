@@ -1,10 +1,12 @@
-use crate::{TypeInference, monomorphization::MonomorphizationData};
-use std::{collections::HashMap, vec};
+use crate::symbol_table::TyId;
+use crate::{MonomorphizedStructField, MonomorphizedSymbol, TypeInference};
+use std::collections::HashMap;
 use zirael_parser::{
-  AstWalker, CallInfo, EnumVariantData, Expr, ExprKind, GenericParameter, Path, StructField,
-  SymbolId, SymbolKind, Type, ast::monomorphized_symbol::MonomorphizedSymbol,
+  AstWalker, CallInfo, EnumVariantData, Expr, ExprKind, FunctionSignature, GenericParameter, Path,
+  StructField, SymbolId, SymbolKind, Type,
 };
 use zirael_utils::ident_table::{Identifier, resolve};
+use zirael_utils::prelude::Span;
 
 #[derive(Debug, Clone)]
 struct StructInfo {
@@ -20,80 +22,172 @@ impl<'reports> TypeInference<'reports> {
     name_expr: &Expr,
     fields: &mut HashMap<Identifier, Expr>,
     call_info: &mut Option<CallInfo>,
+  type_annotations: &mut Vec<Type>,
+  _expected_type: Option<&Type>,
   ) -> Type {
     let struct_sym_id = match self.resolve_struct_symbol(name_expr) {
-      Ok(id) => id,
-      Err(ty) => return ty,
+      Some(id) => id,
+      None => return Type::Error,
     };
 
-    let struct_info = match self.get_struct_info(struct_sym_id, name_expr) {
-      Ok(info) => info,
-      Err(ty) => return ty,
+    let sym = match self.symbol_table().get_symbol(struct_sym_id) {
+      Ok(symbol) => symbol,
+      Err(_) => return Type::Error,
     };
 
-    self.validate_required_fields(&struct_info.fields, fields, name_expr);
+    if let SymbolKind::EnumVariant { parent_enum: _, data } = &sym.kind {
+      match data {
+        EnumVariantData::Unit => {
+          if !fields.is_empty() {
+            self.error(
+              "unit variant cannot have fields",
+              vec![("unit variant".to_string(), name_expr.span.clone())],
+              vec![],
+            );
+            return Type::Error;
+          }
+          return Type::Symbol(struct_sym_id);
+        }
+        EnumVariantData::Struct(_) => {
+          return self.infer_enum_variant_init(&struct_sym_id, &name_expr.span, fields, call_info);
+        }
+      }
+    }
 
-    self.setup_generics(&struct_info.generics);
+    let struct_info = match self.extract_struct_info(&sym.kind, struct_sym_id, name_expr) {
+      Some(info) => info,
+      None => return Type::Error,
+    };
 
-    let (field_types, generic_mapping) =
-      self.infer_field_types(fields, &struct_info.fields, &struct_info.generics);
+    if !self.validate_required_fields(&struct_info.fields, fields, name_expr) {
+      return Type::Error;
+    }
 
-    self.create_final_type(
-      struct_info,
-      field_types,
-      generic_mapping,
-      fields,
-      struct_sym_id,
-      call_info,
-    )
+    if !self.validate_type_annotations(type_annotations, &struct_info.generics, &name_expr.span) {
+      return Type::Error;
+    }
+    self.infer_struct_types(fields);
+
+    let generic_mapping =
+      match self.resolve_struct_generics(&struct_info, fields, type_annotations, &name_expr.span) {
+        Ok(mapping) => mapping,
+        Err(()) => return Type::Error,
+      };
+    println!("Generic mapping: {:?}", generic_mapping);
+
+    // let concrete_fields = self.create_concrete_fields(&struct_info.fields, &generic_mapping);
+    //
+    // println!("{:#?}", concrete_fields);
+    // if !self.validate_field_types(fields, &concrete_fields) {
+    //   return Type::Error;
+    // }
+
+    let monomorphized_id = if !struct_info.generics.is_empty() && !generic_mapping.is_empty() {
+      // let mono_fields =
+      //   self.create_monomorphized_fields(fields, &concrete_fields, &generic_mapping);
+      //
+      // Some(self.sym_table.add_monomorphized_symbol(MonomorphizedSymbol::struct_def(
+      //   struct_sym_id,
+      //   struct_info.name,
+      //   "TODO".to_string(),
+      //   mono_fields,
+      //   generic_mapping.clone(),
+      //   None,
+      // )))
+      None
+    } else {
+      None
+    };
+
+    *call_info = Some(CallInfo {
+      original_symbol: struct_sym_id,
+      monomorphized_id,
+      concrete_types: generic_mapping.clone(),
+    });
+
+    Type::Int
+    // self.create_struct_type(&struct_info, &generic_mapping)
   }
 
-  fn resolve_struct_symbol(&mut self, name_expr: &Expr) -> Result<SymbolId, Type> {
+  fn infer_struct_types(&mut self, fields: &mut HashMap<Identifier, Expr>) {
+    for (_, field) in fields.iter_mut() {
+      self.infer_expr(field);
+      self.visit_type(&mut field.ty);
+    }
+  }
+
+  fn resolve_struct_generics(
+    &mut self,
+    struct_info: &StructInfo,
+    fields: &HashMap<Identifier, Expr>,
+    type_annotations: &Vec<Type>,
+    call_span: &Span,
+  ) -> Result<HashMap<Identifier, TyId>, ()> {
+    let mut generic_mapping: HashMap<Identifier, TyId> = HashMap::new();
+
+    if !type_annotations.is_empty() {
+      generic_mapping =
+        self.create_mapping_from_annotations(&struct_info.generics, type_annotations);
+    } else if !struct_info.generics.is_empty() {
+      let original_generics = self.ctx.generic_params.clone();
+      for param in &struct_info.generics {
+        self.ctx.generic_params.insert(param.name, self.ctx.next_type_var_id);
+        self.ctx.next_type_var_id += 1;
+      }
+
+      let expected_types: Vec<Type> = struct_info.fields.iter().map(|f| f.ty.clone()).collect();
+      let actual_types: Vec<Type> = struct_info
+        .fields
+        .iter()
+        .filter_map(|f| fields.get(&f.name).map(|expr| expr.ty.clone()))
+        .collect();
+
+      generic_mapping = self.infer_generic_mappings(&struct_info.generics, &expected_types, &actual_types);
+
+      self.ctx.generic_params = original_generics;
+    }
+
+    let unresolved = self.get_unresolved_generics(&struct_info.generics, &generic_mapping);
+    if !unresolved.is_empty() {
+      let struct_name = resolve(&struct_info.name);
+
+      self.report_unresolved_generics(
+        &unresolved,
+        &struct_name,
+        call_span,
+        !type_annotations.is_empty(),
+      );
+      return Err(());
+    }
+
+    Ok(generic_mapping)
+  }
+
+  fn resolve_struct_symbol(&mut self, name_expr: &Expr) -> Option<SymbolId> {
     match &name_expr.kind {
-      ExprKind::Identifier(_, Some(sym_id)) => Ok(*sym_id),
-      ExprKind::Path(path) => self.resolve_path_symbol(path, name_expr),
+      ExprKind::Identifier(_, Some(sym_id)) => Some(*sym_id),
+      ExprKind::Path(path) => path.segments.last().and_then(|seg| seg.symbol_id),
       _ => {
         self.error(
           "expected identifier or path in struct initialization",
           vec![("here".to_string(), name_expr.span.clone())],
           vec![],
         );
-        Err(Type::Error)
+        None
       }
     }
   }
 
-  fn resolve_path_symbol(&mut self, path: &Path, name_expr: &Expr) -> Result<SymbolId, Type> {
-    if let Some(last_segment) = path.segments.last() {
-      if let Some(sym_id) = last_segment.symbol_id {
-        Ok(sym_id)
-      } else {
-        self.error(
-          "unresolved path in struct initialization",
-          vec![("here".to_string(), name_expr.span.clone())],
-          vec![],
-        );
-        Err(Type::Error)
-      }
-    } else {
-      self.error(
-        "empty path in struct initialization",
-        vec![("here".to_string(), name_expr.span.clone())],
-        vec![],
-      );
-      Err(Type::Error)
-    }
-  }
-
-  fn get_struct_info(
+  fn extract_struct_info(
     &mut self,
+    symbol_kind: &SymbolKind,
     struct_sym_id: SymbolId,
     name_expr: &Expr,
-  ) -> Result<StructInfo, Type> {
-    let symbol = self.symbol_table.get_symbol_unchecked(&struct_sym_id);
+  ) -> Option<StructInfo> {
+  let symbol = self.symbol_table().get_symbol(struct_sym_id).expect("symbol must exist");
 
-    match &symbol.kind {
-      SymbolKind::Struct { fields, generics, .. } => Ok(StructInfo {
+    match symbol_kind {
+      SymbolKind::Struct { fields, generics, .. } => Some(StructInfo {
         fields: fields.clone(),
         generics: generics.clone(),
         name: symbol.name,
@@ -108,7 +202,7 @@ impl<'reports> TypeInference<'reports> {
           vec![("here".to_string(), name_expr.span.clone())],
           vec![],
         );
-        Err(Type::Error)
+        None
       }
     }
   }
@@ -119,32 +213,34 @@ impl<'reports> TypeInference<'reports> {
     data: &EnumVariantData,
     variant_name: Identifier,
     name_expr: &Expr,
-  ) -> Result<StructInfo, Type> {
-    let parent_symbol = self.symbol_table.get_symbol_unchecked(&parent_enum);
+  ) -> Option<StructInfo> {
+  let parent_symbol = self.symbol_table().get_symbol(parent_enum).expect("enum must exist");
 
-    if let SymbolKind::Enum { generics, .. } = &parent_symbol.kind {
-      if let EnumVariantData::Struct(variant_fields) = data {
-        Ok(StructInfo {
+    match &parent_symbol.kind {
+      SymbolKind::Enum { generics, .. } => match data {
+        EnumVariantData::Struct(variant_fields) => Some(StructInfo {
           fields: variant_fields.clone(),
           generics: generics.clone(),
           name: variant_name,
           parent_enum_id: Some(parent_enum),
-        })
-      } else {
+        }),
+        _ => {
+          self.error(
+            "cannot initialize non-struct enum variant with struct syntax",
+            vec![("here".to_string(), name_expr.span.clone())],
+            vec![],
+          );
+          None
+        }
+      },
+      _ => {
         self.error(
-          "cannot initialize non-struct enum variant with struct syntax",
+          "invalid parent enum for variant",
           vec![("here".to_string(), name_expr.span.clone())],
           vec![],
         );
-        Err(Type::Error)
+        None
       }
-    } else {
-      self.error(
-        "invalid parent enum for variant",
-        vec![("here".to_string(), name_expr.span.clone())],
-        vec![],
-      );
-      Err(Type::Error)
     }
   }
 
@@ -153,8 +249,10 @@ impl<'reports> TypeInference<'reports> {
     struct_fields: &[StructField],
     fields: &HashMap<Identifier, Expr>,
     name_expr: &Expr,
-  ) {
-    for field in struct_fields.iter() {
+  ) -> bool {
+    let mut valid = true;
+
+    for field in struct_fields {
       if !fields.contains_key(&field.name) {
         let field_name = resolve(&field.name);
         self.error(
@@ -162,242 +260,10 @@ impl<'reports> TypeInference<'reports> {
           vec![(format!("missing field `{}`", field_name), name_expr.span.clone())],
           vec![],
         );
-      }
-    }
-  }
-
-  fn setup_generics(&mut self, generics: &[GenericParameter]) {
-    if !generics.is_empty() {
-      for generic in generics.iter() {
-        if !self.ctx.is_generic_parameter(generic.name) {
-          let _type_var = self.ctx.fresh_type_var(Some(generic.name));
-        }
-      }
-    }
-  }
-
-  fn infer_field_types(
-    &mut self,
-    fields: &mut HashMap<Identifier, Expr>,
-    struct_fields: &[StructField],
-    generics: &[GenericParameter],
-  ) -> (Vec<(Identifier, Type)>, HashMap<Identifier, Type>) {
-    let mut field_types = Vec::new();
-    let mut generic_mapping = HashMap::new();
-
-    for (field_name, field_expr) in fields.iter_mut() {
-      if let Some(field) = struct_fields.iter().find(|f| &f.name == field_name) {
-        let expr_type = self.infer_expr(field_expr);
-
-        field_types.push((*field_name, expr_type.clone()));
-
-        if !generics.is_empty() {
-          self.infer_generic_types(&field.ty, &expr_type, &mut generic_mapping);
-        }
-
-        if generics.is_empty() && !self.eq_types_readonly(&field.ty, &expr_type) {
-          self.type_mismatch(&field.ty, &expr_type, field_expr.span.clone());
-        }
-      } else {
-        let field_name_str = resolve(field_name);
-        self.error(
-          &format!("unknown field `{}`", field_name_str),
-          vec![(format!("unknown field `{}`", field_name_str), field_expr.span.clone())],
-          vec![],
-        );
+        valid = false;
       }
     }
 
-    for (_, field_type) in field_types.iter_mut() {
-      self.try_monomorphize_named_type(field_type);
-    }
-
-    (field_types, generic_mapping)
-  }
-
-  fn create_final_type(
-    &mut self,
-    struct_info: StructInfo,
-    field_types: Vec<(Identifier, Type)>,
-    generic_mapping: HashMap<Identifier, Type>,
-    fields: &HashMap<Identifier, Expr>,
-    struct_sym_id: SymbolId,
-    call_info: &mut Option<CallInfo>,
-  ) -> Type {
-    if struct_info.generics.is_empty() {
-      self.create_non_generic_type(struct_info)
-    } else {
-      self.create_generic_type(
-        struct_info,
-        field_types,
-        generic_mapping,
-        fields,
-        struct_sym_id,
-        call_info,
-      )
-    }
-  }
-
-  fn create_non_generic_type(&self, struct_info: StructInfo) -> Type {
-    let name = if let Some(parent_enum_id) = struct_info.parent_enum_id {
-      let parent_symbol = self.symbol_table.get_symbol_unchecked(&parent_enum_id);
-      parent_symbol.name
-    } else {
-      struct_info.name
-    };
-
-    Type::Named { name, generics: vec![] }
-  }
-
-  fn create_generic_type(
-    &mut self,
-    struct_info: StructInfo,
-    field_types: Vec<(Identifier, Type)>,
-    generic_mapping: HashMap<Identifier, Type>,
-    fields: &HashMap<Identifier, Expr>,
-    struct_sym_id: SymbolId,
-    call_info: &mut Option<CallInfo>,
-  ) -> Type {
-    let concrete_generics = self.resolve_concrete_generics(&struct_info.generics, &generic_mapping);
-
-    if self.struct_all_generics_concrete(&concrete_generics) {
-      self.create_monomorphized_type(
-        struct_info,
-        field_types,
-        concrete_generics,
-        fields,
-        struct_sym_id,
-        call_info,
-      )
-    } else {
-      self.create_partial_generic_type(struct_info, concrete_generics)
-    }
-  }
-
-  fn resolve_concrete_generics(
-    &self,
-    generics: &[GenericParameter],
-    generic_mapping: &HashMap<Identifier, Type>,
-  ) -> Vec<Type> {
-    generics
-      .iter()
-      .map(|g| {
-        generic_mapping.get(&g.name).cloned().expect("generic mapping should contain all generics")
-      })
-      .collect()
-  }
-
-  fn struct_all_generics_concrete(&self, concrete_generics: &[Type]) -> bool {
-    concrete_generics.iter().all(|ty| !matches!(ty, Type::Variable { .. }))
-  }
-
-  fn create_monomorphized_type(
-    &mut self,
-    struct_info: StructInfo,
-    field_types: Vec<(Identifier, Type)>,
-    concrete_generics: Vec<Type>,
-    fields: &HashMap<Identifier, Expr>,
-    struct_sym_id: SymbolId,
-    call_info: &mut Option<CallInfo>,
-  ) -> Type {
-    let monomorphized_fields = self.create_monomorphized_fields(&struct_info, &concrete_generics);
-
-    self.validate_monomorphized_field_types(&field_types, &monomorphized_fields, fields);
-
-    let generic_map = self.create_generic_map(&struct_info.generics, &concrete_generics);
-
-    let monomorphized_id = self.record_monomorphization_with_id(
-      struct_sym_id,
-      &generic_map,
-      Some(MonomorphizationData::Fields(monomorphized_fields)),
-    );
-
-    *call_info = Some(CallInfo {
-      original_symbol: struct_sym_id,
-      monomorphized_id: Some(monomorphized_id),
-      concrete_types: generic_map,
-    });
-
-    let display_type = self.create_display_type(&struct_info, concrete_generics);
-
-    Type::MonomorphizedSymbol(MonomorphizedSymbol {
-      id: monomorphized_id,
-      display_ty: Box::new(display_type),
-    })
-  }
-
-  fn create_monomorphized_fields(
-    &mut self,
-    struct_info: &StructInfo,
-    concrete_generics: &[Type],
-  ) -> Vec<StructField> {
-    let mut monomorphized_fields = struct_info.fields.clone();
-
-    for field in monomorphized_fields.iter_mut() {
-      self.substitute_generic_params(&mut field.ty, &struct_info.generics, concrete_generics);
-    }
-
-    monomorphized_fields
-  }
-
-  fn validate_monomorphized_field_types(
-    &mut self,
-    field_types: &[(Identifier, Type)],
-    monomorphized_fields: &[StructField],
-    fields: &HashMap<Identifier, Expr>,
-  ) {
-    let mut type_mismatches = Vec::new();
-
-    for (field_name, expr_type) in field_types {
-      if let Some(field) = monomorphized_fields.iter().find(|f| &f.name == field_name) {
-        if !self.eq_types_readonly(&field.ty, expr_type) {
-          if let Some(field_expr) = fields.get(field_name) {
-            type_mismatches.push((field.ty.clone(), expr_type.clone(), field_expr.span.clone()));
-          }
-        }
-      }
-    }
-
-    for (expected_ty, found_ty, span) in type_mismatches {
-      self.type_mismatch(&expected_ty, &found_ty, span);
-    }
-  }
-
-  fn create_generic_map(
-    &self,
-    generics: &[GenericParameter],
-    concrete_generics: &[Type],
-  ) -> HashMap<Identifier, Type> {
-    let mut generic_map = HashMap::new();
-    for (g, ty) in generics.iter().zip(concrete_generics.iter()) {
-      generic_map.insert(g.name, ty.clone());
-    }
-    generic_map
-  }
-
-  fn create_display_type(&self, struct_info: &StructInfo, concrete_generics: Vec<Type>) -> Type {
-    let name = if let Some(parent_enum_id) = struct_info.parent_enum_id {
-      let parent_symbol = self.symbol_table.get_symbol_unchecked(&parent_enum_id);
-      parent_symbol.name
-    } else {
-      struct_info.name
-    };
-
-    Type::Named { name, generics: concrete_generics }
-  }
-
-  fn create_partial_generic_type(
-    &self,
-    struct_info: StructInfo,
-    concrete_generics: Vec<Type>,
-  ) -> Type {
-    let name = if let Some(parent_enum_id) = struct_info.parent_enum_id {
-      let parent_symbol = self.symbol_table.get_symbol_unchecked(&parent_enum_id);
-      parent_symbol.name
-    } else {
-      struct_info.name
-    };
-
-    Type::Named { name, generics: concrete_generics }
+    valid
   }
 }

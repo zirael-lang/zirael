@@ -128,7 +128,7 @@ impl MonoSymbolTable {
 
     let id = self.mono_ids.alloc_with_id(|id| match &mut symbol.kind {
       MonomorphizedSymbolKind::Function { mono_id, .. } => *mono_id = Some(id),
-      MonomorphizedSymbolKind::Struct { mono_id, .. } => *mono_id = id,
+      MonomorphizedSymbolKind::Struct { mono_id, .. } => *mono_id = Some(id),
       MonomorphizedSymbolKind::EnumVariant { mono_id, .. } => *mono_id = id,
     });
 

@@ -17,7 +17,7 @@ impl<'reports> TypeInference<'reports> {
     if self.eq(left_ty, right_ty) {
       return UnificationResult::Identical(left_ty.clone());
     }
-    
+
     match (left_ty, right_ty) {
       (Type::Inferred, concrete) | (concrete, Type::Inferred) => {
         return UnificationResult::Unified(concrete.clone());
@@ -79,7 +79,7 @@ impl<'reports> TypeInference<'reports> {
           UnificationResult::Incompatible => Some(UnificationResult::Incompatible),
         }
       }
-      
+
       (Type::Reference(left_inner), Type::Reference(right_inner)) => {
         match self.unify_types(left_inner, right_inner) {
           UnificationResult::Identical(inner) | UnificationResult::Unified(inner) => {
@@ -88,7 +88,7 @@ impl<'reports> TypeInference<'reports> {
           UnificationResult::Incompatible => Some(UnificationResult::Incompatible),
         }
       }
-      
+
       (Type::Array(left_inner, left_size), Type::Array(right_inner, right_size)) => {
         if left_size != right_size {
           return Some(UnificationResult::Incompatible);
@@ -100,18 +100,18 @@ impl<'reports> TypeInference<'reports> {
           UnificationResult::Incompatible => Some(UnificationResult::Incompatible),
         }
       }
-      
-      (Type::Function { params: left_params, return_type: left_ret }, 
+
+      (Type::Function { params: left_params, return_type: left_ret },
        Type::Function { params: right_params, return_type: right_ret }) => {
         if left_params.len() != right_params.len() {
           return Some(UnificationResult::Incompatible);
         }
-        
+
         let unified_ret = match self.unify_types(left_ret, right_ret) {
           UnificationResult::Identical(ret) | UnificationResult::Unified(ret) => ret,
           UnificationResult::Incompatible => return Some(UnificationResult::Incompatible),
         };
-        
+
         let mut unified_params = Vec::new();
         for (left_param, right_param) in left_params.iter().zip(right_params.iter()) {
           match self.unify_types(left_param, right_param) {
@@ -121,13 +121,13 @@ impl<'reports> TypeInference<'reports> {
             UnificationResult::Incompatible => return Some(UnificationResult::Incompatible),
           }
         }
-        
-        Some(UnificationResult::Unified(Type::Function { 
-          params: unified_params, 
-          return_type: Box::new(unified_ret) 
+
+        Some(UnificationResult::Unified(Type::Function {
+          params: unified_params,
+          return_type: Box::new(unified_ret)
         }))
       }
-      
+
       _ => None,
     }
   }
@@ -138,7 +138,7 @@ impl<'reports> TypeInference<'reports> {
         warn!("not available");
         None
       }
-      
+
       (Type::Symbol(left_id), Type::Symbol(right_id)) => {
         if left_id == right_id {
           Some(UnificationResult::Identical(left_ty.clone()))
@@ -146,7 +146,7 @@ impl<'reports> TypeInference<'reports> {
           Some(UnificationResult::Incompatible)
         }
       }
-      
+
       _ => None,
     }
   }
@@ -170,12 +170,12 @@ impl<'reports> TypeInference<'reports> {
         }
       }
       Type::MonomorphizedSymbol(_mono_id) => {
-        None  
+        None
       }
-      Type::String | Type::Char | Type::Int | Type::Uint | Type::Float | 
+      Type::String | Type::Char | Type::Int | Type::Uint | Type::Float |
       Type::Bool | Type::Void | Type::Never | Type::Inferred | Type::Error => None,
-      
-      Type::Pointer(_) | Type::Reference(_) | Type::Array(_, _) | 
+
+      Type::Pointer(_) | Type::Reference(_) | Type::Array(_, _) |
       Type::Function { .. } | Type::Variable { .. } | Type::BoundedVariable { .. } |
       Type::Id(_) => None,
     }
@@ -190,23 +190,23 @@ impl<'reports> TypeInference<'reports> {
     match (left, right) {
       (Type::Inferred, concrete) => Some(concrete.clone()),
       (concrete, Type::Inferred) => Some(concrete.clone()),
-      
+
       (a, b) if self.eq(a, b) => Some(a.clone()),
-      
+
       (Type::Variable { name: var_name, .. }, concrete) => {
         self.unify_with_substitution(*var_name, concrete, substitutions)
       }
       (concrete, Type::Variable { name: var_name, .. }) => {
         self.unify_with_substitution(*var_name, concrete, substitutions)
       }
-      
+
       (Type::BoundedVariable { name: var_name, .. }, concrete) => {
         self.unify_with_substitution(*var_name, concrete, substitutions)
       }
       (concrete, Type::BoundedVariable { name: var_name, .. }) => {
         self.unify_with_substitution(*var_name, concrete, substitutions)
       }
-      
+
       (Type::Symbol(left_id), Type::Symbol(right_id)) => {
         if left_id == right_id {
           Some(left.clone())
@@ -214,7 +214,7 @@ impl<'reports> TypeInference<'reports> {
           None
         }
       }
-      
+
       (Type::MonomorphizedSymbol(left_id), Type::MonomorphizedSymbol(right_id)) => {
         if left_id == right_id {
           Some(left.clone())
@@ -222,17 +222,17 @@ impl<'reports> TypeInference<'reports> {
           None
         }
       }
-      
+
       (Type::Pointer(left_inner), Type::Pointer(right_inner)) => {
         self.unify_generic_params(left_inner, right_inner, substitutions)
           .map(|inner| Type::Pointer(Box::new(inner)))
       }
-      
+
       (Type::Reference(left_inner), Type::Reference(right_inner)) => {
         self.unify_generic_params(left_inner, right_inner, substitutions)
           .map(|inner| Type::Reference(Box::new(inner)))
       }
-      
+
       (Type::Array(left_inner, left_size), Type::Array(right_inner, right_size)) => {
         if left_size != right_size {
           return None;
@@ -240,42 +240,42 @@ impl<'reports> TypeInference<'reports> {
         self.unify_generic_params(left_inner, right_inner, substitutions)
           .map(|inner| Type::Array(Box::new(inner), *left_size))
       }
-      
-      (Type::Function { params: left_params, return_type: left_ret }, 
+
+      (Type::Function { params: left_params, return_type: left_ret },
        Type::Function { params: right_params, return_type: right_ret }) => {
         if left_params.len() != right_params.len() {
           return None;
         }
-        
+
         let unified_ret = self.unify_generic_params(left_ret, right_ret, substitutions)?;
-        
+
         let mut unified_params = Vec::new();
         for (left_param, right_param) in left_params.iter().zip(right_params.iter()) {
           let unified_param = self.unify_generic_params(left_param, right_param, substitutions)?;
           unified_params.push(unified_param);
         }
-        
-        Some(Type::Function { 
-          params: unified_params, 
-          return_type: Box::new(unified_ret) 
+
+        Some(Type::Function {
+          params: unified_params,
+          return_type: Box::new(unified_ret)
         })
       }
-      
-      (Type::Named { name: left_name, generics: left_generics }, 
+
+      (Type::Named { name: left_name, generics: left_generics },
        Type::Named { name: right_name, generics: right_generics }) => {
         if left_name != right_name || left_generics.len() != right_generics.len() {
           return None;
         }
-        
+
         let mut unified_generics = Vec::new();
         for (left_gen, right_gen) in left_generics.iter().zip(right_generics.iter()) {
           let unified_gen = self.unify_generic_params(left_gen, right_gen, substitutions)?;
           unified_generics.push(unified_gen);
         }
-        
+
         Some(Type::Named { name: *left_name, generics: unified_generics })
       }
-      
+
       _ => {
         if self.eq(left, right) {
           Some(left.clone())
@@ -293,10 +293,10 @@ impl<'reports> TypeInference<'reports> {
     substitutions: &mut HashMap<Identifier, Type>,
   ) -> Option<Type> {
     if let Some(existing) = substitutions.get(&var_name) {
-      if self.eq(existing, concrete) { 
-        Some(concrete.clone()) 
-      } else { 
-        None 
+      if self.eq(existing, concrete) {
+        Some(concrete.clone())
+      } else {
+        None
       }
     } else {
       substitutions.insert(var_name, concrete.clone());
@@ -336,8 +336,8 @@ impl<'reports> TypeInference<'reports> {
         }
         self.apply_substitutions(return_type, substitutions);
       }
-      
-      Type::String | Type::Char | Type::Int | Type::Uint | Type::Float | 
+
+      Type::String | Type::Char | Type::Int | Type::Uint | Type::Float |
       Type::Bool | Type::Void | Type::Never | Type::Inferred | Type::Error |
       Type::Symbol(_) | Type::MonomorphizedSymbol(_) | Type::Id(_) => {}
     }

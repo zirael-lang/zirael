@@ -23,7 +23,12 @@ impl<'reports> TypeInference<'reports> {
     span: &Span,
     context: &str,
   ) -> bool {
-    if !self.eq(expected, actual) {
+    let mut expected_norm = expected.clone();
+    let mut actual_norm = actual.clone();
+    self.visit_type(&mut expected_norm);
+    self.visit_type(&mut actual_norm);
+
+    if !self.eq(&expected_norm, &actual_norm) {
       self.type_mismatch_with_context(expected, actual, span.clone(), context);
       false
     } else {
@@ -59,9 +64,8 @@ impl<'reports> TypeInference<'reports> {
         self.infer_call(callee, &mut call.args, &mut call.call_info, &mut call.type_annotations)
       }
       ExprKind::Paren(expr) => self.infer_expr_with_expected(expr, expected_type),
-      ExprKind::StructInit { name, fields, call_info } => {
-        // self.infer_struct_init(name, fields, call_info)
-        Type::Void
+      ExprKind::StructInit { name, fields, call_info, type_annotations } => {
+        self.infer_struct_init(name, fields, call_info, type_annotations, expected_type)
       }
       // ExprKind::FieldAccess(fields) => self.infer_field_access(fields),
       // ExprKind::IndexAccess(expr, index) => self.infer_index_access(expr, index),
@@ -89,35 +93,11 @@ impl<'reports> TypeInference<'reports> {
         Type::Error
       }
     };
-    expr.ty = ty.clone();
-    ty
-  }
-
-  fn infer_ternary(
-    &mut self,
-    condition: &mut Expr,
-    true_expr: &mut Expr,
-    false_expr: &mut Expr,
-  ) -> Type {
-    let condition_ty = self.infer_expr(condition);
-    let true_ty = self.infer_expr(true_expr);
-    let false_ty = self.infer_expr(false_expr);
-
-    self.expect_type(&Type::Bool, &condition_ty, &condition.span, "ternary condition");
-
-    match self.unify_types(&true_ty, &false_ty) {
-      UnificationResult::Identical(ty) => ty,
-      UnificationResult::Unified(ty) => {
-        true_expr.ty = ty.clone();
-        false_expr.ty = ty.clone();
-        self.update_expr_recursively(true_expr, &ty);
-        self.update_expr_recursively(false_expr, &ty);
-        ty
-      }
-      UnificationResult::Incompatible => {
-        self.ternary_error(&true_ty, &false_ty, true_expr, false_expr)
-      }
-    }
+    // Normalize the resulting type so no Named variants remain post-inference.
+    let mut normalized = ty.clone();
+    self.visit_type(&mut normalized);
+    expr.ty = normalized.clone();
+    normalized
   }
 
   fn ternary_error(
@@ -222,7 +202,10 @@ impl<'reports> TypeInference<'reports> {
   pub fn infer_variable(&mut self, decl: &mut VarDecl) -> Type {
     let expected_type = if let Type::Inferred = decl.ty { None } else { Some(&decl.ty) };
     let value_ty = &self.infer_expr_with_expected(&mut decl.value, expected_type);
-    let variable_ty = if let Type::Inferred = decl.ty { value_ty.clone() } else { decl.ty.clone() };
+    let mut variable_ty =
+      if let Type::Inferred = decl.ty { value_ty.clone() } else { decl.ty.clone() };
+
+    self.visit_type(&mut variable_ty);
 
     if let Some(symbol_id) = decl.symbol_id {
       let symbol = self.symbol_table.get_symbol_unchecked(&symbol_id);
@@ -285,14 +268,13 @@ impl<'reports> TypeInference<'reports> {
   }
 
   fn infer_literal(&mut self, lit: &Literal) -> Type {
-    let ty = match lit {
+    match lit {
       Literal::Bool(_) => Type::Bool,
       Literal::Char(_) => Type::Char,
       Literal::Float(_) => Type::Float,
       Literal::Integer(_) => Type::Int,
       Literal::String(_) => Type::String,
-    };
-    ty
+    }
   }
 
   pub fn infer_generic_types(
@@ -567,7 +549,7 @@ impl<'reports> TypeInference<'reports> {
                     _ => {}
                   }
                 }
-                
+
                 self.error(
                   "cannot infer generic enum variant type without context - provide explicit type annotation",
                   vec![("here".to_string(), path.span.clone())],

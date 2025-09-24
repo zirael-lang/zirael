@@ -151,5 +151,3 @@ impl<'reports> TypeInference<'reports> {
     signature
   }
 }
-
-pub struct FunctionMonomorphizer {}

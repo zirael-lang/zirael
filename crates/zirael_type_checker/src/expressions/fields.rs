@@ -439,12 +439,7 @@ impl<'reports> TypeInference<'reports> {
                   field_map.insert(field.name, arg.clone());
                 }
 
-                self.infer_enum_variant_init(
-                  variant_id,
-                  &fields[1].span.clone(),
-                  &mut field_map,
-                  call_info,
-                )
+                self.infer_enum_variant_init(&variant_id, &fields[1].span.clone(), &mut field_map, call_info)
               }
             }
           } else {
@@ -592,12 +587,7 @@ impl<'reports> TypeInference<'reports> {
                   field_map.insert(field.name, arg.clone());
                 }
 
-                self.infer_enum_variant_init(
-                  variant_id,
-                  &fields[1].span.clone(),
-                  &mut field_map,
-                  call_info,
-                )
+                self.infer_enum_variant_init(&variant_id, &fields[1].span.clone(), &mut field_map, call_info)
               }
             }
           } else {
