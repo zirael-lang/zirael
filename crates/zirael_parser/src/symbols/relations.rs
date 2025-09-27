@@ -17,6 +17,15 @@ pub enum OriginalSymbolId {
   Monomorphization(MonomorphizationId),
 }
 
+impl OriginalSymbolId {
+  pub fn as_symbol(&self) -> Option<SymbolId> {
+    match self {
+      Self::Symbol(id) => Some(*id),
+      Self::Monomorphization(_) => None,
+    }
+  }
+}
+
 impl fmt::Display for OriginalSymbolId {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     match self {

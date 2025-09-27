@@ -22,8 +22,8 @@ impl<'reports> TypeInference<'reports> {
     name_expr: &Expr,
     fields: &mut HashMap<Identifier, Expr>,
     call_info: &mut Option<CallInfo>,
-  type_annotations: &mut Vec<Type>,
-  _expected_type: Option<&Type>,
+    type_annotations: &mut Vec<Type>,
+    _expected_type: Option<&Type>,
   ) -> Type {
     let struct_sym_id = match self.resolve_struct_symbol(name_expr) {
       Some(id) => id,
@@ -73,7 +73,6 @@ impl<'reports> TypeInference<'reports> {
         Ok(mapping) => mapping,
         Err(()) => return Type::Error,
       };
-    println!("Generic mapping: {:?}", generic_mapping);
 
     // let concrete_fields = self.create_concrete_fields(&struct_info.fields, &generic_mapping);
     //
@@ -142,7 +141,8 @@ impl<'reports> TypeInference<'reports> {
         .filter_map(|f| fields.get(&f.name).map(|expr| expr.ty.clone()))
         .collect();
 
-      generic_mapping = self.infer_generic_mappings(&struct_info.generics, &expected_types, &actual_types);
+      generic_mapping =
+        self.infer_generic_mappings(&struct_info.generics, &expected_types, &actual_types);
 
       self.ctx.generic_params = original_generics;
     }
@@ -184,7 +184,7 @@ impl<'reports> TypeInference<'reports> {
     struct_sym_id: SymbolId,
     name_expr: &Expr,
   ) -> Option<StructInfo> {
-  let symbol = self.symbol_table().get_symbol(struct_sym_id).expect("symbol must exist");
+    let symbol = self.symbol_table().get_symbol(struct_sym_id).expect("symbol must exist");
 
     match symbol_kind {
       SymbolKind::Struct { fields, generics, .. } => Some(StructInfo {
@@ -214,7 +214,7 @@ impl<'reports> TypeInference<'reports> {
     variant_name: Identifier,
     name_expr: &Expr,
   ) -> Option<StructInfo> {
-  let parent_symbol = self.symbol_table().get_symbol(parent_enum).expect("enum must exist");
+    let parent_symbol = self.symbol_table().get_symbol(parent_enum).expect("enum must exist");
 
     match &parent_symbol.kind {
       SymbolKind::Enum { generics, .. } => match data {

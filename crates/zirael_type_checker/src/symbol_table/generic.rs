@@ -121,8 +121,9 @@ pub enum GenericSymbolKind {
     variants: Vec<GenericEnumVariant>,
   },
   EnumVariant {
-    symbol_id: SymbolId,
+    parent_enum: SymbolId,
     data: GenericEnumData,
+    has_generics: bool,
   },
   Value {
     ty: TyId,
@@ -144,8 +145,8 @@ pub enum MonomorphizedSymbolKind {
   },
   EnumVariant {
     mono_id: MonomorphizationId,
-    symbol_id: SymbolId,
     fields: Vec<MonomorphizedStructField>,
+    parent_enum: SymbolId,
   },
 }
 
@@ -255,16 +256,17 @@ impl GenericSymbol {
   }
 
   pub fn enum_variant(
-    base_symbol_id: SymbolId,
+    symbol_id: SymbolId,
     name: Identifier,
-    variant_symbol_id: SymbolId,
+    parent_enum: SymbolId,
     data: GenericEnumData,
     is_used: bool,
     span: Span,
+    has_generics: bool,
   ) -> Self {
     Self {
-      base: GenericSymbolBase { symbol_id: base_symbol_id, name, is_used, span },
-      kind: GenericSymbolKind::EnumVariant { symbol_id: variant_symbol_id, data },
+      base: GenericSymbolBase { symbol_id, name, is_used, span },
+      kind: GenericSymbolKind::EnumVariant { parent_enum, data, has_generics },
     }
   }
 }
@@ -296,20 +298,6 @@ impl MonomorphizedSymbol {
     Self {
       base: MonomorphizedSymbolBase { original_symbol_id, name, concrete_types },
       kind: MonomorphizedSymbolKind::Struct { mono_id, mangled_name, fields },
-    }
-  }
-
-  pub fn enum_variant(
-    original_symbol_id: SymbolId,
-    name: Identifier,
-    symbol_id: SymbolId,
-    fields: Vec<MonomorphizedStructField>,
-    concrete_types: HashMap<Identifier, TyId>,
-    mono_id: MonomorphizationId,
-  ) -> Self {
-    Self {
-      base: MonomorphizedSymbolBase { original_symbol_id, name, concrete_types },
-      kind: MonomorphizedSymbolKind::EnumVariant { mono_id, symbol_id, fields },
     }
   }
 }

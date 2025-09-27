@@ -178,8 +178,8 @@ impl MonoSymbolTable {
     match self.monomorphized_symbols.get(&mono_id) {
       Some(MonomorphizedSymbol {
         base,
-        kind: MonomorphizedSymbolKind::EnumVariant { symbol_id, fields, .. },
-      }) => Some((base, *symbol_id, fields)),
+        kind: MonomorphizedSymbolKind::EnumVariant { fields, .. },
+      }) => Some((base, base.original_symbol_id, fields)),
       _ => None,
     }
   }
@@ -254,5 +254,33 @@ impl MonoSymbolTable {
     base: String,
   ) {
     self.mangled_names.insert(original, MangledName { base, module_path });
+  }
+
+  pub fn get_mangled_name(&self, original: &OriginalSymbolId) -> Option<&MangledName> {
+    self.mangled_names.get(original)
+  }
+
+  pub fn get_enum_variants_by_parent(&self, parent: SymbolId) -> Vec<SymbolId> {
+    let mut variants = Vec::new();
+
+    self.generic_symbols.iter().for_each(|(_, sym)| {
+      if let GenericSymbolKind::EnumVariant { parent_enum, has_generics, .. } = &sym.kind
+        && parent_enum == &parent
+        && !has_generics
+      {
+        variants.push(sym.symbol_id());
+      }
+    });
+
+    println!("{:#?}", self.monomorphized_symbols);
+    self.monomorphized_symbols.iter().for_each(|(_, sym)| {
+      if let MonomorphizedSymbolKind::EnumVariant { parent_enum, .. } = &sym.kind
+        && parent_enum == &parent
+      {
+        variants.push(sym.base.original_symbol_id);
+      }
+    });
+
+    variants
   }
 }

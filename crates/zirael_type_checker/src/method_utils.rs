@@ -18,8 +18,8 @@ impl<'reports> TypeInference<'reports> {
     };
 
     match &struct_symbol.kind {
-      zirael_parser::SymbolKind::Struct { generics, .. }
-      | zirael_parser::SymbolKind::Enum { generics, .. } => {
+      SymbolKind::Struct { generics, .. }
+      | SymbolKind::Enum { generics, .. } => {
         let generic_types = generics
           .iter()
           .map(|g| Type::Named { name: g.name, generics: vec![] })
@@ -27,7 +27,7 @@ impl<'reports> TypeInference<'reports> {
 
         Some(Type::Named { name: struct_symbol.name, generics: generic_types })
       }
-      zirael_parser::SymbolKind::TypeExtension { ty, .. } => {
+      SymbolKind::TypeExtension { ty, .. } => {
         if ty.is_primitive() {
           Some(ty.clone())
         } else {

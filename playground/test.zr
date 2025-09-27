@@ -5,5 +5,4 @@ enum Option<T> {
 
 fn main() {
     var _x = Option::Some { value: 42  };
-    var _y: Option<int> = Option::None;
 }

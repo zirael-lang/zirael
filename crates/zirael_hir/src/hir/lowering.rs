@@ -105,14 +105,9 @@ impl<'reports, 'table> AstLowering<'reports, 'table> {
     let symbol = self.symbol_table.get_generic_symbol(symbol_id);
 
     let Some(symbol) = symbol else {
-      self.error(
-        &format!("Symbol not found in generic symbol table {:?}", symbol_id),
-        vec![],
-        vec![],
-      );
+      self.error(&format!("sym not found in generic symbol table {:?}", symbol_id), vec![], vec![]);
       return HirExprKind::Error;
     };
-
     // TODO: implement mode checking
     // self.symbol_for_mode_check(&symbol, *symbol.name.span());
 
@@ -168,10 +163,7 @@ impl<'reports, 'table> AstLowering<'reports, 'table> {
           Type::Function { params, return_type }
         }
         Type::Named { name, generics } => {
-          let generics = generics
-            .into_iter()
-            .map(|g| normalize(sym_table, g))
-            .collect::<Vec<_>>();
+          let generics = generics.into_iter().map(|g| normalize(sym_table, g)).collect::<Vec<_>>();
           if let Some(symbol) = sym_table.lookup_symbol(&name) {
             Type::Symbol(symbol.id)
           } else {
@@ -281,6 +273,10 @@ impl<'reports, 'table> AstLowering<'reports, 'table> {
     if let Some(variants) = self.symbol_table.get_mono_variants(symbol_id) {
       debug!("Found {:?} mono variants for symbol {}", variants, sym.base.name);
 
+      if let ItemKind::Enum(_enum) = &item.kind {
+        return Some(());
+      }
+
       for id in variants {
         let symbol = self.symbol_table.get_monomorphized_symbol(id).cloned();
 
@@ -301,7 +297,7 @@ impl<'reports, 'table> AstLowering<'reports, 'table> {
 
               self.current_items.push(hir_item);
             }
-            _ => warn!("not available right now"),
+            _ => warn!("not implemented: \n{:?} \n->\n {:?}\n", item, symbol),
           }
         } else {
           self.error(

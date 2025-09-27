@@ -448,12 +448,12 @@ impl SymbolTable {
 
   pub fn is_a_child_of_symbol(&self, symbol_id: SymbolId) -> Option<SymbolId> {
     self.write(|table| {
-      for (&struct_id, methods) in &table.parent_symbols_lookup {
-        if methods.contains(&symbol_id) {
+      for (&parent, children) in &table.parent_symbols_lookup {
+        if children.contains(&symbol_id) {
           table
             .symbol_relations
-            .entry(OriginalSymbolId::Symbol(symbol_id), OriginalSymbolId::Symbol(struct_id));
-          return Some(struct_id);
+            .entry(OriginalSymbolId::Symbol(symbol_id), OriginalSymbolId::Symbol(parent));
+          return Some(parent);
         }
       }
       None

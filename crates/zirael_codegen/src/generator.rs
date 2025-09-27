@@ -11,7 +11,10 @@ use zirael_parser::ty::{Ty, TyId};
 use zirael_parser::{
   BinaryOp, EnumVariantData, Literal, OriginalSymbolId, SymbolId, SymbolTable, Type,
 };
-use zirael_type_checker::MonoSymbolTable;
+use zirael_type_checker::{
+  GenericEnumData, GenericSymbolKind, MonoSymbolTable, MonomorphizedStructField,
+  MonomorphizedSymbolKind,
+};
 use zirael_utils::prelude::CompilationInfo;
 use zirael_utils::sources::Sources;
 
@@ -126,9 +129,6 @@ impl<'a> CodeGenerator<'a> {
               HirItemKind::Struct(_) => {
                 codegen.line(&format!("typedef struct {} {};", mangled_name, mangled_name));
               }
-              HirItemKind::Enum(_) => {
-                codegen.line(&format!("typedef enum {} {};", mangled_name, mangled_name));
-              }
               _ => {}
             }
           }
@@ -177,11 +177,116 @@ impl<'a> CodeGenerator<'a> {
         self.generate_method_declarations(codegen, &struct_def.methods);
       }
       HirItemKind::Enum(enum_def) => {
+        self.generate_enum_variant_declarations(codegen, enum_def, &item.original_item_id);
         self.generate_method_declarations(codegen, &enum_def.methods);
       }
       HirItemKind::TypeExtension(ext) => {
         self.generate_method_declarations(codegen, &ext.methods);
       }
+    }
+  }
+
+  fn generate_enum_variant_declarations(
+    &mut self,
+    codegen: &mut Codegen,
+    enum_def: &HirEnum,
+    original_id: &OriginalSymbolId,
+  ) {
+    let Some(mangled_name) = self.get_mangled_name(original_id) else { return };
+
+    for variant in &enum_def.variants {
+      self.generate_monomorphized_variants(codegen, &mangled_name, &variant.symbol_id);
+      self.generate_generic_variant_if_needed(codegen, &mangled_name, &variant.symbol_id);
+    }
+  }
+
+  fn generate_monomorphized_variants(
+    &mut self,
+    codegen: &mut Codegen,
+    enum_mangled_name: &str,
+    variant_symbol_id: &SymbolId,
+  ) {
+    let Some(mono_variants) = self.mono_symbol_table.symbol_to_mono_variants.get(variant_symbol_id)
+    else {
+      return;
+    };
+
+    for &mono_id in mono_variants {
+      let Some(mono_variant) = self.mono_symbol_table.get_monomorphized_symbol(mono_id) else {
+        continue;
+      };
+      let Some(variant_mangled_name) =
+        self.get_mangled_name(&OriginalSymbolId::Monomorphization(mono_id))
+      else {
+        continue;
+      };
+
+      if let MonomorphizedSymbolKind::EnumVariant { fields, .. } = &mono_variant.kind {
+        self.write_variant_declaration(codegen, enum_mangled_name, &variant_mangled_name, fields);
+      }
+    }
+  }
+
+  fn generate_generic_variant_if_needed(
+    &mut self,
+    codegen: &mut Codegen,
+    enum_mangled_name: &str,
+    variant_symbol_id: &SymbolId,
+  ) {
+    let has_monomorphizations = self
+      .mono_symbol_table
+      .symbol_to_mono_variants
+      .get(variant_symbol_id)
+      .map_or(false, |variants| !variants.is_empty());
+
+    if has_monomorphizations {
+      return;
+    }
+
+    let Some(variant_sym) = self.mono_symbol_table.get_generic_symbol(*variant_symbol_id) else {
+      return;
+    };
+    let variant_name = format!("{}_{}", enum_mangled_name, variant_sym.name());
+
+    if let GenericSymbolKind::EnumVariant { data, .. } = &variant_sym.kind {
+      match data {
+        GenericEnumData::Unit => {
+          codegen.writeln(&format!("{} {}(void);", enum_mangled_name, variant_name));
+        }
+        GenericEnumData::Struct(fields) => {
+          let params: Vec<String> = fields
+            .iter()
+            .map(|field| {
+              let field_type = self.resolve_type_id(&field.ty);
+              format!("{} {}", field_type, field.name)
+            })
+            .collect();
+          let param_list = if params.is_empty() { "void".to_string() } else { params.join(", ") };
+          codegen.writeln(&format!("{} {}({});", enum_mangled_name, variant_name, param_list));
+        }
+      }
+    }
+  }
+
+  fn write_variant_declaration(
+    &mut self,
+    codegen: &mut Codegen,
+    enum_mangled_name: &str,
+    variant_name: &str,
+    fields: &[MonomorphizedStructField],
+  ) {
+    if fields.is_empty() {
+      codegen.writeln(&format!("{} {}(void);", enum_mangled_name, variant_name));
+    } else {
+      let params: Vec<String> = fields
+        .iter()
+        .map(|field| {
+          let field_type = self.resolve_type_id(&field.concrete_ty);
+          format!("{} {}", field_type, field.name)
+        })
+        .collect();
+      let param_list = params.join(", ");
+      codegen.writeln(&format!("{} {}({});", enum_mangled_name, variant_name, param_list));
     }
   }
 
@@ -214,6 +319,7 @@ impl<'a> CodeGenerator<'a> {
         self.generate_method_implementations(codegen, &struct_def.methods);
       }
       HirItemKind::Enum(enum_def) => {
+        self.generate_enum_variant_implementations(codegen, enum_def, &item.original_item_id);
         self.generate_method_implementations(codegen, &enum_def.methods);
       }
       HirItemKind::TypeExtension(ext) => {
@@ -245,24 +351,6 @@ impl<'a> CodeGenerator<'a> {
       for field in &struct_def.fields {
         codegen.line(&format!("{} {};", "TODOOOOOOOOOOOOOOOOO", field.name));
       }
-
-      codegen.dedent();
-      codegen.line("};");
-      codegen.empty_line();
-    }
-  }
-
-  fn generate_enum_definition(
-    &mut self,
-    codegen: &mut Codegen,
-    enum_def: &HirEnum,
-    original_id: &OriginalSymbolId,
-  ) {
-    if let Some(mangled_name) = self.get_mangled_name(original_id) {
-      codegen.line(&format!("enum {} {{", mangled_name));
-      codegen.indent();
-
-      for (i, variant) in enum_def.variants.iter().enumerate() {}
 
       codegen.dedent();
       codegen.line("};");
@@ -367,6 +455,7 @@ impl<'a> CodeGenerator<'a> {
         if let Some(mangled) = self.get_mangled_name(id) {
           mangled
         } else {
+          println!("{:?}", id);
           format!("/* UnknownSymbol {:?} */ void*", id)
         }
       }

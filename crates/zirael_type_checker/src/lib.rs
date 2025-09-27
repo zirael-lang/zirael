@@ -134,14 +134,17 @@ impl<'reports> AstWalker<'reports> for TypeInference<'reports> {
         ty: self.sym_table.intern_type(field.ty.clone()),
       });
     }
-    
-    self.symbol_table.modify_symbol(self.current_item.unwrap(), |kind| {
-      if let SymbolKind::Struct { fields: sym_fields, .. } = kind {
-        *sym_fields = _struct.fields.clone();
-      }
-      
-      kind.clone()
-    }).expect("update failed");
+
+    self
+      .symbol_table
+      .modify_symbol(self.current_item.unwrap(), |kind| {
+        if let SymbolKind::Struct { fields: sym_fields, .. } = kind {
+          *sym_fields = _struct.fields.clone();
+        }
+
+        kind.clone()
+      })
+      .expect("update failed");
 
     for item in &mut _struct.methods {
       self.walk_item(item);
@@ -164,16 +167,7 @@ impl<'reports> AstWalker<'reports> for TypeInference<'reports> {
     let enum_generic_type_vars = self.create_generic_mapping(&_enum.generics);
     self.current_struct_generics = enum_generic_type_vars.clone();
 
-    for variant in &mut _enum.variants {
-      if let EnumVariantData::Struct(ref mut fields) = variant.data {
-        for field in fields {
-          if !enum_generic_type_vars.is_empty() {
-            self.substitute_type_with_map(&mut field.ty, &enum_generic_type_vars);
-          }
-          self.walk_struct_field(field);
-        }
-      }
-    }
+    self.substitute_enum_variants(_enum, &enum_generic_type_vars);
 
     for item in &mut _enum.methods {
       self.walk_item(item);
@@ -187,46 +181,30 @@ impl<'reports> AstWalker<'reports> for TypeInference<'reports> {
           EnumVariantData::Struct(fields) => {
             let converted: Vec<GenericStructField> = fields
               .iter()
-              .map(|f| GenericStructField { name: f.name, ty: self.sym_table.intern_type(f.ty.clone()) })
+              .map(|f| GenericStructField {
+                name: f.name,
+                ty: self.sym_table.intern_type(f.ty.clone()),
+              })
               .collect();
             GenericEnumData::Struct(converted)
           }
         };
-        generic_variants.push(GenericEnumVariant { name: variant.name, symbol_id: variant.symbol_id.unwrap(), data });
+
+        generic_variants.push(GenericEnumVariant {
+          name: variant.name,
+          symbol_id: variant.symbol_id.unwrap(),
+          data,
+        });
       }
 
       let generic_enum = GenericEnum::new(enum_sym_id, _enum.name)
         .with_generics(_enum.generics.clone())
         .with_variants(generic_variants.clone());
 
-  let sym = self.symbol_table.get_symbol(enum_sym_id).expect("enum symbol must exist");
+      let sym = self.symbol_table.get_symbol(enum_sym_id).expect("enum symbol must exist");
       self.sym_table.add_generic_enum(enum_sym_id, generic_enum, sym.is_used, _enum.span);
 
-      for variant in &_enum.variants {
-        let data = match &variant.data {
-          EnumVariantData::Unit => GenericEnumData::Unit,
-          EnumVariantData::Struct(fields) => {
-            let converted: Vec<GenericStructField> = fields
-              .iter()
-              .map(|f| GenericStructField { name: f.name, ty: self.sym_table.intern_type(f.ty.clone()) })
-              .collect();
-            GenericEnumData::Struct(converted)
-          }
-        };
-        let variant_symbol_id = variant.symbol_id.unwrap();
-        let variant_sym = self.symbol_table.get_symbol(variant_symbol_id).expect("variant symbol must exist");
-        let variant_generic = GenericSymbol::enum_variant(
-          enum_sym_id,
-          variant.name,
-          variant_symbol_id,
-          data,
-          variant_sym.is_used,
-          variant.span,
-        );
-        let generic_id = self.sym_table.generic_symbols.alloc(variant_generic);
-        self.sym_table.symbol_to_generic.insert(variant_symbol_id, generic_id);
-        self.sym_table.generic_to_symbol.insert(generic_id, variant_symbol_id);
-      }
+      self.add_enum_variants(_enum, enum_sym_id);
     }
 
     self.current_struct_generics.clear();

@@ -10,6 +10,7 @@ use zirael_utils::prelude::CompilationInfo;
 use zirael_utils::sources::Sources;
 
 mod codegen;
+mod enums;
 mod expressions;
 mod generator;
 mod mangling_table;
@@ -41,7 +42,7 @@ pub fn run_codegen(
     sources,
     order,
     compilation_info,
-    main_function
+    main_function,
   );
 
   code_generator.generate_c_code()

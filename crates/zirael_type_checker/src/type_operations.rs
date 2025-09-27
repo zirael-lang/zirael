@@ -1,8 +1,9 @@
 use crate::TypeInference;
 use crate::symbol_table::TyId;
 use std::collections::HashMap;
-use zirael_parser::{GenericParameter, Type};
-use zirael_utils::prelude::Identifier;
+use zirael_parser::{GenericParameter, OriginalSymbolId, Type};
+use zirael_parser::ty::Ty;
+use zirael_utils::prelude::{Identifier, warn};
 
 impl<'reports> TypeInference<'reports> {
   pub fn symbol_table(&self) -> &zirael_parser::SymbolTable {
@@ -23,17 +24,27 @@ impl<'reports> TypeInference<'reports> {
     }
   }
 
-  pub fn has_generics(&self, ty: &Type) -> bool {
+  pub fn has_generics(&mut self, ty: &Type) -> bool {
+    let ty = self.sym_table.intern_type(ty.clone());
+    
+    self.has_generics_ty(&self.sym_table[ty])
+  }
+  
+  fn has_generics_ty(&self, ty: &Ty) -> bool {
     match ty {
-      Type::Variable { .. } => true,
-      Type::Named { generics, .. } => {
-        !generics.is_empty() || generics.iter().any(|g| self.has_generics(g))
+      Ty::GenericVariable { .. } => true,
+      Ty::Pointer(inner) => self.has_generics_ty(inner),
+      Ty::Reference(inner) => self.has_generics_ty(inner),
+      Ty::Array(inner) => self.has_generics_ty(inner),
+      Ty::Function ( params, return_type ) => {
+        for param in params {
+          if self.has_generics_ty(param) {
+            return true;
+          }
+        }
+        self.has_generics_ty(return_type)
       }
-      Type::Reference(inner) | Type::Pointer(inner) => self.has_generics(inner),
-      Type::Array(inner, _) => self.has_generics(inner),
-      Type::Function { params, return_type } => {
-        params.iter().any(|p| self.has_generics(p)) || self.has_generics(return_type)
-      }
+      Ty::Symbol(id) if id.as_symbol().is_none() => true,
       _ => false,
     }
   }

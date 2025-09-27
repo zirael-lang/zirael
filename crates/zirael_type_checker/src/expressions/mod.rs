@@ -314,7 +314,15 @@ impl<'reports> TypeInference<'reports> {
         self.infer_generic_types(e_inner, a_inner, mapping);
       }
 
-      _ => {}
+      (Type::Id(id), _) | (_, Type::Id(id)) => {}
+
+      _ => {
+        println!(
+          "Mismatched types in generic inference: expected {}, found {}",
+          self.format_type(expected),
+          self.format_type(actual)
+        );
+      }
     }
   }
 
