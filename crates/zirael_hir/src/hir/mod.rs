@@ -5,8 +5,10 @@ use zirael_parser::{
   AstId, Attribute, Attributes, EnumVariantData, MonomorphizationId, OriginalSymbolId, StructField,
   SymbolId, Type,
 };
+use zirael_utils::ident_table::Identifier;
 use zirael_utils::prelude::{SourceFileId, Span};
 
+mod enums;
 pub mod expr;
 pub mod lowering;
 
@@ -75,7 +77,7 @@ pub struct HirBody {
 pub struct HirStruct {
   pub id: AstId,
   pub symbol_id: SymbolId,
-  pub fields: Vec<StructField>,
+  pub fields: Vec<HirStructField>,
   pub methods: Vec<HirItem>,
 }
 
@@ -89,8 +91,20 @@ pub struct HirEnum {
 
 #[derive(Debug, Clone)]
 pub struct HirVariant {
-  pub symbol_id: SymbolId,
-  pub data: EnumVariantData,
+  pub symbol_id: OriginalSymbolId,
+  pub data: HirEnumVariantData,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum HirEnumVariantData {
+  Unit,
+  Struct(Vec<HirStructField>),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct HirStructField {
+  pub name: Identifier,
+  pub ty: TyId,
 }
 
 #[derive(PartialEq, Eq)]

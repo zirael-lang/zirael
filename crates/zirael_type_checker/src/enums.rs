@@ -46,7 +46,6 @@ impl<'reports> TypeInference<'reports> {
       return Type::Error;
     }
 
-    println!("{:?}", generic_mapping);
     let monomorphized_id = if !enum_generics.is_empty() && !generic_mapping.is_empty() {
       Some(self.create_monomorphized_enum_variant(
         *variant_id,
@@ -66,7 +65,7 @@ impl<'reports> TypeInference<'reports> {
       monomorphized_id,
       concrete_types: generic_mapping,
     });
-    
+
     if let Some(mono_id) = monomorphized_id {
       Type::MonomorphizedSymbol(mono_id)
     } else {
@@ -225,16 +224,21 @@ impl<'reports> TypeInference<'reports> {
     enum_sym_id: SymbolId,
     enum_name: Identifier,
     variant_fields: &[GenericStructField],
-    _enum_generics: &[GenericParameter],
-    _concrete_generics: &[Type],
+    enum_generics: &[GenericParameter],
+    concrete_generics: &[Type],
     generic_mapping: &HashMap<Identifier, TyId>,
   ) -> MonomorphizationId {
     let mono_fields: Vec<MonomorphizedStructField> = variant_fields
       .iter()
-      .map(|field| MonomorphizedStructField {
-        name: field.name,
-        concrete_ty: field.ty,
-        is_public: true,
+      .map(|field| {
+        let mut original_type = Type::Id(field.ty);
+        self.substitute_type_with_map(&mut original_type, &generic_mapping);
+
+        MonomorphizedStructField {
+          name: field.name,
+          concrete_ty: self.sym_table.intern_type(original_type),
+          is_public: true,
+        }
       })
       .collect();
 

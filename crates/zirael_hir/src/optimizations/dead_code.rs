@@ -54,15 +54,11 @@ impl<'reports, 'mono> AstLowering<'reports, 'mono> {
 
     let is_unused = match &symbol.kind {
       GenericSymbolKind::Enum { generics, variants } if !generics.is_empty() => {
-        variants.iter().any(|v| self.symbol_table.has_mono_variant(v.symbol_id))
+        variants.iter().all(|v| !self.symbol_table.has_mono_variant(v.symbol_id))
       }
       _ => {
-        if let Some(generics) = symbol.generics() {
-          if !generics.is_empty() {
-            !self.symbol_table.has_mono_variant(symbol.base.symbol_id)
-          } else {
-            !symbol.base.is_used
-          }
+        if !symbol.generics().is_empty() {
+          !self.symbol_table.has_mono_variant(symbol.base.symbol_id)
         } else {
           !symbol.base.is_used
         }

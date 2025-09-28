@@ -111,4 +111,37 @@ impl<'reports> TypeInference<'reports> {
   pub fn make_pointer(&self, inner: Type) -> Type {
     Type::Pointer(Box::new(inner))
   }
+
+  pub fn ty_id_to_type(&self, ty_id: TyId) -> Type {
+    let ty = self.sym_table.resolve(ty_id);
+    self.ty_to_type(ty)
+  }
+
+  fn ty_to_type(&self, ty: &Ty) -> Type {
+    match ty {
+      Ty::String => Type::String,
+      Ty::Char => Type::Char,
+      Ty::Int => Type::Int,
+      Ty::Uint => Type::Uint,
+      Ty::Float => Type::Float,
+      Ty::Bool => Type::Bool,
+      Ty::Void => Type::Void,
+      Ty::Never => Type::Never,
+      Ty::Pointer(inner) => Type::Pointer(Box::new(self.ty_to_type(inner))),
+      Ty::Reference(inner) => Type::Reference(Box::new(self.ty_to_type(inner))),
+      Ty::Array(inner) => Type::Array(Box::new(self.ty_to_type(inner)), None),
+      Ty::Function(params, return_type) => {
+        let param_types = params.iter().map(|p| self.ty_to_type(p)).collect();
+        Type::Function {
+          params: param_types,
+          return_type: Box::new(self.ty_to_type(return_type)),
+        }
+      }
+      Ty::Symbol(original_id) => match original_id {
+        OriginalSymbolId::Symbol(symbol_id) => Type::Symbol(*symbol_id),
+        OriginalSymbolId::Monomorphization(mono_id) => Type::MonomorphizedSymbol(*mono_id),
+      },
+      Ty::GenericVariable { id, name } => Type::Variable { id: *id, name: *name },
+    }
+  }
 }

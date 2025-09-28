@@ -193,12 +193,12 @@ impl GenericSymbol {
     &self.base.name
   }
 
-  pub fn generics(&self) -> Option<&Vec<GenericParameter>> {
+  pub fn generics(&self) -> &[GenericParameter] {
     match &self.kind {
-      GenericSymbolKind::Function { generics, .. } => Some(generics),
-      GenericSymbolKind::Struct { generics, .. } => Some(generics),
-      GenericSymbolKind::Enum { generics, .. } => Some(generics),
-      _ => None,
+      GenericSymbolKind::Function { generics, .. } => generics,
+      GenericSymbolKind::Struct { generics, .. } => generics,
+      GenericSymbolKind::Enum { generics, .. } => generics,
+      _ => &[],
     }
   }
 }

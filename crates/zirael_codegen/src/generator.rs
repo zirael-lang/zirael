@@ -177,116 +177,11 @@ impl<'a> CodeGenerator<'a> {
         self.generate_method_declarations(codegen, &struct_def.methods);
       }
       HirItemKind::Enum(enum_def) => {
-        self.generate_enum_variant_declarations(codegen, enum_def, &item.original_item_id);
         self.generate_method_declarations(codegen, &enum_def.methods);
       }
       HirItemKind::TypeExtension(ext) => {
         self.generate_method_declarations(codegen, &ext.methods);
       }
-    }
-  }
-
-  fn generate_enum_variant_declarations(
-    &mut self,
-    codegen: &mut Codegen,
-    enum_def: &HirEnum,
-    original_id: &OriginalSymbolId,
-  ) {
-    let Some(mangled_name) = self.get_mangled_name(original_id) else { return };
-
-    for variant in &enum_def.variants {
-      self.generate_monomorphized_variants(codegen, &mangled_name, &variant.symbol_id);
-      self.generate_generic_variant_if_needed(codegen, &mangled_name, &variant.symbol_id);
-    }
-  }
-
-  fn generate_monomorphized_variants(
-    &mut self,
-    codegen: &mut Codegen,
-    enum_mangled_name: &str,
-    variant_symbol_id: &SymbolId,
-  ) {
-    let Some(mono_variants) = self.mono_symbol_table.symbol_to_mono_variants.get(variant_symbol_id)
-    else {
-      return;
-    };
-
-    for &mono_id in mono_variants {
-      let Some(mono_variant) = self.mono_symbol_table.get_monomorphized_symbol(mono_id) else {
-        continue;
-      };
-      let Some(variant_mangled_name) =
-        self.get_mangled_name(&OriginalSymbolId::Monomorphization(mono_id))
-      else {
-        continue;
-      };
-
-      if let MonomorphizedSymbolKind::EnumVariant { fields, .. } = &mono_variant.kind {
-        self.write_variant_declaration(codegen, enum_mangled_name, &variant_mangled_name, fields);
-      }
-    }
-  }
-
-  fn generate_generic_variant_if_needed(
-    &mut self,
-    codegen: &mut Codegen,
-    enum_mangled_name: &str,
-    variant_symbol_id: &SymbolId,
-  ) {
-    let has_monomorphizations = self
-      .mono_symbol_table
-      .symbol_to_mono_variants
-      .get(variant_symbol_id)
-      .map_or(false, |variants| !variants.is_empty());
-
-    if has_monomorphizations {
-      return;
-    }
-
-    let Some(variant_sym) = self.mono_symbol_table.get_generic_symbol(*variant_symbol_id) else {
-      return;
-    };
-    let variant_name = format!("{}_{}", enum_mangled_name, variant_sym.name());
-
-    if let GenericSymbolKind::EnumVariant { data, .. } = &variant_sym.kind {
-      match data {
-        GenericEnumData::Unit => {
-          codegen.writeln(&format!("{} {}(void);", enum_mangled_name, variant_name));
-        }
-        GenericEnumData::Struct(fields) => {
-          let params: Vec<String> = fields
-            .iter()
-            .map(|field| {
-              let field_type = self.resolve_type_id(&field.ty);
-              format!("{} {}", field_type, field.name)
-            })
-            .collect();
-          let param_list = if params.is_empty() { "void".to_string() } else { params.join(", ") };
-          codegen.writeln(&format!("{} {}({});", enum_mangled_name, variant_name, param_list));
-        }
-      }
-    }
-  }
-
-  fn write_variant_declaration(
-    &mut self,
-    codegen: &mut Codegen,
-    enum_mangled_name: &str,
-    variant_name: &str,
-    fields: &[MonomorphizedStructField],
-  ) {
-    if fields.is_empty() {
-      codegen.writeln(&format!("{} {}(void);", enum_mangled_name, variant_name));
-    } else {
-      let params: Vec<String> = fields
-        .iter()
-        .map(|field| {
-          let field_type = self.resolve_type_id(&field.concrete_ty);
-          format!("{} {}", field_type, field.name)
-        })
-        .collect();
-      let param_list = params.join(", ");
-      codegen.writeln(&format!("{} {}({});", enum_mangled_name, variant_name, param_list));
     }
   }
 
@@ -412,6 +307,26 @@ impl<'a> CodeGenerator<'a> {
     })
   }
 
+  fn get_effective_id(&self, original_id: &OriginalSymbolId) -> OriginalSymbolId {
+    let symbol_id = match original_id {
+      OriginalSymbolId::Symbol(sym_id) => *sym_id,
+      OriginalSymbolId::Monomorphization(mono) => {
+        let symbol = self.mono_symbol_table.get_monomorphized_symbol(*mono);
+
+        let Some(symbol) = symbol else {
+          return OriginalSymbolId::Monomorphization(*mono);
+        };
+
+        symbol.base.original_symbol_id
+      }
+    };
+
+    let effective_symbol_id =
+      self.symbol_table.is_a_child_of_symbol(symbol_id).unwrap_or(symbol_id);
+
+    OriginalSymbolId::Symbol(effective_symbol_id)
+  }
+
   pub fn resolve_type_id(&self, ty_id: &TyId) -> String {
     let ty = self.mono_symbol_table.resolve(*ty_id);
     self.generate_ty(&ty)
@@ -452,15 +367,20 @@ impl<'a> CodeGenerator<'a> {
       }
 
       Ty::Symbol(id) => {
-        if let Some(mangled) = self.get_mangled_name(id) {
-          mangled
+        let effective_id = self.get_effective_id(id);
+        let mangled = self.mono_symbol_table.mangled_names.get(&effective_id);
+        let Some(mangled) = mangled else {
+          return "/** ERR **/ void*".to_string();
+        };
+
+        if mangled.module_path.is_empty() {
+          mangled.base.clone()
         } else {
-          println!("{:?}", id);
-          format!("/* UnknownSymbol {:?} */ void*", id)
+          format!("{}_{}", mangled.module_path, mangled.base)
         }
       }
 
-      _ => "void*".to_string(),
+      _ => format!("/** {:?} **/ void*", ty),
     }
   }
 }

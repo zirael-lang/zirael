@@ -314,7 +314,15 @@ impl<'reports> TypeInference<'reports> {
         self.infer_generic_types(e_inner, a_inner, mapping);
       }
 
-      (Type::Id(id), _) | (_, Type::Id(id)) => {}
+      (Type::Id(id), actual_type) => {
+        let resolved_type = self.ty_id_to_type(*id);
+        self.infer_generic_types(&resolved_type, actual_type, mapping);
+      }
+
+      (expected_type, Type::Id(id)) => {
+        let resolved_type = self.ty_id_to_type(*id);
+        self.infer_generic_types(expected_type, &resolved_type, mapping);
+      }
 
       _ => {
         println!(

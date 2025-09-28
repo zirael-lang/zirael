@@ -1,6 +1,6 @@
 use crate::hir::{
-  ExprContext, HirBody, HirEnum, HirFunction, HirFunctionSignature, HirItem, HirItemKind,
-  HirModule, HirParam, HirStruct, HirTypeExtension, HirVariant,
+  ExprContext, HirBody, HirEnum, HirEnumVariantData, HirFunction, HirFunctionSignature, HirItem,
+  HirItemKind, HirModule, HirParam, HirStruct, HirStructField, HirTypeExtension, HirVariant,
   expr::{
     AccessKind, FieldSymbol, HirExpr, HirExprKind, HirMatchArm, HirPattern, HirPatternField,
     HirStmt,
@@ -8,6 +8,7 @@ use crate::hir::{
 };
 use id_arena::Arena;
 use std::collections::HashMap;
+use std::env::var;
 use zirael_parser::ty::{Ty, TyId};
 use zirael_parser::{ast::item::Item, *};
 use zirael_type_checker::{
@@ -326,28 +327,23 @@ impl<'reports, 'table> AstLowering<'reports, 'table> {
     }
   }
 
-  fn lower_methods(&mut self, methods: &mut Vec<Item>) -> Vec<HirItem> {
+  pub fn lower_methods(&mut self, methods: &mut Vec<Item>) -> Vec<HirItem> {
     methods.iter_mut().filter_map(|i| self.lower_item(i)).collect()
-  }
-
-  fn lower_enum(&mut self, enum_def: &mut EnumDeclaration, symbol_id: SymbolId) -> HirEnum {
-    HirEnum {
-      id: enum_def.id,
-      symbol_id,
-      methods: self.lower_methods(&mut enum_def.methods),
-      variants: enum_def
-        .variants
-        .iter_mut()
-        .map(|v| HirVariant { symbol_id: v.symbol_id.unwrap(), data: v.data.clone() })
-        .collect::<Vec<_>>(),
-    }
   }
 
   fn lower_struct(&mut self, struct_def: &mut StructDeclaration, symbol_id: SymbolId) -> HirStruct {
     HirStruct {
       id: struct_def.id,
       symbol_id,
-      fields: struct_def.fields.clone(),
+      fields: struct_def
+        .fields
+        .iter()
+        .map(|field| HirStructField {
+          name: field.name.clone(),
+          ty: self.symbol_table.intern_type(field.ty.clone()),
+        })
+        .collect::<Vec<_>>(),
+
       methods: self.lower_methods(&mut struct_def.methods),
     }
   }

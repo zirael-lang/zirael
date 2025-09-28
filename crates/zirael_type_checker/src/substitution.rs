@@ -1,7 +1,7 @@
 use crate::TypeInference;
-use crate::symbol_table::{MonomorphizedSymbol, TyId};
+use crate::symbol_table::TyId;
 use std::collections::HashMap;
-use zirael_parser::{GenericParameter, OriginalSymbolId, SymbolKind, Type};
+use zirael_parser::{GenericParameter, OriginalSymbolId, Type};
 use zirael_utils::ident_table::resolve;
 use zirael_utils::prelude::{Colorize, Identifier, ReportBuilder, ReportKind, debug};
 
@@ -37,6 +37,16 @@ impl<'reports> TypeInference<'reports> {
           self.substitute_type_with_map(generic, param_map);
         }
       }
+      Type::Variable { name, .. } => {
+        if let Some(concrete) = param_map.get(name) {
+          *ty = Type::Id(concrete.clone());
+        }
+      }
+      Type::Id(ty_id) => {
+        let mut inner_type = self.ty_id_to_type(*ty_id);
+        self.substitute_type_with_map(&mut inner_type, param_map);
+        *ty_id = self.sym_table.intern_type(inner_type);
+      }
       Type::Pointer(inner) => {
         self.substitute_type_with_map(inner, param_map);
       }
@@ -52,7 +62,9 @@ impl<'reports> TypeInference<'reports> {
         }
         self.substitute_type_with_map(return_type, param_map);
       }
-      _ => {}
+      _ => {
+        println!("{:?}", ty);
+      }
     };
 
     self.try_to_symbol(ty);
@@ -86,7 +98,12 @@ impl<'reports> TypeInference<'reports> {
 
         if let Some(symbol) = self.symbol_table.lookup_symbol(name) {
           if self.current_item.is_some() {
-            debug!("Adding relation: {:?} -> {:?} (name: {})", self.current_item.unwrap(), symbol.id, resolve(name));
+            debug!(
+              "Adding relation: {:?} -> {:?} (name: {})",
+              self.current_item.unwrap(),
+              symbol.id,
+              resolve(name)
+            );
             self.symbol_table.new_relation(
               OriginalSymbolId::Symbol(self.current_item.unwrap()),
               OriginalSymbolId::Symbol(symbol.canonical_symbol),

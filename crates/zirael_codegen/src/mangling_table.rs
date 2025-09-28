@@ -132,6 +132,10 @@ impl<'table, 'sources> ManglingTable<'table, 'sources> {
       GenericSymbolKind::Function { generics, .. } => generics,
       GenericSymbolKind::Struct { generics, .. } => generics,
       GenericSymbolKind::Enum { generics, .. } => generics,
+      GenericSymbolKind::EnumVariant { parent_enum, .. } => {
+        let parent = self.sym_table.get_generic_symbol(*parent_enum)?;
+        parent.generics()
+      }
       _ => return None,
     };
 
