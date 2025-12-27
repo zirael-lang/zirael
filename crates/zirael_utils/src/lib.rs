@@ -1,25 +1,18 @@
+mod arena;
 mod article;
-mod clap;
 mod cli;
-mod comp_info;
 pub mod dependency;
+mod diagnostics;
+mod enums;
 pub mod ident_table;
-mod lib_type;
-pub mod logger;
-mod mode;
 mod path;
 mod project_config;
-mod project_type;
-mod reports;
-pub mod sources;
+mod session;
 mod span;
-pub mod style;
 
 pub mod prelude {
-  pub use crate::{
-    article::*, cli::*, comp_info::*, ident_table::*, lib_type::*, logger::*, mode::*, path::*,
-    project_config::*, project_type::*, reports::*, sources::*, style::*, span::*
-  };
+  pub use crate::cli::*;
+  pub use crate::{article::*, ident_table::*, path::*, project_config::*, session::*, span::*};
   pub use anyhow::{Result, anyhow, bail};
   pub use ariadne::{Color, Label, Report, ReportKind, Source};
   pub use colored::Colorize;
@@ -27,7 +20,11 @@ pub mod prelude {
   pub use log::{debug, error, info, warn};
   pub use parking_lot::*;
   pub use rayon::prelude::*;
-  
+
+  pub use crate::arena::sources::*;
+  pub use crate::enums::lib_type::*;
+  pub use crate::enums::mode::*;
+  pub use crate::enums::project_type::*;
   pub use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,

@@ -20,7 +20,8 @@ once_cell = { workspace = true }
 parking_lot = { workspace = true }
 rayon = { workspace = true }
 serde = { workspace = true }
-id-arena = { workspace = true }
+generational-arena = { workspace = true }
+dashmap = { workspace = true }
 
 [lints]
 workspace = true

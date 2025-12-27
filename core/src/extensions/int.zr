@@ -2,3 +2,4 @@ extension int {
     fn abs(self): int {
         self < 0 ? -self : self
     }
+}

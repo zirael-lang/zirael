@@ -1,29 +1,49 @@
-mod expr;
-pub mod item;
-mod keyword;
-mod operator;
-mod path;
-mod stmt;
-mod types;
+pub mod import;
+pub mod items;
+pub mod generics;
+pub mod params;
+pub mod types;
+pub mod statements;
+pub mod identifier;
+pub mod expressions;
 
-pub use expr::*;
-pub use item::*;
-pub use keyword::*;
-pub use operator::*;
-pub use path::*;
-pub use stmt::*;
+pub use expressions::*;
+pub use generics::*;
+pub use identifier::*;
+pub use import::*;
+pub use items::*;
+pub use params::*;
+pub use statements::*;
 pub use types::*;
+use zirael_utils::prelude::Span;
+use crate::ast::expressions::Expr;
+use crate::ast::identifier::Ident;
+use crate::ast::import::ImportDecl;
+use crate::ast::items::Item;
 
-pub use crate::ast::item::Item;
-use std::fmt::Debug;
-
-#[derive(Clone, Debug)]
-pub struct Ast {
-  pub items: Vec<Item>,
+#[derive(Debug, Clone)]
+pub struct Attribute {
+    pub path: AttrPath,
+    pub args: Option<Vec<AttrArg>>,
+    pub span: Span,
 }
 
-impl Ast {
-  pub fn new(items: Vec<Item>) -> Self {
-    Self { items }
-  }
+#[derive(Debug, Clone)]
+pub struct AttrPath {
+    pub segments: Vec<Ident>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub enum AttrArg {
+    Named { name: Ident, value: Expr },
+    Positional(Expr),
+}
+
+#[derive(Debug, Clone)]
+pub struct ProgramNode {
+    pub attributes: Vec<Attribute>,
+    pub imports: Vec<ImportDecl>,
+    pub items: Vec<Item>,
+    pub span: Span,
 }

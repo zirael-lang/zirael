@@ -1,6 +1,6 @@
 use crate::compiler::{Compiler, CompilerKind};
 use anyhow::{Context as _, Result, anyhow};
-use log::debug;
+use log::{debug, warn};
 use std::{
   collections::HashMap,
   env,
@@ -39,12 +39,11 @@ pub fn detect_compiler() -> Result<Compiler> {
       debug!("Successfully detected GCC compiler as fallback");
       Ok(compiler)
     }
-    Err(e) => {
-      Err(anyhow!("No suitable C compiler found. Tried Clang, {}, and GCC. Last error: {}", 
-        if cfg!(windows) { "MSVC" } else { "system compilers" }, 
-        e
-      ))
-    }
+    Err(e) => Err(anyhow!(
+      "No suitable C compiler found. Tried Clang, {}, and GCC. Last error: {}",
+      if cfg!(windows) { "MSVC" } else { "system compilers" },
+      e
+    )),
   }
 }
 
@@ -53,8 +52,7 @@ fn detect_clang() -> Result<Compiler> {
 
   if let Ok(path) = which::which("clang") {
     debug!("Found Clang at: {}", path.display());
-    return Compiler::new(path, CompilerKind::Clang)
-        .context("Failed to initialize Clang compiler");
+    return Compiler::new(path, CompilerKind::Clang).context("Failed to initialize Clang compiler");
   }
 
   Err(anyhow!("Clang compiler not found in PATH"))
@@ -65,8 +63,7 @@ fn detect_gcc() -> Result<Compiler> {
 
   if let Ok(path) = which::which("gcc") {
     debug!("Found GCC at: {}", path.display());
-    return Compiler::new(path, CompilerKind::Gcc)
-        .context("Failed to initialize GCC compiler");
+    return Compiler::new(path, CompilerKind::Gcc).context("Failed to initialize GCC compiler");
   }
 
   Err(anyhow!("GCC compiler not found in PATH"))
@@ -87,12 +84,15 @@ fn detect_msvc_compiler() -> Result<Compiler> {
   ];
 
   let program_files = env::var("ProgramFiles")
-      .or_else(|_| env::var("ProgramFiles(x86)"))
-      .context("Could not find Program Files directory")?;
+    .or_else(|_| env::var("ProgramFiles(x86)"))
+    .context("Could not find Program Files directory")?;
   let vs_base = Path::new(&program_files).join("Microsoft Visual Studio");
 
   if !vs_base.exists() {
-    return Err(anyhow!("Microsoft Visual Studio installation directory not found at: {}", vs_base.display()));
+    return Err(anyhow!(
+      "Microsoft Visual Studio installation directory not found at: {}",
+      vs_base.display()
+    ));
   }
 
   for path in &msvc_paths {
@@ -107,10 +107,13 @@ fn detect_msvc_compiler() -> Result<Compiler> {
           match which::which("cl") {
             Ok(cl_path) => {
               return Compiler::new(cl_path, CompilerKind::Msvc)
-                  .context("Failed to initialize MSVC compiler");
+                .context("Failed to initialize MSVC compiler");
             }
             Err(e) => {
-              return Err(anyhow!("cl.exe not found in PATH after setting up MSVC environment: {}", e));
+              return Err(anyhow!(
+                "cl.exe not found in PATH after setting up MSVC environment: {}",
+                e
+              ));
             }
           }
         }
@@ -138,11 +141,11 @@ fn setup_msvc_environment(vcvars_path: &Path) -> Result<HashMap<String, String>>
   debug!("Executing MSVC setup command: {cmd_line}");
 
   let output = Command::new("cmd")
-      .args(["/C", &cmd_line])
-      .stdout(Stdio::piped())
-      .stderr(Stdio::piped())
-      .output()
-      .context("Failed to execute vcvars script")?;
+    .args(["/C", &cmd_line])
+    .stdout(Stdio::piped())
+    .stderr(Stdio::piped())
+    .output()
+    .context("Failed to execute vcvars script")?;
 
   debug!("MSVC setup stdout: {}", String::from_utf8_lossy(&output.stdout));
   debug!("MSVC setup stderr: {}", String::from_utf8_lossy(&output.stderr));
@@ -174,7 +177,9 @@ fn setup_msvc_environment(vcvars_path: &Path) -> Result<HashMap<String, String>>
 fn apply_env_vars(env_vars: &HashMap<String, String>) {
   for (key, value) in env_vars {
     #[expect(unsafe_code)]
-    unsafe { env::set_var(key, value) };
+    unsafe {
+      env::set_var(key, value)
+    };
   }
   debug!("Applied {} environment variables", env_vars.len());
 }
