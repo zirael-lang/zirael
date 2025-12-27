@@ -24,8 +24,11 @@ fmt:
     cargo fmt --all
     dprint fmt
 
-comp-run args='':
+playground args='':
     cargo run -p zirael playground/test.zr {{ args }} --name playground -o playground/build --type binary
 
 build-std args='':
     cargo run -p zirael std/src/lib.zr {{ args }} --name std -o std/build --type library
+
+check-std args='':
+    just build-std --check-only {{ args }}

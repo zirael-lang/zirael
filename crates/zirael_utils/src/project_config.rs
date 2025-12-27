@@ -42,3 +42,18 @@ pub struct CheckConfig {
   pub name: String,
   pub root: PathBuf,
 }
+
+impl CheckConfig {
+  pub fn from_cli(cli: Cli) -> anyhow::Result<Self> {
+    let root = current_dir()?;
+
+    Ok(Self {
+      entrypoint: cli.entrypoint,
+      project_type: cli.ty,
+      packages: cli.packages,
+      mode: cli.mode,
+      name: cli.name,
+      root,
+    })
+  }
+}

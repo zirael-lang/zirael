@@ -1,79 +1,95 @@
-use zirael_utils::prelude::*;
+use crate::ast::expressions::Expr;
+use crate::ast::import::Path;
+use zirael_utils::prelude::Span;
 
-use crate::ast::monomorphized_symbol::MonomorphizedSymbol;
-
-pub type TypeVarId = u32;
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone)]
 pub enum Type {
-  String,
-  Char,
-  Int,
-  Uint,
-  Float,
+  Primitive(PrimitiveType),
+  Path(TypePath),
+  Function(FunctionType),
+  Reference(ReferenceType),
+  Array(ArrayType),
+  Tuple(TupleType),
+  Unit(Span),
+}
+
+#[derive(Debug, Clone)]
+pub struct PrimitiveType {
+  pub kind: PrimitiveKind,
+  pub span: Span,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PrimitiveKind {
+  // Signed integers
+  I8,
+  I16,
+  I32,
+  I64,
+  I128,
+  ISize,
+
+  // Unsigned integers
+  U8,
+  U16,
+  U32,
+  U64,
+  U128,
+  USize,
+
+  // Floating point
+  F32,
+  F64,
+
+  // Other primitives
   Bool,
-  Void,
-  Never,
-  Pointer(Box<Type>),
-  Reference(Box<Type>),
-  Array(Box<Type>, Option<usize>),
-  Function { params: Vec<Type>, return_type: Box<Type> },
-  Named { name: Identifier, generics: Vec<Type> },
+  Char,
+}
 
-  MonomorphizedSymbol(MonomorphizedSymbol),
+#[derive(Debug, Clone)]
+pub struct TypePath {
+  pub path: Path,
+  pub args: Option<Vec<Type>>,
+  pub span: Span,
+}
 
-  Variable { id: usize, name: Identifier },
-  BoundedVariable { id: usize, name: Identifier, bounds: Vec<TraitBound> },
+#[derive(Debug, Clone)]
+pub struct FunctionType {
+  pub params: Vec<Type>,
+  pub return_type: Box<Type>,
+  pub span: Span,
+}
 
-  Inferred,
-  Error,
+#[derive(Debug, Clone)]
+pub struct ReferenceType {
+  pub is_mut: bool,
+  pub inner: Box<Type>,
+  pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct ArrayType {
+  pub element: Box<Type>,
+  pub size: Expr,
+  pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct TupleType {
+  pub elements: Vec<Type>,
+  pub span: Span,
 }
 
 impl Type {
-  pub fn is_numeric(&self) -> bool {
-    matches!(self, Self::Int | Self::Float | Self::Uint)
+  pub fn span(&self) -> Span {
+    match self {
+      Type::Primitive(p) => p.span,
+      Type::Path(p) => p.span,
+      Type::Function(f) => f.span,
+      Type::Reference(r) => r.span,
+      Type::Array(a) => a.span,
+      Type::Tuple(t) => t.span,
+      Type::Unit(s) => s.clone(),
+    }
   }
-
-  pub fn is_int(&self) -> bool {
-    matches!(self, Self::Int | Self::Uint)
-  }
-
-  pub fn is_float(&self) -> bool {
-    matches!(self, Self::Float)
-  }
-
-  pub fn is_reference(&self) -> bool {
-    matches!(self, Self::Reference(_))
-  }
-
-  pub fn is_primitive(&self) -> bool {
-    matches!(self, Self::String | Self::Char | Self::Int | Self::Uint | Self::Float | Self::Bool)
-  }
-  
-  pub fn is_bool(&self) -> bool {
-    matches!(self, Self::Bool)
-  }
-
-  pub fn is_never(&self) -> bool {
-    matches!(self, Self::Never)
-  }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct GenericParameter {
-  pub name: Identifier,
-  pub constraints: Vec<TraitBound>,
-  pub default_type: Option<Type>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct TraitBound {
-  pub name: Identifier,
-  pub generic_args: Vec<GenericArg>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum GenericArg {
-  Type(Type),
-  Named { name: Identifier, ty: Type },
 }

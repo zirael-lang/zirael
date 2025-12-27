@@ -1,16 +1,22 @@
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+use crate::arena::ArenaId;
+use crate::prelude::SourceFileId;
+use generational_arena::Index;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Span {
   pub start: usize,
   pub end: usize,
+
+  pub file_id: SourceFileId,
 }
 
 impl Span {
-  pub fn new(start: usize, end: usize) -> Self {
-    Self { start, end }
+  pub fn new(start: usize, end: usize, file_id: SourceFileId) -> Self {
+    Self { start, end, file_id }
   }
 
-  pub fn from_len(start: usize, len: usize) -> Self {
-    Self { start, end: start + len }
+  pub fn from_len(start: usize, len: usize, file_id: SourceFileId) -> Self {
+    Self { start, end: start + len, file_id }
   }
 
   pub fn len(&self) -> usize {
@@ -29,7 +35,7 @@ impl Span {
     let start = self.start.max(other.start);
     let end = self.end.min(other.end);
 
-    if start < end { Some(Self { start, end }) } else { None }
+    if start < end { Some(Self { start, end, file_id: self.file_id }) } else { None }
   }
 
   pub fn overlaps(&self, other: &Self) -> bool {
@@ -37,29 +43,27 @@ impl Span {
   }
 
   pub fn to_start(&self) -> Self {
-    Self::new(self.start, self.start + 1)
+    Self::new(self.start, self.start + 1, self.file_id)
   }
 
   pub fn to_end(&self) -> Self {
-    if self.end > 0 { Self::new(self.end - 1, self.end) } else { Self::new(self.end, self.end) }
+    if self.end > 0 {
+      Self::new(self.end - 1, self.end, self.file_id)
+    } else {
+      Self::new(self.end, self.end, self.file_id)
+    }
   }
 
   pub fn move_by(&self, offset: usize) -> Self {
-    Self::new(self.start + offset, self.end + offset)
+    Self::new(self.start + offset, self.end + offset, self.file_id)
   }
 
   pub fn move_back_by(&self, offset: usize) -> Self {
-    Self::new(self.start - offset, self.end - offset)
+    Self::new(self.start - offset, self.end - offset, self.file_id)
   }
 
   pub fn to(&self, other: Self) -> Self {
-    Self::new(self.start, other.end)
-  }
-}
-
-impl From<std::ops::Range<usize>> for Span {
-  fn from(range: std::ops::Range<usize>) -> Self {
-    Self { start: range.start, end: range.end }
+    Self::new(self.start, other.end, self.file_id)
   }
 }
 
@@ -80,5 +84,27 @@ impl Iterator for Span {
     } else {
       None
     }
+  }
+}
+
+impl Default for Span {
+  fn default() -> Self {
+    Self { start: 0, end: 0, file_id: SourceFileId(usize::MAX - 1) }
+  }
+}
+
+impl ariadne::Span for Span {
+  type SourceId = SourceFileId;
+
+  fn source(&self) -> &Self::SourceId {
+    &self.file_id
+  }
+
+  fn start(&self) -> usize {
+    self.start
+  }
+
+  fn end(&self) -> usize {
+    self.end
   }
 }
