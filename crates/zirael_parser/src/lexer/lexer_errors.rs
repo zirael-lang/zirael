@@ -1,6 +1,6 @@
 use std::fmt;
+use zirael_diagnostics::prelude::{Diag, DiagnosticLevel, Label, ToDiagnostic};
 use zirael_utils::prelude::Span;
-use zirael_utils::prelude::{Diag, DiagnosticLevel, Label, ToDiagnostic};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct LexError {

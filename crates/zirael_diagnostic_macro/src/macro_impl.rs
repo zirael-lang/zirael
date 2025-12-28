@@ -72,10 +72,10 @@ fn is_valid_label_severity(ident: &str) -> bool {
 
 fn get_diagnostic_level(severity: &str) -> proc_macro2::TokenStream {
   match severity.to_lowercase().as_str() {
-    "error" => quote! { DiagnosticLevel::Error },
-    "warning" => quote! { DiagnosticLevel::Warning },
-    "bug" => quote! { DiagnosticLevel::Bug },
-    _ => quote! { DiagnosticLevel::Error },
+    "error" => quote! { zirael_diagnostics::DiagnosticLevel::Error },
+    "warning" => quote! { zirael_diagnostics::DiagnosticLevel::Warning },
+    "bug" => quote! { zirael_diagnostics::DiagnosticLevel::Bug },
+    _ => quote! { zirael_diagnostics::DiagnosticLevel::Error },
   }
 }
 
@@ -222,20 +222,20 @@ fn impl_diagnostic_derive(ast: &DeriveInput) -> Result<TokenStream, MacroFunctio
 
     if message.is_empty() {
       quote! {
-        zirael_utils::prelude::Label::new(String::new(), self.#ident, #diagnostic_level)
+        zirael_diagnostics::Label::new(String::new(), self.#ident, #diagnostic_level)
       }
     } else if message_fields.is_empty() {
       quote! {
         {
           let message = format!(#message);
-          zirael_utils::prelude::Label::new(message, self.#ident, #diagnostic_level)
+          zirael_diagnostics::Label::new(message, self.#ident, #diagnostic_level)
         }
       }
     } else {
       quote! {
         {
           let message = format!(#message, #(#message_fields_for_quote),*);
-          zirael_utils::prelude::Label::new(message, self.#ident, #diagnostic_level)
+          zirael_diagnostics::Label::new(message, self.#ident, #diagnostic_level)
         }
       }
     }
@@ -308,11 +308,11 @@ fn impl_diagnostic_derive(ast: &DeriveInput) -> Result<TokenStream, MacroFunctio
 
   Ok(TokenStream::from(quote! {
       #[automatically_derived]
-      impl ToDiagnostic for #struct_name {
-          fn to_diagnostic(&self) -> Diag {
+        impl zirael_diagnostics::ToDiagnostic for #struct_name {
+          fn to_diagnostic(&self) -> zirael_diagnostics::Diag {
             #message_impl
 
-              Diag {
+            zirael_diagnostics::Diag {
                   message,
                   level: #diagnostic_level,
                   labels: vec![

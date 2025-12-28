@@ -1,12 +1,9 @@
-use crate::arena::{ArenaExt, ArenaId, GenArena};
 use ariadne::Source;
 use dashmap::DashMap;
 use dashmap::iter::Iter;
 use dashmap::mapref::one::Ref;
-use generational_arena::{Arena, Index};
-use parking_lot::RwLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::{borrow::Cow, collections::HashMap, path::PathBuf, sync::Arc};
+use std::path::PathBuf;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct SourceFileId(pub usize);

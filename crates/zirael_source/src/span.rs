@@ -1,6 +1,4 @@
-use crate::arena::ArenaId;
-use crate::prelude::SourceFileId;
-use generational_arena::Index;
+use crate::arena::sources::SourceFileId;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Span {

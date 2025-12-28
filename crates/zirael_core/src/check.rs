@@ -3,9 +3,7 @@ use anyhow::Result;
 use anyhow::bail;
 use std::path::PathBuf;
 use zirael_utils::context::Context;
-use zirael_utils::prelude::{
-  CheckConfig, Diag, DiagnosticLevel, PackageType, Session, SourceFile, info,
-};
+use zirael_utils::prelude::{CheckConfig, PackageType, Session, SourceFile, info};
 
 pub fn check_project(config: &CheckConfig) -> Result<()> {
   let sess = Session::new(config.clone());

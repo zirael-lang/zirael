@@ -1,0 +1,16 @@
+[package]
+name = "zirael_source"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Zirael shared source/span utilities"
+
+[dependencies]
+ariadne = { workspace = true }
+dashmap = { workspace = true }
+generational-arena = { workspace = true }
+parking_lot = { workspace = true }
+
+[lints]
+workspace = true

@@ -1,6 +1,3 @@
-use crate::arena::{ArenaExt, ArenaId, GenArena};
-use crate::prelude::{SourceFileId, Sources};
-use crate::span::Span;
 use anyhow::Result;
 use ariadne::{Cache, Color, Report, ReportKind, Source};
 use dashmap::DashSet;
@@ -9,6 +6,9 @@ use parking_lot::RwLock;
 use std::fmt::{Debug, Display};
 use std::io::stderr;
 use std::sync::Arc;
+use zirael_source::arena::{ArenaExt, ArenaId, GenArena};
+use zirael_source::arena::sources::{SourceFileId, Sources};
+use zirael_source::span::Span;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct DiagnosticId(pub Index);
@@ -120,6 +120,8 @@ pub struct DiagnosticCtx {
   sources: Sources,
 }
 
+pub struct SourcesCache<'a>(pub &'a Sources);
+
 impl GenArena<Diagnostic> for Arena<Diagnostic> {
   fn arena(&self) -> &Arena<Diagnostic> {
     &self
@@ -174,7 +176,7 @@ impl DiagnosticCtx {
     for note in &diagnostic.notes {
       report.add_note(note);
     }
-    
+
     for help in &diagnostic.helps {
       report.add_help(help);
     }
@@ -184,15 +186,16 @@ impl DiagnosticCtx {
       arena.get_mut(id.index()).take();
     });
 
-    report.write(&self.sources, &mut writer).expect("");
+    let mut cache = SourcesCache(&self.sources);
+    report.write(&mut cache, &mut writer).expect("");
   }
 }
 
-impl Cache<SourceFileId> for &Sources {
+impl Cache<SourceFileId> for SourcesCache<'_> {
   type Storage = String;
 
   fn fetch(&mut self, id: &SourceFileId) -> Result<&Source<Self::Storage>, impl Debug> {
-    if let Some(source_file) = self.get(*id) {
+    if let Some(source_file) = self.0.get(*id) {
       let content = source_file.value().content().clone();
       Ok(Box::leak(Box::new(content)))
     } else {
@@ -201,7 +204,7 @@ impl Cache<SourceFileId> for &Sources {
   }
 
   fn display<'b>(&self, id: &'b SourceFileId) -> Option<impl Display + 'b> {
-    let path = self.get_unchecked(*id);
+    let path = self.0.get_unchecked(*id);
     Some(format!("{}", path.value().path().display()))
   }
 }

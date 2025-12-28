@@ -1,0 +1,18 @@
+[package]
+name = "zirael_diagnostics"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Zirael diagnostics"
+
+[dependencies]
+anyhow = { workspace = true }
+ariadne = { workspace = true }
+dashmap = { workspace = true }
+generational-arena = { workspace = true }
+parking_lot = { workspace = true }
+zirael_source = { workspace = true }
+
+[lints]
+workspace = true

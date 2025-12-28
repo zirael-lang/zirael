@@ -9,6 +9,7 @@ description = "Zirael Core"
 [dependencies]
 zirael_parser = { workspace = true }
 zirael_utils = { workspace = true }
+zirael_diagnostics = { workspace = true }
 anyhow = { workspace = true }
 zirael_c_compiler = { workspace = true }
 fs-err = { workspace = true }

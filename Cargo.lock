@@ -963,6 +963,7 @@ name = "zirael"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "zirael_cli",
  "zirael_core",
 ]
 
@@ -981,12 +982,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "zirael_cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "colored",
+ "env_logger",
+ "log",
+ "zirael_utils",
+]
+
+[[package]]
 name = "zirael_core"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "fs-err",
  "zirael_c_compiler",
+ "zirael_diagnostics",
  "zirael_parser",
  "zirael_utils",
 ]
@@ -999,6 +1013,19 @@ dependencies = [
  "quote",
  "syn",
  "thiserror",
+ "zirael_diagnostics",
+]
+
+[[package]]
+name = "zirael_diagnostics"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "ariadne",
+ "dashmap 7.0.0-rc2",
+ "generational-arena",
+ "parking_lot",
+ "zirael_source",
 ]
 
 [[package]]
@@ -1007,7 +1034,19 @@ version = "0.1.0"
 dependencies = [
  "unicode-normalization",
  "unicode-xid",
+ "zirael_diagnostic_macro",
+ "zirael_diagnostics",
  "zirael_utils",
+]
+
+[[package]]
+name = "zirael_source"
+version = "0.1.0"
+dependencies = [
+ "ariadne",
+ "dashmap 7.0.0-rc2",
+ "generational-arena",
+ "parking_lot",
 ]
 
 [[package]]
@@ -1016,11 +1055,8 @@ version = "0.1.0"
 dependencies = [
  "anstyle",
  "anyhow",
- "ariadne",
- "clap",
  "colored",
  "dashmap 7.0.0-rc2",
- "env_logger",
  "fs-err",
  "generational-arena",
  "lasso",
@@ -1029,4 +1065,6 @@ dependencies = [
  "parking_lot",
  "rayon",
  "serde",
+ "zirael_diagnostics",
+ "zirael_source",
 ]

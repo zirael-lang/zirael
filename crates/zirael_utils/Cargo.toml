@@ -9,7 +9,6 @@ description = "Zirael Utils"
 [dependencies]
 anstyle = { workspace = true }
 anyhow = { workspace = true }
-ariadne = { workspace = true }
 colored = { workspace = true }
 fs-err = { workspace = true }
 lasso = { workspace = true }
@@ -20,6 +19,8 @@ rayon = { workspace = true }
 serde = { workspace = true }
 generational-arena = { workspace = true }
 dashmap = { workspace = true }
+zirael_source = { workspace = true }
+zirael_diagnostics = { workspace = true }
 
 [lints]
 workspace = true

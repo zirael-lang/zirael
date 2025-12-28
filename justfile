@@ -30,5 +30,5 @@ playground args='':
 build-std args='':
     cargo run -p zirael std/src/lib.zr {{ args }} --name std -o std/build --type library
 
-check-std args='':
-    just build-std --check-only {{ args }}
+check-playground args='':
+    cargo run -p zirael playground/src/index.zr {{ args }} --name std -o playground/build --type library

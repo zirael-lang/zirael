@@ -1,5 +1,5 @@
-use crate::prelude::DiagnosticCtx;
 use crate::project_config::CheckConfig;
+use zirael_diagnostics::DiagnosticCtx;
 
 #[derive(Debug)]
 /// Struct that holds information about current package
