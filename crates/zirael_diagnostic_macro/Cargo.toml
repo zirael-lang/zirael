@@ -11,3 +11,4 @@ proc-macro2 = "1.0.94"
 quote = "1.0.40"
 syn = { version = "2.0.100", features = ["extra-traits"] }
 thiserror = { workspace = true }
+zirael_utils = { workspace = true }

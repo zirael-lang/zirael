@@ -1,5 +1,6 @@
 use std::fmt;
 use zirael_utils::prelude::Span;
+use zirael_utils::prelude::{Diag, DiagnosticLevel, Label, ToDiagnostic};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct LexError {
@@ -119,9 +120,6 @@ impl LexError {
       LexErrorKind::InvalidEscape { escape } if escape.starts_with("\\x") => {
         Some("Hex escapes must have exactly 2 hex digits: \\xXX".to_string())
       }
-      LexErrorKind::UnterminatedString => {
-        Some("add closing quote (\") to terminate string".to_string())
-      }
       LexErrorKind::UnterminatedChar => {
         Some("add closing quote (') to terminate character literal".to_string())
       }
@@ -137,23 +135,28 @@ impl LexError {
 }
 
 impl fmt::Display for LexError {
-  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     write!(f, "{}", self.message())
   }
 }
 
 impl std::error::Error for LexError {}
 
-pub type LexResult<T> = Result<T, LexError>;
-
-impl From<&LexError> for Diagnostic {
-  fn from(error: &LexError) -> Self {
-    let mut diag = Diagnostic::error(error.message(), error.span);
-
-    if let Some(help) = error.help() {
-      diag = diag.with_note(help);
+impl ToDiagnostic for LexError {
+  fn to_diagnostic(&self) -> Diag {
+    let mut helps = Vec::new();
+    if let Some(help) = self.help() {
+      helps.push(help);
     }
 
-    diag
+    Diag {
+      message: self.message(),
+      level: DiagnosticLevel::Error,
+      labels: vec![Label::new(self.label(), self.span, DiagnosticLevel::Error)],
+      notes: Vec::new(),
+      helps,
+    }
   }
 }
+
+pub type LexResult<T> = Result<T, LexError>;

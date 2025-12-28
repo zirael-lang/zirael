@@ -14,12 +14,22 @@ pub enum MacroFunctionError {
 }
 
 const VALID_SEVERITIES: &[&str] = &["help", "warning", "error", "bug", "note"];
+const VALID_LABEL_SEVERITIES: &[&str] = &["error", "warning", "help"];
 
-fn get_string_literal(expr: &Expr) -> Result<String, MacroFunctionError> {
+fn is_span_type(ty: &syn::Type) -> bool {
+  match ty {
+    syn::Type::Path(type_path) => {
+      type_path.path.segments.last().map(|seg| seg.ident == "Span").unwrap_or(false)
+    }
+    _ => false,
+  }
+}
+
+fn get_lit_str(expr: &Expr) -> Result<syn::LitStr, MacroFunctionError> {
   match expr {
     Expr::Lit(expr_lit) => {
       if let syn::Lit::Str(lit_str) = &expr_lit.lit {
-        Ok(lit_str.value())
+        Ok(lit_str.clone())
       } else {
         Err(MacroFunctionError::InvalidAttribute("Message must be a string literal".to_string()))
       }
@@ -28,25 +38,60 @@ fn get_string_literal(expr: &Expr) -> Result<String, MacroFunctionError> {
   }
 }
 
+fn collect_struct_messages(
+  ast: &DeriveInput,
+  attr_name: &str,
+) -> Result<Vec<syn::LitStr>, MacroFunctionError> {
+  let mut out = Vec::new();
+
+  for attr in &ast.attrs {
+    let is_match = attr.path().segments.last().map(|seg| seg.ident == attr_name).unwrap_or(false);
+
+    if !is_match {
+      continue;
+    }
+
+    let expr = attr.parse_args::<Expr>()?;
+    out.push(get_lit_str(&expr)?);
+  }
+
+  Ok(out)
+}
+
+fn get_string_literal(expr: &Expr) -> Result<String, MacroFunctionError> {
+  Ok(get_lit_str(expr)?.value())
+}
+
 fn is_valid_severity(ident: &str) -> bool {
   VALID_SEVERITIES.contains(&ident.to_lowercase().as_str())
 }
 
-fn get_label_style(severity: &str) -> proc_macro2::TokenStream {
+fn is_valid_label_severity(ident: &str) -> bool {
+  VALID_LABEL_SEVERITIES.contains(&ident.to_lowercase().as_str())
+}
+
+fn get_diagnostic_level(severity: &str) -> proc_macro2::TokenStream {
   match severity.to_lowercase().as_str() {
-    "error" => quote! { LabelStyle::Error },
-    "warning" => quote! { LabelStyle::Warning },
-    "note" => quote! { LabelStyle::Note },
-    "help" => quote! { LabelStyle::Help },
-    _ => quote! { LabelStyle::Primary },
+    "error" => quote! { DiagnosticLevel::Error },
+    "warning" => quote! { DiagnosticLevel::Warning },
+    "bug" => quote! { DiagnosticLevel::Bug },
+    _ => quote! { DiagnosticLevel::Error },
   }
 }
 
-fn to_pascal_case(s: &str) -> String {
-  let mut result = String::with_capacity(s.len());
-  result.push_str(&s[..1].to_uppercase());
-  result.push_str(&s[1..]);
-  result
+fn get_help_fields(fields: &syn::FieldsNamed) -> Vec<&syn::Ident> {
+  fields
+    .named
+    .iter()
+    .filter_map(|field| {
+      let has_help = field
+        .attrs
+        .iter()
+        .any(|attr| attr.path().segments.last().map(|seg| seg.ident == "help").unwrap_or(false));
+
+      if has_help { field.ident.as_ref() } else { None }
+    })
+    .collect()
 }
 
 pub fn macro_derive_impl(item: TokenStream) -> TokenStream {
@@ -63,6 +108,10 @@ pub fn macro_derive_impl(item: TokenStream) -> TokenStream {
 fn impl_diagnostic_derive(ast: &DeriveInput) -> Result<TokenStream, MacroFunctionError> {
   let struct_name = &ast.ident;
 
+  let struct_note_messages = collect_struct_messages(ast, "note")?;
+  let struct_help_messages = collect_struct_messages(ast, "help")?;
+
+  // Find the main diagnostic attribute (#[error], #[warning], or #[bug])
   let diagnostic_attr = ast
     .attrs
     .iter()
@@ -71,16 +120,16 @@ fn impl_diagnostic_derive(ast: &DeriveInput) -> Result<TokenStream, MacroFunctio
         .path()
         .segments
         .last()
-        .map(|seg| is_valid_severity(&seg.ident.to_string()))
+        .map(|seg| {
+          let ident = seg.ident.to_string();
+          ident == "error" || ident == "warning" || ident == "bug"
+        })
         .unwrap_or(false)
     })
     .ok_or(MacroFunctionError::MissingAttribute)?;
 
   let severity = diagnostic_attr.path().segments.last().unwrap().ident.to_string().to_lowercase();
-
-  let severity_variant = to_pascal_case(&severity);
-
-  let error_string = get_string_literal(&diagnostic_attr.parse_args::<Expr>()?)?;
+  let error_message = get_string_literal(&diagnostic_attr.parse_args::<Expr>()?)?;
 
   let fields = match &ast.data {
     syn::Data::Struct(data) => match &data.fields {
@@ -114,6 +163,8 @@ fn impl_diagnostic_derive(ast: &DeriveInput) -> Result<TokenStream, MacroFunctio
     })
     .collect();
 
+  let message_fields_for_quote = &message_fields;
+
   // Fields with #[note] attribute
   let note_fields: Vec<_> = fields
     .named
@@ -128,20 +179,28 @@ fn impl_diagnostic_derive(ast: &DeriveInput) -> Result<TokenStream, MacroFunctio
     })
     .collect();
 
-  // Fields with severity attributes (span labels)
-  let span_fields: Vec<_> = fields
+  // Fields with #[help] attribute
+  let help_fields = get_help_fields(fields);
+
+  // Additional label fields (secondary spans)
+  let label_fields: Vec<_> = fields
     .named
     .iter()
     .filter_map(|field| {
+      if !is_span_type(&field.ty) {
+        return None;
+      }
+
       let attr = field.attrs.iter().find(|attr| {
         attr
           .path()
           .segments
           .last()
-          .map(|seg| is_valid_severity(&seg.ident.to_string()))
+          .map(|seg| is_valid_label_severity(&seg.ident.to_string()))
           .unwrap_or(false)
       })?;
 
+      let field_ident = field.ident.as_ref()?;
       let severity = attr.path().segments.last().unwrap().ident.to_string().to_lowercase();
 
       let message = attr
@@ -150,7 +209,7 @@ fn impl_diagnostic_derive(ast: &DeriveInput) -> Result<TokenStream, MacroFunctio
         .and_then(|expr| get_string_literal(&expr).ok())
         .unwrap_or_default();
 
-      Some((field.ident.clone(), message, severity))
+      Some((field_ident.clone(), message, severity))
     })
     .collect();
 
@@ -158,25 +217,27 @@ fn impl_diagnostic_derive(ast: &DeriveInput) -> Result<TokenStream, MacroFunctio
     quote! { let #ident = &self.#ident; }
   });
 
-  let label_implementations = span_fields.iter().map(|(field_ident, message, severity)| {
-    let ident = field_ident.as_ref().unwrap();
-    let label_style = get_label_style(severity);
-    let message_field_refs_clone = message_fields.iter().map(|&msg_ident| {
-      quote! { let #msg_ident = &self.#msg_ident; }
-    });
+  let label_implementations = label_fields.iter().map(|(ident, message, severity)| {
+    let diagnostic_level = get_diagnostic_level(severity);
 
-    quote! {
+    if message.is_empty() {
+      quote! {
+        zirael_utils::prelude::Label::new(String::new(), self.#ident, #diagnostic_level)
+      }
+    } else if message_fields.is_empty() {
+      quote! {
         {
-            #(#message_field_refs_clone)*
-            let message = format!(#message);
-
-            Label::new(
-                #label_style,
-                self.#ident.1,
-                self.#ident.0.range()
-            )
-            .with_message(message)
+          let message = format!(#message);
+          zirael_utils::prelude::Label::new(message, self.#ident, #diagnostic_level)
         }
+      }
+    } else {
+      quote! {
+        {
+          let message = format!(#message, #(#message_fields_for_quote),*);
+          zirael_utils::prelude::Label::new(message, self.#ident, #diagnostic_level)
+        }
+      }
     }
   });
 
@@ -188,35 +249,78 @@ fn impl_diagnostic_derive(ast: &DeriveInput) -> Result<TokenStream, MacroFunctio
     quote! { #ident.to_string() }
   });
 
-  let severity_ident = syn::Ident::new(&severity_variant, proc_macro2::Span::call_site());
+  let help_field_refs = help_fields.iter().map(|&ident| {
+    quote! { let #ident = &self.#ident; }
+  });
+
+  let help_strings = help_fields.iter().map(|&ident| {
+    quote! { #ident.to_string() }
+  });
+
+  let struct_note_pushes = struct_note_messages.iter().map(|lit| {
+    quote! { notes.push(#lit.to_string()); }
+  });
+
+  let struct_help_pushes = struct_help_messages.iter().map(|lit| {
+    quote! { helps.push(#lit.to_string()); }
+  });
+
+  let diagnostic_level = get_diagnostic_level(&severity);
+
+  let notes_impl = if note_fields.is_empty() && struct_note_messages.is_empty() {
+    quote! { Vec::new() }
+  } else {
+    quote! {
+      {
+        #(#note_field_refs)*
+        let mut notes = Vec::new();
+        #(#struct_note_pushes)*
+        #(notes.push(#note_strings);)*
+        notes
+      }
+    }
+  };
+
+  let helps_impl = if help_fields.is_empty() && struct_help_messages.is_empty() {
+    quote! { Vec::new() }
+  } else {
+    quote! {
+      {
+        #(#help_field_refs)*
+        let mut helps = Vec::new();
+        #(#struct_help_pushes)*
+        #(helps.push(#help_strings);)*
+        helps
+      }
+    }
+  };
+
+  let message_impl = if message_fields.is_empty() {
+    quote! {
+      let message = format!(#error_message);
+    }
+  } else {
+    quote! {
+      #(#message_field_refs)*
+      let message = format!(#error_message, #(#message_fields_for_quote),*);
+    }
+  };
 
   Ok(TokenStream::from(quote! {
       #[automatically_derived]
       impl ToDiagnostic for #struct_name {
-          fn message(&self) -> String {
-              #(#message_field_refs)*
-              format!(#error_string)
-          }
+          fn to_diagnostic(&self) -> Diag {
+            #message_impl
 
-          fn labels(&self) -> Vec<Label<usize>> {
-              vec![
-                  #(#label_implementations,)*
-              ]
-          }
-
-          fn severity(&self) -> Severity {
-              Severity::#severity_ident
-          }
-
-          fn code(&self) -> Option<String> {
-              None
-          }
-
-          fn notes(&self) -> Vec<String> {
-              #(#note_field_refs)*
-              vec![
-                  #(#note_strings,)*
-              ]
+              Diag {
+                  message,
+                  level: #diagnostic_level,
+                  labels: vec![
+                      #(#label_implementations,)*
+                  ],
+                  notes: #notes_impl,
+                  helps: #helps_impl
+              }
           }
       }
   }))

@@ -36,7 +36,7 @@ pub struct Diag {
   pub level: DiagnosticLevel,
   pub labels: Vec<Label>,
   pub notes: Vec<String>,
-  pub span: Span,
+  pub helps: Vec<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -165,11 +165,7 @@ impl DiagnosticCtx {
 
     let mut writer = stderr();
     let mut report =
-      Report::build(diagnostic.level.severity(), diagnostic.span).with_message(&diagnostic.message);
-
-    report = report.with_label(
-      Label::new(diagnostic.message.clone(), diagnostic.span, diagnostic.level).ariadne_label(),
-    );
+      Report::build(diagnostic.level.severity(), Span::default()).with_message(&diagnostic.message);
 
     for label in &diagnostic.labels {
       report.add_label(label.ariadne_label());
@@ -177,6 +173,10 @@ impl DiagnosticCtx {
 
     for note in &diagnostic.notes {
       report.add_note(note);
+    }
+    
+    for help in &diagnostic.helps {
+      report.add_help(help);
     }
 
     let report = report.finish();

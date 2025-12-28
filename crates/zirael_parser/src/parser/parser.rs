@@ -1,5 +1,4 @@
 use crate::lexer::{Token, TokenType};
-use compiler_utils::{Diagnostic, Span};
 use std::fmt;
 use zirael_utils::prelude::Span;
 
@@ -32,21 +31,6 @@ impl fmt::Display for ParserError {
 }
 
 impl std::error::Error for ParserError {}
-
-impl From<ParserError> for Diagnostic {
-  fn from(error: ParserError) -> Self {
-    let diag = Diagnostic::error(error.message, error.span);
-
-    match error.kind {
-      ParserErrorKind::UnexpectedEof => diag.with_note("unexpected end of file while parsing"),
-      ParserErrorKind::ExpectedExpression => diag.with_note("expected an expression here"),
-      ParserErrorKind::ExpectedStatement => diag.with_note("expected a statement here"),
-      ParserErrorKind::ExpectedType => diag.with_note("expected a type annotation here"),
-      ParserErrorKind::ExpectedIdentifier => diag.with_note("expected an identifier here"),
-      _ => diag,
-    }
-  }
-}
 
 pub struct Parser {
   tokens: Vec<Token>,

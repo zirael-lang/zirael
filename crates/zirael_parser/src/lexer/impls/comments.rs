@@ -2,7 +2,7 @@ use crate::lexer::lexer::Lexer;
 use crate::lexer::lexer_errors::{LexError, LexErrorKind};
 use crate::lexer::tokens::{Token, TokenType};
 
-impl Lexer {
+impl<'ctx> Lexer<'ctx> {
     pub(crate) fn skip_line_comment(&mut self) {
         self.advance();
         self.advance();

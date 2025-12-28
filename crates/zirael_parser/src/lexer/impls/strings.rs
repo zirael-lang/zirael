@@ -2,7 +2,7 @@ use crate::lexer::lexer::Lexer;
 use crate::lexer::lexer_errors::{LexError, LexErrorKind, LexResult};
 use crate::lexer::tokens::{Token, TokenType};
 
-impl Lexer {
+impl<'ctx> Lexer<'ctx> {
     pub(crate) fn lex_string(&mut self) -> LexResult<Token> {
         let start_offset = self.offset;
         let mut value = String::new();
