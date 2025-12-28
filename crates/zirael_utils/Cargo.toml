@@ -10,9 +10,7 @@ description = "Zirael Utils"
 anstyle = { workspace = true }
 anyhow = { workspace = true }
 ariadne = { workspace = true }
-clap = { workspace = true }
 colored = { workspace = true }
-env_logger = { workspace = true }
 fs-err = { workspace = true }
 lasso = { workspace = true }
 log = { workspace = true }

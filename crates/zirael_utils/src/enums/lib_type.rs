@@ -1,7 +1,6 @@
-use clap::ValueEnum;
 use std::fmt::Display;
 
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum LibType {
   Static,
   Dynamic,

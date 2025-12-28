@@ -1,0 +1,18 @@
+[package]
+name = "zirael_cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Zirael CLI support"
+
+[dependencies]
+anyhow = { workspace = true }
+clap = { workspace = true }
+env_logger = { workspace = true }
+log = { workspace = true }
+colored = { workspace = true }
+zirael_utils = { workspace = true }
+
+[lints]
+workspace = true

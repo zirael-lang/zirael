@@ -3,17 +3,12 @@ use anyhow::Result;
 use anyhow::bail;
 use std::path::PathBuf;
 use zirael_utils::context::Context;
-use zirael_utils::prelude::{CheckConfig, PackageType, Session, SourceFile, info, Diag, DiagnosticLevel};
+use zirael_utils::prelude::{
+  CheckConfig, Diag, DiagnosticLevel, PackageType, Session, SourceFile, info,
+};
 
 pub fn check_project(config: &CheckConfig) -> Result<()> {
   let sess = Session::new(config.clone());
-  sess.dcx().add(Diag {
-    message: "Hello!".to_string(),
-    level: DiagnosticLevel::Error,
-    labels: vec![],
-    helps: vec![],
-    notes: vec![]
-  });
   let context = &mut Context::new(&sess);
 
   let file = &config.entrypoint;

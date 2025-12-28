@@ -1,6 +1,6 @@
+use colored::Colorize;
 use log::LevelFilter;
 use std::fmt::Display;
-use colored::Colorize;
 
 pub fn setup_logger(verbose: bool, test_logger: bool) {
   let level = if verbose { LevelFilter::Debug } else { LevelFilter::Info };
@@ -42,7 +42,6 @@ pub fn setup_logger(verbose: bool, test_logger: bool) {
 
   builder.init();
 }
-
 
 pub trait FormatExt: Display {
   fn output_val(&self) -> String;
