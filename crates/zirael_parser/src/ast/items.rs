@@ -5,10 +5,12 @@ use crate::ast::identifier::Ident;
 use crate::ast::params::Param;
 use crate::ast::statements::Block;
 use crate::ast::types::{Type, TypePath};
+use crate::ast::NodeId;
 use zirael_utils::prelude::Span;
 
 #[derive(Debug, Clone)]
 pub struct Item {
+  pub id: NodeId,
   pub attributes: Vec<Attribute>,
   pub visibility: Visibility,
   pub kind: ItemKind,
@@ -33,6 +35,7 @@ pub enum ItemKind {
 
 #[derive(Debug, Clone)]
 pub struct ConstItem {
+  pub id: NodeId,
   pub name: Ident,
   pub ty: Type,
   pub value: Expr,
@@ -41,6 +44,7 @@ pub struct ConstItem {
 
 #[derive(Debug, Clone)]
 pub struct FunctionItem {
+  pub id: NodeId,
   pub is_const: bool,
   pub name: Ident,
   pub generics: Option<GenericParams>,
@@ -52,6 +56,7 @@ pub struct FunctionItem {
 
 #[derive(Debug, Clone)]
 pub struct StructItem {
+  pub id: NodeId,
   pub name: Ident,
   pub generics: Option<GenericParams>,
   pub members: Vec<StructMember>,
@@ -66,6 +71,7 @@ pub enum StructMember {
 
 #[derive(Debug, Clone)]
 pub struct StructField {
+  pub id: NodeId,
   pub attributes: Vec<Attribute>,
   pub visibility: Visibility,
   pub name: Ident,
@@ -75,6 +81,7 @@ pub struct StructField {
 
 #[derive(Debug, Clone)]
 pub struct MethodItem {
+  pub id: NodeId,
   pub attributes: Vec<Attribute>,
   pub visibility: Visibility,
   pub name: Ident,
@@ -86,6 +93,7 @@ pub struct MethodItem {
 
 #[derive(Debug, Clone)]
 pub struct EnumItem {
+  pub id: NodeId,
   pub name: Ident,
   pub generics: Option<GenericParams>,
   pub variants: Vec<Variant>,
@@ -94,6 +102,7 @@ pub struct EnumItem {
 
 #[derive(Debug, Clone)]
 pub struct Variant {
+  pub id: NodeId,
   pub attributes: Vec<Attribute>,
   pub name: Ident,
   pub payload: Option<VariantPayload>,
@@ -114,6 +123,7 @@ pub enum VariantField {
 
 #[derive(Debug, Clone)]
 pub struct InterfaceItem {
+  pub id: NodeId,
   pub name: Ident,
   pub generics: Option<GenericParams>,
   pub members: Vec<InterfaceMember>,
@@ -128,6 +138,7 @@ pub enum InterfaceMember {
 
 #[derive(Debug, Clone)]
 pub struct InterfaceMethod {
+  pub id: NodeId,
   pub name: Ident,
   pub params: Vec<Param>,
   pub return_type: Option<Type>,
@@ -136,12 +147,14 @@ pub struct InterfaceMethod {
 
 #[derive(Debug, Clone)]
 pub struct AssociatedType {
+  pub id: NodeId,
   pub name: Ident,
   pub span: Span,
 }
 
 #[derive(Debug, Clone)]
 pub struct ImplItem {
+  pub id: NodeId,
   pub generics: Option<GenericParams>,
   pub interface_ref: Option<TypePath>,
   pub target_type: Type,
@@ -158,6 +171,7 @@ pub enum ImplMember {
 
 #[derive(Debug, Clone)]
 pub struct InterfaceMethodImpl {
+  pub id: NodeId,
   pub name: Ident,
   pub params: Vec<Param>,
   pub return_type: Option<Type>,
@@ -167,6 +181,7 @@ pub struct InterfaceMethodImpl {
 
 #[derive(Debug, Clone)]
 pub struct AssociatedTypeImpl {
+  pub id: NodeId,
   pub name: Ident,
   pub ty: Type,
   pub span: Span,

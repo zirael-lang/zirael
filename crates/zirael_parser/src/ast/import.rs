@@ -1,8 +1,10 @@
 use zirael_utils::prelude::Span;
 use crate::ast::identifier::Ident;
+use crate::ast::NodeId;
 
 #[derive(Debug, Clone)]
 pub struct ImportDecl {
+  pub id: NodeId,
   pub path: Path,
   pub tail: Option<ImportTail>,
   pub span: Span,
@@ -16,6 +18,7 @@ pub enum ImportTail {
 
 #[derive(Debug, Clone)]
 pub struct ImportSpec {
+  pub id: NodeId,
   pub name: ImportName,
   pub alias: Option<Ident>,
   pub span: Span,
@@ -29,6 +32,7 @@ pub enum ImportName {
 
 #[derive(Debug, Clone)]
 pub struct Path {
+  pub id: NodeId,
   pub root: Option<PathRoot>,
   pub segments: Vec<Ident>,
   pub span: Span,

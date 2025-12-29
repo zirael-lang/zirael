@@ -1,6 +1,7 @@
 use crate::ast::expressions::Expr;
 use crate::ast::identifier::Ident;
 use crate::ast::types::Type;
+use crate::ast::NodeId;
 use zirael_utils::prelude::Span;
 
 #[derive(Debug, Clone)]
@@ -12,6 +13,7 @@ pub enum Param {
 
 #[derive(Debug, Clone)]
 pub struct SelfParam {
+  pub id: NodeId,
   pub kind: SelfKind,
   pub span: Span,
 }
@@ -26,6 +28,7 @@ pub enum SelfKind {
 
 #[derive(Debug, Clone)]
 pub struct RegularParam {
+  pub id: NodeId,
   pub name: Ident,
   pub ty: Type,
   pub default: Option<Expr>,
@@ -34,6 +37,7 @@ pub struct RegularParam {
 
 #[derive(Debug, Clone)]
 pub struct VariadicParam {
+  pub id: NodeId,
   pub name: Ident,
   pub ty: Type,
   pub span: Span,

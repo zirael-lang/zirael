@@ -1,4 +1,4 @@
-use crate::ast::{AttrArg, AttrPath, Attribute};
+use crate::ast::{AttrArg, AttrPath, Attribute, NodeId};
 use crate::identifier::Ident;
 use crate::lexer::TokenType;
 use crate::parser::{ParseResult, Parser, ParserError, ParserErrorKind};
@@ -36,6 +36,7 @@ impl Parser {
         self.expect(TokenType::RightBracket, "to close attribute")?;
 
         Ok(Attribute {
+            id: NodeId::new(),
             path,
             args,
             span: self.span_from(start),
@@ -53,6 +54,7 @@ impl Parser {
         }
 
         Ok(AttrPath {
+            id: NodeId::new(),
             segments,
             span: self.span_from(start),
         })

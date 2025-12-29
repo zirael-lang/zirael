@@ -1,5 +1,6 @@
 use crate::ast::{
   Block, ConstDecl, ExprStmt, ForStmt, LoopStmt, ReturnStmt, Statement, VarDecl, WhileStmt,
+  NodeId,
 };
 use crate::lexer::TokenType;
 use crate::parser::{ParseResult, Parser};
@@ -59,7 +60,7 @@ impl Parser {
     let value = self.parse_expr()?;
     self.expect(TokenType::Semicolon, "after variable declaration")?;
 
-    Ok(VarDecl { is_mut, name, ty, value, span: self.span_from(start) })
+    Ok(VarDecl { id: NodeId::new(), is_mut, name, ty, value, span: self.span_from(start) })
   }
 
   fn parse_const_decl(&mut self, start: Span) -> ParseResult<ConstDecl> {
@@ -71,7 +72,7 @@ impl Parser {
     let value = self.parse_expr()?;
     self.expect(TokenType::Semicolon, "after const declaration")?;
 
-    Ok(ConstDecl { name, ty, value, span: self.span_from(start) })
+    Ok(ConstDecl { id: NodeId::new(), name, ty, value, span: self.span_from(start) })
   }
 
   fn parse_for_stmt(&mut self) -> ParseResult<ForStmt> {
@@ -81,7 +82,7 @@ impl Parser {
     let iterator = self.parse_expr()?;
     let body = self.parse_block()?;
 
-    Ok(ForStmt { binding, iterator, body, span: self.span_from(start) })
+    Ok(ForStmt { id: NodeId::new(), binding, iterator, body, span: self.span_from(start) })
   }
 
   fn parse_while_stmt(&mut self) -> ParseResult<WhileStmt> {
@@ -89,14 +90,14 @@ impl Parser {
     let condition = self.parse_expr()?;
     let body = self.parse_block()?;
 
-    Ok(WhileStmt { condition, body, span: self.span_from(start) })
+    Ok(WhileStmt { id: NodeId::new(), condition, body, span: self.span_from(start) })
   }
 
   fn parse_loop_stmt(&mut self) -> ParseResult<LoopStmt> {
     let start = self.expect(TokenType::Loop, "at start of loop")?.span;
     let body = self.parse_block()?;
 
-    Ok(LoopStmt { body, span: self.span_from(start) })
+    Ok(LoopStmt { id: NodeId::new(), body, span: self.span_from(start) })
   }
 
   fn parse_return_stmt(&mut self) -> ParseResult<ReturnStmt> {
@@ -106,7 +107,7 @@ impl Parser {
 
     self.expect(TokenType::Semicolon, "after return statement")?;
 
-    Ok(ReturnStmt { value, span: self.span_from(start) })
+    Ok(ReturnStmt { id: NodeId::new(), value, span: self.span_from(start) })
   }
 
   fn parse_expr_stmt(&mut self) -> ParseResult<ExprStmt> {
@@ -116,7 +117,7 @@ impl Parser {
     // Expression statements can optionally end with semicolon
     let has_semicolon = self.eat(TokenType::Semicolon);
 
-    Ok(ExprStmt { expr, has_semicolon, span: self.span_from(start) })
+    Ok(ExprStmt { id: NodeId::new(), expr, has_semicolon, span: self.span_from(start) })
   }
 
   pub fn parse_block(&mut self) -> ParseResult<Block> {
@@ -136,6 +137,6 @@ impl Parser {
 
     self.expect(TokenType::RightBrace, "after block")?;
 
-    Ok(Block { statements, span: self.span_from(start) })
+    Ok(Block { id: NodeId::new(), statements, span: self.span_from(start) })
   }
 }

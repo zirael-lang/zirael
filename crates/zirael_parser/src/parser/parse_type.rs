@@ -1,5 +1,6 @@
 use crate::ast::{
   ArrayType, FunctionType, PrimitiveKind, PrimitiveType, ReferenceType, TupleType, Type, TypePath,
+  NodeId, UnitType,
 };
 use crate::lexer::TokenType;
 use crate::parser::{ParseResult, Parser};
@@ -18,7 +19,7 @@ impl Parser {
     if self.eat(TokenType::Amp) {
       let is_mut = self.eat(TokenType::Mut);
       let inner = Box::new(self.parse_type_inner()?);
-      return Ok(Type::Reference(ReferenceType { is_mut, inner, span: self.span_from(start) }));
+      return Ok(Type::Reference(ReferenceType { id: NodeId::new(), is_mut, inner, span: self.span_from(start) }));
     }
 
     // Function type: func(T, U) -> R
@@ -37,7 +38,7 @@ impl Parser {
       self.expect(TokenType::Semicolon, "in array type")?;
       let size = self.parse_expr()?;
       self.expect(TokenType::RightBracket, "after array type")?;
-      return Ok(Type::Array(ArrayType { element, size, span: self.span_from(start) }));
+      return Ok(Type::Array(ArrayType { id: NodeId::new(), element, size, span: self.span_from(start) }));
     }
 
     // Primitive or path type
@@ -51,7 +52,7 @@ impl Parser {
     // Type arguments: Type<T, U>
     let args = if self.eat(TokenType::Lt) { Some(self.parse_type_args()?) } else { None };
 
-    Ok(Type::Path(TypePath { path, args, span: self.span_from(start) }))
+    Ok(Type::Path(TypePath { id: NodeId::new(), path, args, span: self.span_from(start) }))
   }
 
   fn parse_function_type(&mut self, start: Span) -> ParseResult<Type> {
@@ -74,12 +75,12 @@ impl Parser {
     self.expect(TokenType::Arrow, "in function type")?;
     let return_type = Box::new(self.parse_type()?);
 
-    Ok(Type::Function(FunctionType { params, return_type, span: self.span_from(start) }))
+    Ok(Type::Function(FunctionType { id: NodeId::new(), params, return_type, span: self.span_from(start) }))
   }
 
   fn parse_tuple_or_unit_type(&mut self, start: Span) -> ParseResult<Type> {
     if self.eat(TokenType::RightParen) {
-      return Ok(Type::Unit(self.span_from(start)));
+      return Ok(Type::Unit(UnitType { id: NodeId::new(), span: self.span_from(start) }));
     }
 
     let first = self.parse_type()?;
@@ -106,7 +107,7 @@ impl Parser {
 
     self.expect(TokenType::RightParen, "after tuple type")?;
 
-    Ok(Type::Tuple(TupleType { elements, span: self.span_from(start) }))
+    Ok(Type::Tuple(TupleType { id: NodeId::new(), elements, span: self.span_from(start) }))
   }
 
   pub(crate) fn parse_type_args(&mut self) -> ParseResult<Vec<Type>> {
@@ -155,6 +156,6 @@ impl Parser {
 
     let span = token.span.clone();
     self.advance();
-    Some(PrimitiveType { kind, span })
+    Some(PrimitiveType { id: NodeId::new(), kind, span })
   }
 }

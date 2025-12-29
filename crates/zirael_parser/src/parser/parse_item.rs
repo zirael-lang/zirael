@@ -3,7 +3,7 @@ use crate::ast::{
     GenericParams, ImplItem, ImplMember, InterfaceItem, InterfaceMember, InterfaceMethod,
     InterfaceMethodImpl, ItemKind, MethodItem, Param, ProgramNode, RegularParam,
     SelfKind, SelfParam, StructField, StructItem, StructMember, TypeBound, VariadicParam,
-    Variant, VariantField, VariantPayload, Visibility,
+    Variant, VariantField, VariantPayload, Visibility, NodeId,
 };
 use crate::items::Item;
 use crate::lexer::TokenType;
@@ -41,6 +41,7 @@ impl Parser {
         }
 
         Ok(ProgramNode {
+            id: NodeId::new(),
             attributes,
             imports,
             items,
@@ -81,6 +82,7 @@ impl Parser {
         };
 
         Ok(Item {
+            id: NodeId::new(),
             attributes,
             visibility,
             kind,
@@ -98,6 +100,7 @@ impl Parser {
         self.expect(TokenType::Semicolon, "after const item")?;
 
         Ok(ConstItem {
+            id: NodeId::new(),
             name,
             ty,
             value,
@@ -131,6 +134,7 @@ impl Parser {
         let body = self.parse_block()?;
 
         Ok(FunctionItem {
+            id: NodeId::new(),
             is_const,
             name,
             generics,
@@ -175,6 +179,7 @@ impl Parser {
                             self.advance(); // consume mut
                             self.advance(); // consume self
                             return Ok(Param::SelfParam(SelfParam {
+                                id: NodeId::new(),
                                 kind: SelfKind::RefMut,
                                 span: self.span_from(start),
                             }));
@@ -185,6 +190,7 @@ impl Parser {
                     self.advance(); // consume &
                     self.advance(); // consume self
                     return Ok(Param::SelfParam(SelfParam {
+                        id: NodeId::new(),
                         kind: SelfKind::Ref,
                         span: self.span_from(start),
                     }));
@@ -199,6 +205,7 @@ impl Parser {
                     self.advance(); // consume mut
                     self.advance(); // consume self
                     return Ok(Param::SelfParam(SelfParam {
+                        id: NodeId::new(),
                         kind: SelfKind::Mut,
                         span: self.span_from(start),
                     }));
@@ -210,6 +217,7 @@ impl Parser {
         if self.check(&TokenType::SelfValue) {
             self.advance();
             return Ok(Param::SelfParam(SelfParam {
+                id: NodeId::new(),
                 kind: SelfKind::Value,
                 span: self.span_from(start),
             }));
@@ -223,6 +231,7 @@ impl Parser {
         // Check for variadic: name: Type...
         if self.eat(TokenType::DotDotDot) {
             return Ok(Param::Variadic(VariadicParam {
+                id: NodeId::new(),
                 name,
                 ty,
                 span: self.span_from(start),
@@ -236,6 +245,7 @@ impl Parser {
         };
 
         Ok(Param::Regular(RegularParam {
+            id: NodeId::new(),
             name,
             ty,
             default,
@@ -265,6 +275,7 @@ impl Parser {
         self.expect(TokenType::Gt, "after generic parameters")?;
 
         Ok(GenericParams {
+            id: NodeId::new(),
             params,
             span: self.span_from(start),
         })
@@ -282,12 +293,14 @@ impl Parser {
                 let bound_start = self.current_span();
                 let path = self.parse_path()?;
                 let type_path = crate::ast::TypePath {
+                    id: NodeId::new(),
                     path: path.clone(),
                     args: None,
                     span: path.span.clone(),
                 };
 
                 bounds.push(TypeBound {
+                    id: NodeId::new(),
                     path: type_path,
                     span: self.span_from(bound_start),
                 });
@@ -299,6 +312,7 @@ impl Parser {
         }
 
         Ok(GenericParam {
+            id: NodeId::new(),
             name,
             bounds,
             span: self.span_from(start),
@@ -332,6 +346,7 @@ impl Parser {
         self.expect(TokenType::RightBrace, "after struct members")?;
 
         Ok(StructItem {
+            id: NodeId::new(),
             name,
             generics,
             members,
@@ -370,6 +385,7 @@ impl Parser {
         self.expect(TokenType::Comma, "after struct field")?;
 
         Ok(StructField {
+            id: NodeId::new(),
             attributes,
             visibility,
             name,
@@ -399,6 +415,7 @@ impl Parser {
         let body = self.parse_block()?;
 
         Ok(MethodItem {
+            id: NodeId::new(),
             attributes,
             visibility,
             name,
@@ -438,6 +455,7 @@ impl Parser {
         self.expect(TokenType::RightBrace, "after enum variants")?;
 
         Ok(EnumItem {
+            id: NodeId::new(),
             name,
             generics,
             variants,
@@ -479,6 +497,7 @@ impl Parser {
         };
 
         Ok(Variant {
+            id: NodeId::new(),
             attributes,
             name,
             payload,
@@ -530,6 +549,7 @@ impl Parser {
         self.expect(TokenType::RightBrace, "after interface members")?;
 
         Ok(InterfaceItem {
+            id: NodeId::new(),
             name,
             generics,
             members,
@@ -546,6 +566,7 @@ impl Parser {
             self.expect(TokenType::Semicolon, "after associated type")?;
 
             return Ok(InterfaceMember::AssociatedType(AssociatedType {
+                id: NodeId::new(),
                 name,
                 span: self.span_from(start),
             }));
@@ -568,6 +589,7 @@ impl Parser {
         self.expect(TokenType::Semicolon, "after interface method")?;
 
         Ok(InterfaceMember::Method(InterfaceMethod {
+            id: NodeId::new(),
             name,
             params,
             return_type,
@@ -622,6 +644,7 @@ impl Parser {
         self.expect(TokenType::RightBrace, "after impl members")?;
 
         Ok(ImplItem {
+            id: NodeId::new(),
             generics,
             interface_ref,
             target_type,
@@ -641,6 +664,7 @@ impl Parser {
             self.expect(TokenType::Semicolon, "after associated type")?;
 
             return Ok(ImplMember::AssociatedType(AssociatedTypeImpl {
+                id: NodeId::new(),
                 name,
                 ty,
                 span: self.span_from(start),
@@ -665,6 +689,7 @@ impl Parser {
 
         if is_interface_impl {
             Ok(ImplMember::Method(InterfaceMethodImpl {
+                id: NodeId::new(),
                 name,
                 params,
                 return_type,
@@ -673,6 +698,7 @@ impl Parser {
             }))
         } else {
             Ok(ImplMember::InherentMethod(MethodItem {
+                id: NodeId::new(),
                 attributes: Vec::new(),
                 visibility: Visibility::Public,
                 name,

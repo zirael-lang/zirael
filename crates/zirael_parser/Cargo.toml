@@ -11,6 +11,7 @@ unicode-normalization = "0.1.25"
 zirael_utils = { workspace = true }
 zirael_diagnostics = { workspace = true }  # Already present
 zirael_diagnostic_macro = { workspace = true }
+zirael_source = { workspace = true }
 
 [lints]
 workspace = true

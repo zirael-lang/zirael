@@ -2,10 +2,12 @@ use crate::ast::identifier::Ident;
 use crate::ast::import::Path;
 use crate::ast::statements::Block;
 use crate::ast::types::{Type, TypePath};
+use crate::ast::NodeId;
 use zirael_utils::prelude::Span;
 
 #[derive(Debug, Clone)]
 pub struct Expr {
+  pub id: NodeId,
   pub kind: ExprKind,
   pub span: Span,
 }
@@ -59,12 +61,14 @@ pub enum ExprKind {
 
 #[derive(Debug, Clone)]
 pub struct PathExpr {
+  pub id: NodeId,
   pub path: Path,
   pub span: Span,
 }
 
 #[derive(Debug, Clone)]
 pub struct IfExpr {
+  pub id: NodeId,
   pub condition: Box<Expr>,
   pub then_block: Block,
   pub else_branch: Option<ElseBranch>,
@@ -79,6 +83,7 @@ pub enum ElseBranch {
 
 #[derive(Debug, Clone)]
 pub struct MatchExpr {
+  pub id: NodeId,
   pub scrutinee: Box<Expr>,
   pub arms: Vec<MatchArm>,
   pub span: Span,
@@ -86,6 +91,7 @@ pub struct MatchExpr {
 
 #[derive(Debug, Clone)]
 pub struct MatchArm {
+  pub id: NodeId,
   pub pattern: Pattern,
   pub body: Expr,
   pub span: Span,
@@ -93,6 +99,7 @@ pub struct MatchArm {
 
 #[derive(Debug, Clone)]
 pub struct Argument {
+  pub id: NodeId,
   pub name: Option<Ident>,
   pub value: Expr,
   pub span: Span,
@@ -195,7 +202,7 @@ pub enum AssignOp {
 // Patterns
 #[derive(Debug, Clone)]
 pub enum Pattern {
-  Wildcard(Span),
+  Wildcard(WildcardPat),
   Literal(Literal),
   Ident(Ident),
   Struct(StructPattern),
@@ -204,7 +211,14 @@ pub enum Pattern {
 }
 
 #[derive(Debug, Clone)]
+pub struct WildcardPat {
+  pub id: NodeId,
+  pub span: Span,
+}
+
+#[derive(Debug, Clone)]
 pub struct StructPattern {
+  pub id: NodeId,
   pub path: TypePath,
   pub fields: Vec<StructPatternField>,
   pub span: Span,
@@ -218,12 +232,14 @@ pub enum StructPatternField {
 
 #[derive(Debug, Clone)]
 pub struct TuplePattern {
+  pub id: NodeId,
   pub patterns: Vec<Pattern>,
   pub span: Span,
 }
 
 #[derive(Debug, Clone)]
 pub struct EnumPattern {
+  pub id: NodeId,
   pub path: TypePath,
   pub patterns: Vec<Pattern>,
   pub span: Span,
@@ -238,11 +254,18 @@ pub enum Literal {
   Char(CharLit),
   Byte(ByteLit),
   Bool(BoolLit),
-  Unit(Span),
+  Unit(UnitLit),
+}
+
+#[derive(Debug, Clone)]
+pub struct UnitLit {
+  pub id: NodeId,
+  pub span: Span,
 }
 
 #[derive(Debug, Clone)]
 pub struct IntLit {
+  pub id: NodeId,
   pub value: String,
   pub base: IntBase,
   pub suffix: Option<IntSuffix>,
@@ -275,6 +298,7 @@ pub enum IntSuffix {
 
 #[derive(Debug, Clone)]
 pub struct FloatLit {
+  pub id: NodeId,
   pub value: String,
   pub suffix: Option<FloatSuffix>,
   pub span: Span,
@@ -288,6 +312,7 @@ pub enum FloatSuffix {
 
 #[derive(Debug, Clone)]
 pub struct StringLit {
+  pub id: NodeId,
   pub value: String,
   pub raw: String,
   pub span: Span,
@@ -295,6 +320,7 @@ pub struct StringLit {
 
 #[derive(Debug, Clone)]
 pub struct CharLit {
+  pub id: NodeId,
   pub value: char,
   pub raw: String,
   pub span: Span,
@@ -302,6 +328,7 @@ pub struct CharLit {
 
 #[derive(Debug, Clone)]
 pub struct ByteLit {
+  pub id: NodeId,
   pub value: u8,
   pub raw: String,
   pub span: Span,
@@ -309,6 +336,7 @@ pub struct ByteLit {
 
 #[derive(Debug, Clone)]
 pub struct BoolLit {
+  pub id: NodeId,
   pub value: bool,
   pub span: Span,
 }

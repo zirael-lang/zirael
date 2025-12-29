@@ -1036,6 +1036,7 @@ dependencies = [
  "unicode-xid",
  "zirael_diagnostic_macro",
  "zirael_diagnostics",
+ "zirael_source",
  "zirael_utils",
 ]
 

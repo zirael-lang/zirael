@@ -1,5 +1,6 @@
 use crate::ast::expressions::Expr;
 use crate::ast::import::Path;
+use crate::ast::NodeId;
 use zirael_utils::prelude::Span;
 
 #[derive(Debug, Clone)]
@@ -10,11 +11,18 @@ pub enum Type {
   Reference(ReferenceType),
   Array(ArrayType),
   Tuple(TupleType),
-  Unit(Span),
+  Unit(UnitType),
+}
+
+#[derive(Debug, Clone)]
+pub struct UnitType {
+  pub id: NodeId,
+  pub span: Span,
 }
 
 #[derive(Debug, Clone)]
 pub struct PrimitiveType {
+  pub id: NodeId,
   pub kind: PrimitiveKind,
   pub span: Span,
 }
@@ -48,6 +56,7 @@ pub enum PrimitiveKind {
 
 #[derive(Debug, Clone)]
 pub struct TypePath {
+  pub id: NodeId,
   pub path: Path,
   pub args: Option<Vec<Type>>,
   pub span: Span,
@@ -55,6 +64,7 @@ pub struct TypePath {
 
 #[derive(Debug, Clone)]
 pub struct FunctionType {
+  pub id: NodeId,
   pub params: Vec<Type>,
   pub return_type: Box<Type>,
   pub span: Span,
@@ -62,6 +72,7 @@ pub struct FunctionType {
 
 #[derive(Debug, Clone)]
 pub struct ReferenceType {
+  pub id: NodeId,
   pub is_mut: bool,
   pub inner: Box<Type>,
   pub span: Span,
@@ -69,6 +80,7 @@ pub struct ReferenceType {
 
 #[derive(Debug, Clone)]
 pub struct ArrayType {
+  pub id: NodeId,
   pub element: Box<Type>,
   pub size: Expr,
   pub span: Span,
@@ -76,6 +88,7 @@ pub struct ArrayType {
 
 #[derive(Debug, Clone)]
 pub struct TupleType {
+  pub id: NodeId,
   pub elements: Vec<Type>,
   pub span: Span,
 }
@@ -89,7 +102,7 @@ impl Type {
       Type::Reference(r) => r.span,
       Type::Array(a) => a.span,
       Type::Tuple(t) => t.span,
-      Type::Unit(s) => s.clone(),
+      Type::Unit(u) => u.span,
     }
   }
 }

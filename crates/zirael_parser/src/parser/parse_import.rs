@@ -1,5 +1,5 @@
 use crate::ast::{
-    ImportName, ImportSpec, ImportTail, Path, PathRoot,
+    ImportName, ImportSpec, ImportTail, Path, PathRoot, NodeId,
 };
 use crate::import::ImportDecl;
 use crate::lexer::TokenType;
@@ -30,6 +30,7 @@ impl Parser {
         self.expect(TokenType::Semicolon, "after import declaration")?;
 
         Ok(ImportDecl {
+            id: NodeId::new(),
             path,
             tail,
             span: self.span_from(start),
@@ -72,6 +73,7 @@ impl Parser {
         };
 
         Ok(ImportSpec {
+            id: NodeId::new(),
             name,
             alias,
             span: self.span_from(start),
@@ -107,6 +109,7 @@ impl Parser {
         }
 
         Ok(Path {
+            id: NodeId::new(),
             root,
             segments,
             span: self.span_from(start),
