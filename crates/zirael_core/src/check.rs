@@ -2,13 +2,13 @@ use crate::prelude::{Colorize as _, CompilationUnit, FILE_EXTENSION, error};
 use anyhow::Result;
 use anyhow::bail;
 use std::path::PathBuf;
+use std::sync::Arc;
+use zirael_source::arena::source_file::SourceFile;
+use zirael_source::prelude::Sources;
 use zirael_utils::context::Context;
-use zirael_utils::prelude::{CheckConfig, PackageType, Session, SourceFile, info};
+use zirael_utils::prelude::{PackageType, ProjectConfig, Session, info};
 
-pub fn check_project(config: &CheckConfig) -> Result<()> {
-  let sess = Session::new(config.clone());
-  let context = &mut Context::new(&sess);
-
+pub fn check_project(config: &ProjectConfig) -> Result<()> {
   let file = &config.entrypoint;
   info!("checking entrypoint: {} with {} mode", file.display(), config.mode);
 
@@ -21,11 +21,15 @@ pub fn check_project(config: &CheckConfig) -> Result<()> {
       );
     }
   }
-
+  let sources = Arc::new(Sources::new());
+  
+  let sess = Session::new(config.clone(), sources.clone());
+  let context = &mut Context::new(&sess);
+  
   let file = sess.config().root.join(file);
   let contents = fs_err::read_to_string(file.clone())?;
 
-  let file_id = context.sources().add(SourceFile::new(contents, file.clone()));
+  let file_id = sources.add(contents, file.clone());
   let mut unit = CompilationUnit::new(file_id, &context);
 
   let _ = unit.check();

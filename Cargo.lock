@@ -86,16 +86,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b0674a1ddeecb70197781e945de4b3b8ffb61fa939a5597bcf48503737663100"
 
 [[package]]
-name = "ariadne"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8454c8a44ce2cb9cc7e7fae67fc6128465b343b92c6631e94beca3c8d1524ea5"
-dependencies = [
- "unicode-width",
- "yansi",
-]
-
-[[package]]
 name = "autocfg"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -990,6 +980,7 @@ dependencies = [
  "colored",
  "env_logger",
  "log",
+ "zirael_diagnostics",
  "zirael_utils",
 ]
 
@@ -1002,6 +993,7 @@ dependencies = [
  "zirael_c_compiler",
  "zirael_diagnostics",
  "zirael_parser",
+ "zirael_source",
  "zirael_utils",
 ]
 
@@ -1021,10 +1013,11 @@ name = "zirael_diagnostics"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "ariadne",
  "dashmap 7.0.0-rc2",
  "generational-arena",
  "parking_lot",
+ "unicode-width",
+ "yansi",
  "zirael_source",
 ]
 
@@ -1043,7 +1036,6 @@ dependencies = [
 name = "zirael_source"
 version = "0.1.0"
 dependencies = [
- "ariadne",
  "dashmap 7.0.0-rc2",
  "generational-arena",
  "parking_lot",

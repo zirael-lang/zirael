@@ -5,8 +5,8 @@ use zirael_core::prelude::*;
 
 pub fn try_cli() -> Result<()> {
   let cli = Cli::parse();
-  setup_logger(cli.verbose, false);
+  setup_logger(cli.verbose, cli.no_color, false);
 
-  let check_config = CheckConfig::try_from(cli)?;
+  let check_config = ProjectConfig::try_from(cli)?;
   check_project(&check_config)
 }

@@ -13,6 +13,7 @@ env_logger = { workspace = true }
 log = { workspace = true }
 colored = { workspace = true }
 zirael_utils = { workspace = true }
+zirael_diagnostics = { workspace = true }
 
 [lints]
 workspace = true

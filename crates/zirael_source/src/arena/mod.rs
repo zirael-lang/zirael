@@ -2,6 +2,7 @@ use generational_arena::Index;
 use parking_lot::RwLock;
 use std::sync::Arc;
 
+pub mod source_file;
 pub mod sources;
 
 pub trait ArenaId {

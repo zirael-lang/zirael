@@ -1,5 +1,6 @@
 use std::fmt;
-use zirael_diagnostics::prelude::{Diag, DiagnosticLevel, Label, ToDiagnostic};
+use zirael_diagnostics::ToDiagnostic;
+use zirael_diagnostics::prelude::{Diag, DiagnosticLevel, Label};
 use zirael_utils::prelude::Span;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -155,6 +156,8 @@ impl ToDiagnostic for LexError {
       labels: vec![Label::new(self.label(), self.span, DiagnosticLevel::Error)],
       notes: Vec::new(),
       helps,
+      // TODO: come up with a good idea for handling error codes
+      code: None,
     }
   }
 }

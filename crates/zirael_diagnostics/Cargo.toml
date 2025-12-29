@@ -8,11 +8,12 @@ description = "Zirael diagnostics"
 
 [dependencies]
 anyhow = { workspace = true }
-ariadne = { workspace = true }
 dashmap = { workspace = true }
 generational-arena = { workspace = true }
 parking_lot = { workspace = true }
 zirael_source = { workspace = true }
+yansi = "1.0.1"
+unicode-width = "0.2.1"
 
 [lints]
 workspace = true

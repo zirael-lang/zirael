@@ -1,38 +1,9 @@
-use ariadne::Source;
+use crate::arena::source_file::{SourceFile, SourceFileId};
 use dashmap::DashMap;
 use dashmap::iter::Iter;
 use dashmap::mapref::one::Ref;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::path::PathBuf;
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct SourceFileId(pub usize);
-
-#[derive(Debug, Clone)]
-pub struct SourceFile {
-  content: Source<String>,
-  path: PathBuf,
-}
-
-impl SourceFile {
-  pub fn new(content: String, path: PathBuf) -> Self {
-    Self { content: Source::from(content), path }
-  }
-
-  pub fn content(&self) -> &Source {
-    &self.content
-  }
-
-  pub fn path(&self) -> PathBuf {
-    self.path.clone()
-  }
-}
-
-impl AsRef<str> for SourceFile {
-  fn as_ref(&self) -> &str {
-    self.content.text()
-  }
-}
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 #[derive(Debug, Default)]
 pub struct SourcesImpl {
@@ -52,14 +23,13 @@ impl Sources {
     Default::default()
   }
 
-  pub fn add(&self, source: SourceFile) -> SourceFileId {
-    let path = source.path.clone();
-    if let Some(existing_id) = self.get_by_path(&source.path) {
+  pub fn add(&self, input: String, path: PathBuf) -> SourceFileId {
+    if let Some(existing_id) = self.get_by_path(&path) {
       return existing_id.value().clone();
     }
 
     let id = SourceFileId(self.inner.last_id.fetch_add(1, Ordering::Relaxed) + 1);
-    self.inner.sources.insert(id, source);
+    self.inner.sources.insert(id, SourceFile::new(input, path.clone(), id));
     self.inner.path_to_id.insert(path, id);
     id
   }
@@ -78,5 +48,9 @@ impl Sources {
 
   pub fn all(&self) -> Iter<'_, SourceFileId, SourceFile> {
     self.inner.sources.iter()
+  }
+
+  pub fn display(&self, id: SourceFileId) -> Option<String> {
+    self.get(id).map(|s| s.path().display().to_string())
   }
 }

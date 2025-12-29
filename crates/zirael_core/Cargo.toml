@@ -13,6 +13,7 @@ zirael_diagnostics = { workspace = true }
 anyhow = { workspace = true }
 zirael_c_compiler = { workspace = true }
 fs-err = { workspace = true }
+zirael_source = { workspace = true }
 
 [lints]
 workspace = true

@@ -1,13 +1,8 @@
-use anyhow::Result;
-use ariadne::{Cache, Color, Report, ReportKind, Source};
-use dashmap::DashSet;
 use generational_arena::{Arena, Index};
-use parking_lot::RwLock;
 use std::fmt::{Debug, Display};
-use std::io::stderr;
-use std::sync::Arc;
-use zirael_source::arena::{ArenaExt, ArenaId, GenArena};
-use zirael_source::arena::sources::{SourceFileId, Sources};
+use yansi::Color;
+use zirael_source::arena::source_file::SourceFileId;
+use zirael_source::arena::{ArenaId, GenArena};
 use zirael_source::span::Span;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -26,8 +21,8 @@ impl ArenaId for DiagnosticId {
 /// Diagnostic when dropped and not consumed by either cancel or emit panics.
 #[derive(Clone, Debug)]
 pub struct Diagnostic {
-  id: DiagnosticId,
-  diag: Option<Box<Diag>>,
+  pub id: DiagnosticId,
+  pub diag: Option<Box<Diag>>,
 }
 
 #[derive(Clone, Debug)]
@@ -37,13 +32,16 @@ pub struct Diag {
   pub labels: Vec<Label>,
   pub notes: Vec<String>,
   pub helps: Vec<String>,
+  pub code: Option<String>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Label {
   pub span: Span,
-  pub message: String,
+  pub message: Option<String>,
   pub level: DiagnosticLevel,
+  pub order: i32,
+  pub priority: i32,
 
   // Optional because span already contains the file id, but this is useful for overwriting the file.
   pub file: Option<SourceFileId>,
@@ -51,7 +49,7 @@ pub struct Label {
 
 impl Label {
   pub fn new(message: impl Into<String>, span: Span, level: DiagnosticLevel) -> Self {
-    Label { message: message.into(), span, file: None, level }
+    Label { message: Some(message.into()), span, file: None, level, order: 0, priority: 0 }
   }
 
   pub fn new_with_file(
@@ -60,15 +58,15 @@ impl Label {
     level: DiagnosticLevel,
     file_id: SourceFileId,
   ) -> Self {
-    Label { message: message.into(), span, file: Some(file_id), level }
+    Label { message: Some(message.into()), span, file: Some(file_id), level, order: 0, priority: 0 }
   }
 
   pub fn file(&self) -> SourceFileId {
     self.file.unwrap_or(self.span.file_id)
   }
 
-  pub fn ariadne_label(&self) -> ariadne::Label<Span> {
-    ariadne::Label::new(self.span).with_message(self.message.clone()).with_color(self.level.color())
+  pub fn color(&self) -> Option<Color> {
+    Some(self.level.color())
   }
 }
 
@@ -85,15 +83,12 @@ pub enum DiagnosticLevel {
 }
 
 impl DiagnosticLevel {
-  pub fn severity<'a>(&self) -> ReportKind<'a> {
-    ReportKind::Custom(
-      match self {
-        DiagnosticLevel::Error => "error",
-        DiagnosticLevel::Warning => "warn",
-        DiagnosticLevel::Bug => "bug",
-      },
-      self.color(),
-    )
+  pub fn name(&self) -> &'static str {
+    match self {
+      DiagnosticLevel::Error => "error",
+      DiagnosticLevel::Warning => "warn",
+      DiagnosticLevel::Bug => "bug",
+    }
   }
 
   pub fn color(&self) -> Color {
@@ -110,101 +105,5 @@ impl Drop for Diagnostic {
     if self.diag.is_some() {
       panic!("Diagnostic {:?} dropped but it wasn't emitted or cancelled", self.id)
     }
-  }
-}
-
-#[derive(Debug, Default)]
-pub struct DiagnosticCtx {
-  arena: Arc<RwLock<Arena<Diagnostic>>>,
-  emitted_diagnostics: Arc<DashSet<DiagnosticId>>,
-  sources: Sources,
-}
-
-pub struct SourcesCache<'a>(pub &'a Sources);
-
-impl GenArena<Diagnostic> for Arena<Diagnostic> {
-  fn arena(&self) -> &Arena<Diagnostic> {
-    &self
-  }
-}
-
-impl ArenaExt<Arena<Diagnostic>, Diagnostic, DiagnosticId> for DiagnosticCtx {
-  fn lock(&self) -> &Arc<RwLock<Arena<Diagnostic>>> {
-    &self.arena
-  }
-}
-
-pub trait ToDiagnostic {
-  fn to_diagnostic(&self) -> Diag;
-}
-
-impl DiagnosticCtx {
-  pub fn add(&self, diag: Diag) -> DiagnosticId {
-    let id = {
-      let mut arena = self.arena.write();
-      arena.insert_with(|id| Diagnostic { id: DiagnosticId(id), diag: Some(Box::new(diag)) })
-    };
-    DiagnosticId::new(id)
-  }
-
-  pub fn emit(&self, diag: impl ToDiagnostic) {
-    let diagnostic = diag.to_diagnostic();
-    let id = self.add(diagnostic.clone());
-
-    self.emit_diag(id);
-
-    if let DiagnosticLevel::Bug = diagnostic.level {
-      panic!("look at the emitted diagnostic")
-    }
-  }
-
-  // actually emits the diagnostic to stderr
-  fn emit_diag(&self, id: DiagnosticId) {
-    let Some(diagnostic) = self.get(id) else {
-      panic!("No diagnostic found for {:?}", id);
-    };
-    let Some(diagnostic) = &diagnostic.diag else { todo!() };
-
-    let mut writer = stderr();
-    let mut report =
-      Report::build(diagnostic.level.severity(), Span::default()).with_message(&diagnostic.message);
-
-    for label in &diagnostic.labels {
-      report.add_label(label.ariadne_label());
-    }
-
-    for note in &diagnostic.notes {
-      report.add_note(note);
-    }
-
-    for help in &diagnostic.helps {
-      report.add_help(help);
-    }
-
-    let report = report.finish();
-    self.write(|arena| {
-      arena.get_mut(id.index()).take();
-    });
-
-    let mut cache = SourcesCache(&self.sources);
-    report.write(&mut cache, &mut writer).expect("");
-  }
-}
-
-impl Cache<SourceFileId> for SourcesCache<'_> {
-  type Storage = String;
-
-  fn fetch(&mut self, id: &SourceFileId) -> Result<&Source<Self::Storage>, impl Debug> {
-    if let Some(source_file) = self.0.get(*id) {
-      let content = source_file.value().content().clone();
-      Ok(Box::leak(Box::new(content)))
-    } else {
-      Err(Box::new(format!("Source not found: {:?}", id)))
-    }
-  }
-
-  fn display<'b>(&self, id: &'b SourceFileId) -> Option<impl Display + 'b> {
-    let path = self.0.get_unchecked(*id);
-    Some(format!("{}", path.value().path().display()))
   }
 }
