@@ -1,8 +1,8 @@
+use crate::ast::NodeId;
 use crate::ast::identifier::Ident;
 use crate::ast::import::Path;
 use crate::ast::statements::Block;
 use crate::ast::types::{Type, TypePath};
-use crate::ast::NodeId;
 use zirael_utils::prelude::Span;
 
 #[derive(Debug, Clone)]

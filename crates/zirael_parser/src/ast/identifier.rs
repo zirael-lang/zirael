@@ -1,23 +1,27 @@
 use std::fmt;
-use zirael_utils::prelude::Span;
+use zirael_utils::prelude::{Identifier, Span, get_or_intern, resolve as resolve_ident};
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Ident {
-    pub name: String,
-    pub span: Span,
+  pub ident: Identifier,
 }
 
 impl Ident {
-    pub fn new(name: impl Into<String>, span: Span) -> Self {
-        Self {
-            name: name.into(),
-            span,
-        }
-    }
+  pub fn new(name: &str, span: Span) -> Self {
+    Self { ident: get_or_intern(name, Some(span)) }
+  }
+
+  pub fn span(&self) -> &Span {
+    self.ident.span()
+  }
+
+  pub fn text(&self) -> String {
+    resolve_ident(&self.ident)
+  }
 }
 
 impl fmt::Display for Ident {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.name)
-    }
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(f, "{}", self.text())
+  }
 }

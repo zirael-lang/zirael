@@ -1,7 +1,7 @@
 use crate::ast::{
   Argument, AssignOp, BinaryOp, BoolLit, ByteLit, CharLit, ElseBranch, EnumPattern, ExprKind,
-  FloatLit, IfExpr, IntBase, IntLit, Literal, MatchArm, MatchExpr, PathExpr, Pattern,
-  StructPattern, StructPatternField, TuplePattern, UnaryOp, UnitLit, WildcardPat, NodeId,
+  FloatLit, IfExpr, IntBase, IntLit, Literal, MatchArm, MatchExpr, NodeId, PathExpr, Pattern,
+  StructPattern, StructPatternField, TuplePattern, UnaryOp, UnitLit, WildcardPat,
 };
 use crate::expressions::Expr;
 use crate::identifier::Ident;
@@ -75,7 +75,11 @@ impl Parser {
         self.advance();
         let target_type = Box::new(self.parse_type()?);
         let span = lhs.span.to(target_type.span());
-        lhs = Expr { id: NodeId::new(), span, kind: ExprKind::Cast { expr: Box::new(lhs), target_type } };
+        lhs = Expr {
+          id: NodeId::new(),
+          span,
+          kind: ExprKind::Cast { expr: Box::new(lhs), target_type },
+        };
         continue;
       }
 
@@ -127,7 +131,11 @@ impl Parser {
       self.advance();
       let ((), r_bp) = self.prefix_binding_power(op);
       let operand = Box::new(self.parse_expr_bp(r_bp)?);
-      return Ok(Expr { id: NodeId::new(), kind: ExprKind::Unary { op, operand }, span: self.span_from(start) });
+      return Ok(Expr {
+        id: NodeId::new(),
+        kind: ExprKind::Unary { op, operand },
+        span: self.span_from(start),
+      });
     }
 
     // Parenthesized expression or tuple
@@ -143,24 +151,40 @@ impl Parser {
     // Block expression
     if self.check(&TokenType::LeftBrace) {
       let block = self.parse_block()?;
-      return Ok(Expr { id: NodeId::new(), span: block.span.clone(), kind: ExprKind::Block(block) });
+      return Ok(Expr {
+        id: NodeId::new(),
+        span: block.span.clone(),
+        kind: ExprKind::Block(block),
+      });
     }
 
     // If expression
     if self.check(&TokenType::If) {
       let if_expr = self.parse_if_expr()?;
-      return Ok(Expr { id: NodeId::new(), span: if_expr.span.clone(), kind: ExprKind::If(if_expr) });
+      return Ok(Expr {
+        id: NodeId::new(),
+        span: if_expr.span.clone(),
+        kind: ExprKind::If(if_expr),
+      });
     }
 
     // Match expression
     if self.check(&TokenType::Match) {
       let match_expr = self.parse_match_expr()?;
-      return Ok(Expr { id: NodeId::new(), span: match_expr.span.clone(), kind: ExprKind::Match(match_expr) });
+      return Ok(Expr {
+        id: NodeId::new(),
+        span: match_expr.span.clone(),
+        kind: ExprKind::Match(match_expr),
+      });
     }
 
     // Literals
     if let Some(lit) = self.try_parse_literal()? {
-      return Ok(Expr { id: NodeId::new(), span: self.span_from(start), kind: ExprKind::Literal(lit) });
+      return Ok(Expr {
+        id: NodeId::new(),
+        span: self.span_from(start),
+        kind: ExprKind::Literal(lit),
+      });
     }
 
     // Self keyword
@@ -181,7 +205,11 @@ impl Parser {
         });
       } else {
         let ident = self.parse_identifier()?;
-        return Ok(Expr { id: NodeId::new(), span: ident.span.clone(), kind: ExprKind::Ident(ident) });
+        return Ok(Expr {
+          id: NodeId::new(),
+          span: ident.span().clone(),
+          kind: ExprKind::Ident(ident),
+        });
       }
     }
 
@@ -198,7 +226,10 @@ impl Parser {
       return Ok(Expr {
         id: NodeId::new(),
         span: self.span_from(start),
-        kind: ExprKind::Literal(Literal::Unit(UnitLit { id: NodeId::new(), span: self.span_from(start) })),
+        kind: ExprKind::Literal(Literal::Unit(UnitLit {
+          id: NodeId::new(),
+          span: self.span_from(start),
+        })),
       });
     }
 
@@ -206,7 +237,11 @@ impl Parser {
 
     // Parenthesized expression
     if self.eat(TokenType::RightParen) {
-      return Ok(Expr { id: NodeId::new(), span: self.span_from(start), kind: ExprKind::Paren(Box::new(first)) });
+      return Ok(Expr {
+        id: NodeId::new(),
+        span: self.span_from(start),
+        kind: ExprKind::Paren(Box::new(first)),
+      });
     }
 
     // Tuple expression
@@ -287,7 +322,12 @@ impl Parser {
           let name = self.parse_identifier()?;
           self.expect(TokenType::Assign, "in named argument")?;
           let value = self.parse_expr()?;
-          return Ok(Argument { id: NodeId::new(), name: Some(name), value, span: self.span_from(start) });
+          return Ok(Argument {
+            id: NodeId::new(),
+            name: Some(name),
+            value,
+            span: self.span_from(start),
+          });
         }
       }
     }
@@ -340,7 +380,7 @@ impl Parser {
           span: object.span.clone(),
           kind: ExprKind::Field {
             object: Box::new(object),
-            field: Ident { name: "[]".to_string(), span: start.clone() },
+            field: Ident::new("[]", start.clone()),
           },
         }),
         args: vec![Argument { id: NodeId::new(), name: None, value: index, span: start }],
@@ -363,7 +403,13 @@ impl Parser {
       None
     };
 
-    Ok(IfExpr { id: NodeId::new(), condition, then_block, else_branch, span: self.span_from(start) })
+    Ok(IfExpr {
+      id: NodeId::new(),
+      condition,
+      then_block,
+      else_branch,
+      span: self.span_from(start),
+    })
   }
 
   fn parse_match_expr(&mut self) -> ParseResult<MatchExpr> {
@@ -477,7 +523,12 @@ impl Parser {
 
     self.expect(TokenType::RightBrace, "after struct pattern fields")?;
 
-    Ok(Pattern::Struct(StructPattern { id: NodeId::new(), path, fields, span: self.span_from(start) }))
+    Ok(Pattern::Struct(StructPattern {
+      id: NodeId::new(),
+      path,
+      fields,
+      span: self.span_from(start),
+    }))
   }
 
   fn parse_enum_pattern(&mut self, path: crate::ast::TypePath) -> ParseResult<Pattern> {
@@ -500,7 +551,12 @@ impl Parser {
 
     self.expect(TokenType::RightParen, "after enum pattern")?;
 
-    Ok(Pattern::Enum(EnumPattern { id: NodeId::new(), path, patterns, span: self.span_from(start) }))
+    Ok(Pattern::Enum(EnumPattern {
+      id: NodeId::new(),
+      path,
+      patterns,
+      span: self.span_from(start),
+    }))
   }
 
   fn parse_tuple_pattern(&mut self, start: Span) -> ParseResult<Pattern> {
@@ -541,7 +597,12 @@ impl Parser {
       TokenType::FloatLiteral(value) => {
         self.advance();
         let suffix = self.parse_float_suffix(&token.lexeme, value)?;
-        Literal::Float(FloatLit { id: NodeId::new(), value: value.clone(), suffix, span: token.span })
+        Literal::Float(FloatLit {
+          id: NodeId::new(),
+          value: value.clone(),
+          suffix,
+          span: token.span,
+        })
       }
       TokenType::StringLiteral(value) => {
         self.advance();
@@ -554,11 +615,21 @@ impl Parser {
       }
       TokenType::CharLiteral(ch) => {
         self.advance();
-        Literal::Char(CharLit { id: NodeId::new(), value: *ch, raw: token.lexeme.clone(), span: token.span })
+        Literal::Char(CharLit {
+          id: NodeId::new(),
+          value: *ch,
+          raw: token.lexeme.clone(),
+          span: token.span,
+        })
       }
       TokenType::ByteLiteral(b) => {
         self.advance();
-        Literal::Byte(ByteLit { id: NodeId::new(), value: *b, raw: token.lexeme.clone(), span: token.span })
+        Literal::Byte(ByteLit {
+          id: NodeId::new(),
+          value: *b,
+          raw: token.lexeme.clone(),
+          span: token.span,
+        })
       }
       TokenType::True => {
         self.advance();
