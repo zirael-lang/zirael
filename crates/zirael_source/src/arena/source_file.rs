@@ -1,16 +1,10 @@
 use crate::line::Line;
+use crate::new_id;
 use crate::span::Span;
 use std::ops::Range;
 use std::path::PathBuf;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct SourceFileId(pub usize);
-
-impl SourceFileId {
-  pub fn dummy() -> Self {
-    Self(usize::MAX - 1)
-  }
-}
+new_id!(SourceFileId);
 
 #[derive(Debug, Clone)]
 pub struct SourceFile {

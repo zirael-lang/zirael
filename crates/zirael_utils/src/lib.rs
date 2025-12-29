@@ -19,7 +19,6 @@ pub mod prelude {
 
   pub use crate::term_style::*;
 
-  pub use zirael_diagnostics::prelude::*;
   pub use crate::enums::lib_type::*;
   pub use crate::enums::mode::*;
   pub use crate::enums::project_type::*;
@@ -27,5 +26,7 @@ pub mod prelude {
     collections::{HashMap, HashSet},
     path::PathBuf,
   };
+  pub use zirael_diagnostics::prelude::*;
+  pub use zirael_source::id::*;
   pub use zirael_source::prelude::*;
 }

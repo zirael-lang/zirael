@@ -10,6 +10,7 @@ description = "Zirael shared source/span utilities"
 dashmap = { workspace = true }
 generational-arena = { workspace = true }
 parking_lot = { workspace = true }
+paste = "1.0.15"
 
 [lints]
 workspace = true

@@ -14,6 +14,7 @@ parking_lot = { workspace = true }
 zirael_source = { workspace = true }
 yansi = "1.0.1"
 unicode-width = "0.2.1"
+log = "0.4.29"
 
 [lints]
 workspace = true

@@ -1,22 +1,13 @@
 use generational_arena::{Arena, Index};
 use std::fmt::{Debug, Display};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use yansi::Color;
 use zirael_source::arena::source_file::SourceFileId;
 use zirael_source::arena::{ArenaId, GenArena};
+use zirael_source::new_id;
 use zirael_source::span::Span;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct DiagnosticId(pub Index);
-
-impl ArenaId for DiagnosticId {
-  fn new(index: Index) -> Self {
-    DiagnosticId(index)
-  }
-
-  fn index(&self) -> Index {
-    self.0
-  }
-}
+new_id!(DiagnosticId);
 
 /// Diagnostic when dropped and not consumed by either cancel or emit panics.
 #[derive(Clone, Debug)]
