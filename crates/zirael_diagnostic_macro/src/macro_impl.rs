@@ -58,6 +58,56 @@ fn collect_struct_messages(
   Ok(out)
 }
 
+fn parse_code_to_tokens(expr: &Expr) -> Result<proc_macro2::TokenStream, MacroFunctionError> {
+  match expr {
+    Expr::Path(path) => {
+      let segments = &path.path.segments;
+      if segments.len() == 1 {
+        let ident = &segments[0].ident;
+        Ok(quote! { zirael_diagnostics::codes::#ident })
+      } else {
+        Ok(quote! { #path })
+      }
+    }
+
+    _ => Err(MacroFunctionError::InvalidAttribute(
+      "code must be an integer literal or a path (e.g. LEX_FOO)".to_string(),
+    )),
+  }
+}
+
+fn collect_struct_code(
+  ast: &DeriveInput,
+) -> Result<Option<proc_macro2::TokenStream>, MacroFunctionError> {
+  let mut out: Option<proc_macro2::TokenStream> = None;
+
+  for attr in &ast.attrs {
+    let is_match = attr.path().segments.last().map(|seg| seg.ident == "code").unwrap_or(false);
+    if !is_match {
+      continue;
+    }
+
+    if out.is_some() {
+      return Err(MacroFunctionError::InvalidAttribute("duplicate #[code] attribute".to_string()));
+    }
+
+    // Support both: #[code(1234)] and #[code = 1234]
+    let code_expr: Expr = match &attr.meta {
+      syn::Meta::List(_) => attr.parse_args::<Expr>()?,
+      syn::Meta::NameValue(nv) => nv.value.clone(),
+      syn::Meta::Path(_) => {
+        return Err(MacroFunctionError::InvalidAttribute(
+          "#[code] requires a value like #[code(1234)]".to_string(),
+        ));
+      }
+    };
+
+    out = Some(parse_code_to_tokens(&code_expr)?);
+  }
+
+  Ok(out)
+}
+
 fn get_string_literal(expr: &Expr) -> Result<String, MacroFunctionError> {
   Ok(get_lit_str(expr)?.value())
 }
@@ -110,6 +160,7 @@ fn impl_diagnostic_derive(ast: &DeriveInput) -> Result<TokenStream, MacroFunctio
 
   let struct_note_messages = collect_struct_messages(ast, "note")?;
   let struct_help_messages = collect_struct_messages(ast, "help")?;
+  let struct_code = collect_struct_code(ast)?;
 
   // Find the main diagnostic attribute (#[error], #[warning], or #[bug])
   let diagnostic_attr = ast
@@ -306,6 +357,12 @@ fn impl_diagnostic_derive(ast: &DeriveInput) -> Result<TokenStream, MacroFunctio
     }
   };
 
+  let code_impl = if let Some(code_expr) = struct_code {
+    quote! { Some(#code_expr) }
+  } else {
+    quote! { None }
+  };
+
   Ok(TokenStream::from(quote! {
       #[automatically_derived]
         impl zirael_diagnostics::ToDiagnostic for #struct_name {
@@ -319,7 +376,8 @@ fn impl_diagnostic_derive(ast: &DeriveInput) -> Result<TokenStream, MacroFunctio
                       #(#label_implementations,)*
                   ],
                   notes: #notes_impl,
-                  helps: #helps_impl
+                helps: #helps_impl,
+                code: #code_impl,
               }
           }
       }

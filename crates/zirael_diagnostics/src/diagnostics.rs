@@ -7,6 +7,8 @@ use zirael_source::arena::{ArenaId, GenArena};
 use zirael_source::new_id;
 use zirael_source::span::Span;
 
+use crate::DiagnosticCode;
+
 new_id!(DiagnosticId);
 
 /// Diagnostic when dropped and not consumed by either cancel or emit panics.
@@ -23,7 +25,7 @@ pub struct Diag {
   pub labels: Vec<Label>,
   pub notes: Vec<String>,
   pub helps: Vec<String>,
-  pub code: Option<String>,
+  pub code: Option<DiagnosticCode>,
 }
 
 #[derive(Clone, Debug)]

@@ -1,6 +1,7 @@
 use std::fmt;
 use zirael_diagnostics::ToDiagnostic;
-use zirael_diagnostics::prelude::{Diag, DiagnosticLevel, Label};
+use zirael_diagnostics::codes as diag_codes;
+use zirael_diagnostics::prelude::{Diag, DiagnosticCode, DiagnosticLevel, Label};
 use zirael_utils::prelude::Span;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -46,6 +47,30 @@ pub enum LexErrorKind {
 impl LexError {
   pub fn new(kind: LexErrorKind, span: Span) -> Self {
     LexError { kind, span }
+  }
+
+  pub fn code(&self) -> DiagnosticCode {
+    match &self.kind {
+      LexErrorKind::UnterminatedString => diag_codes::LEX_UNTERMINATED_STRING,
+      LexErrorKind::UnterminatedChar => diag_codes::LEX_UNTERMINATED_CHAR,
+      LexErrorKind::UnterminatedBlockComment => diag_codes::LEX_UNTERMINATED_BLOCK_COMMENT,
+      LexErrorKind::InvalidEscape { .. } => diag_codes::LEX_INVALID_ESCAPE,
+      LexErrorKind::InvalidByteValue { .. } => diag_codes::LEX_INVALID_BYTE_VALUE,
+      LexErrorKind::EmptyCharLiteral => diag_codes::LEX_EMPTY_CHAR_LITERAL,
+      LexErrorKind::MultiCharLiteral => diag_codes::LEX_MULTI_CHAR_LITERAL,
+      LexErrorKind::MissingDigitsAfterBase { .. } => diag_codes::LEX_MISSING_DIGITS_AFTER_BASE,
+      LexErrorKind::InvalidDigitForBase { .. } => diag_codes::LEX_INVALID_DIGIT_FOR_BASE,
+      LexErrorKind::MalformedExponent => diag_codes::LEX_MALFORMED_EXPONENT,
+      LexErrorKind::InvalidUtf8 => diag_codes::LEX_INVALID_UTF8,
+      LexErrorKind::UnexpectedBom => diag_codes::LEX_UNEXPECTED_BOM,
+      LexErrorKind::DisallowedCodePoint { .. } => diag_codes::LEX_DISALLOWED_CODE_POINT,
+      LexErrorKind::NonAsciiWhitespace { .. } => diag_codes::LEX_NON_ASCII_WHITESPACE,
+      LexErrorKind::InvalidIdentifierStart { .. } => diag_codes::LEX_INVALID_IDENTIFIER_START,
+      LexErrorKind::InvalidIdentifierContinue { .. } => diag_codes::LEX_INVALID_IDENTIFIER_CONTINUE,
+      LexErrorKind::JoinControlInIdentifier => diag_codes::LEX_JOIN_CONTROL_IN_IDENTIFIER,
+      LexErrorKind::UnattachedDocComment => diag_codes::LEX_UNATTACHED_DOC_COMMENT,
+      LexErrorKind::UnexpectedCharacter { .. } => diag_codes::LEX_UNEXPECTED_CHARACTER,
+    }
   }
 
   pub fn message(&self) -> String {
@@ -156,8 +181,7 @@ impl ToDiagnostic for LexError {
       labels: vec![Label::new(self.label(), self.span, DiagnosticLevel::Error)],
       notes: Vec::new(),
       helps,
-      // TODO: come up with a good idea for handling error codes
-      code: None,
+      code: Some(self.code()),
     }
   }
 }
