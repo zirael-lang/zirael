@@ -1,20 +1,21 @@
 use std::fmt::Display;
+use std::io::BufWriter;
 
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[derive(Clone, Debug)]
 pub enum DiagnosticOutputType {
-    HumanReadable,
-    JSON
+  HumanReadable,
+  JSON,
 }
 
 impl Display for DiagnosticOutputType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{:?}",
-            match self {
-                Self::JSON => "json",
-                Self::HumanReadable => "human readable",
-            }
-        )
-    }
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(
+      f,
+      "{:?}",
+      match self {
+        Self::JSON => "json",
+        Self::HumanReadable => "human readable",
+      }
+    )
+  }
 }

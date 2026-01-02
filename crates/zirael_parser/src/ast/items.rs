@@ -1,11 +1,12 @@
 use crate::ast::Attribute;
+use crate::ast::NodeId;
 use crate::ast::expressions::Expr;
 use crate::ast::generics::GenericParams;
 use crate::ast::identifier::Ident;
+use crate::ast::import::Path;
 use crate::ast::params::Param;
 use crate::ast::statements::Block;
 use crate::ast::types::{Type, TypePath};
-use crate::ast::NodeId;
 use zirael_utils::prelude::Span;
 
 #[derive(Debug, Clone)]
@@ -15,11 +16,12 @@ pub struct Item {
   pub visibility: Visibility,
   pub kind: ItemKind,
   pub span: Span,
+  pub doc_comments: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Visibility {
-  Public,
+  Public(Span),
   Private,
 }
 
@@ -29,8 +31,14 @@ pub enum ItemKind {
   Function(FunctionItem),
   Struct(StructItem),
   Enum(EnumItem),
-  Interface(InterfaceItem),
-  Impl(ImplItem),
+  Mod(ModItem),
+}
+
+#[derive(Debug, Clone)]
+pub struct ModItem {
+  pub id: NodeId,
+  pub path: Option<Path>,
+  pub span: Span,
 }
 
 #[derive(Debug, Clone)]
@@ -122,67 +130,8 @@ pub enum VariantField {
 }
 
 #[derive(Debug, Clone)]
-pub struct InterfaceItem {
-  pub id: NodeId,
-  pub name: Ident,
-  pub generics: Option<GenericParams>,
-  pub members: Vec<InterfaceMember>,
-  pub span: Span,
-}
-
-#[derive(Debug, Clone)]
-pub enum InterfaceMember {
-  Method(InterfaceMethod),
-  AssociatedType(AssociatedType),
-}
-
-#[derive(Debug, Clone)]
-pub struct InterfaceMethod {
-  pub id: NodeId,
-  pub name: Ident,
-  pub params: Vec<Param>,
-  pub return_type: Option<Type>,
-  pub span: Span,
-}
-
-#[derive(Debug, Clone)]
 pub struct AssociatedType {
   pub id: NodeId,
   pub name: Ident,
-  pub span: Span,
-}
-
-#[derive(Debug, Clone)]
-pub struct ImplItem {
-  pub id: NodeId,
-  pub generics: Option<GenericParams>,
-  pub interface_ref: Option<TypePath>,
-  pub target_type: Type,
-  pub members: Vec<ImplMember>,
-  pub span: Span,
-}
-
-#[derive(Debug, Clone)]
-pub enum ImplMember {
-  Method(InterfaceMethodImpl),
-  AssociatedType(AssociatedTypeImpl),
-  InherentMethod(MethodItem),
-}
-
-#[derive(Debug, Clone)]
-pub struct InterfaceMethodImpl {
-  pub id: NodeId,
-  pub name: Ident,
-  pub params: Vec<Param>,
-  pub return_type: Option<Type>,
-  pub body: Block,
-  pub span: Span,
-}
-
-#[derive(Debug, Clone)]
-pub struct AssociatedTypeImpl {
-  pub id: NodeId,
-  pub name: Ident,
-  pub ty: Type,
   pub span: Span,
 }

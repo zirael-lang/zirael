@@ -1,2 +1,2 @@
-mod "float.zr"
-mod "int.zr"
+mod float
+mod int

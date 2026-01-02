@@ -1,0 +1,2 @@
+//#error: invalid digit '{}' for {} literal
+var n = 0b102;

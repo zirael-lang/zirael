@@ -1,21 +1,24 @@
 use crate::fmt::Fmt;
 use crate::show::Show;
+use crate::writer::Writer;
 use crate::{Diag, DiagnosticLevel, Label};
 use std::io;
-use std::io::{Stderr, Write, stderr};
+use std::io::{Write, stderr};
 use std::ops::Range;
 use std::sync::Arc;
 use unicode_width::UnicodeWidthChar;
 use yansi::Color;
-use zirael_source::arena::source_file::SourceFileId;
 use zirael_source::prelude::Sources;
+use zirael_source::source_file::SourceFileId;
 use zirael_source::span::Span;
 
 pub trait Emitter: std::fmt::Debug {
-  fn emit_diagnostic(&self, diag: &Diag) -> anyhow::Result<()>;
+  fn emit_diagnostic(&self, diag: &Diag, w: &mut dyn Write) -> anyhow::Result<()>;
+
+  fn sources(&self) -> &Arc<Sources>;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Characters {
   pub hbar: char,
   pub vbar: char,
@@ -234,12 +237,14 @@ struct SourceGroup<'a> {
 }
 
 impl Emitter for HumanReadableEmitter {
-  fn emit_diagnostic(&self, diag: &Diag) -> anyhow::Result<()> {
-    let draw = &self.characters;
-    let mut w = stderr();
+  fn sources(&self) -> &Arc<Sources> {
+    &self.sources
+  }
+
+  fn emit_diagnostic(&self, diag: &Diag, w: &mut dyn Write) -> anyhow::Result<()> {
+    let draw = self.characters.clone();
 
     // --- Header ---
-
     let code = diag.code.as_ref().map(|c| format!("[{}] ", c));
     let id = format!("{}{}:", Show(code), diag.level.name());
     let kind_color = diag.level.color();
@@ -296,9 +301,9 @@ impl Emitter for HumanReadableEmitter {
       let line_and_col = src.get_byte_line(location).map(|(line_obj, idx, col)| {
         let line_text = src.get_line_text(line_obj).unwrap();
 
-        let col = line_text[..col.min(line_text.len())].chars().count();
-
-        (line_obj, idx, col)
+        let col_chars =
+          line_text.char_indices().take_while(|(byte_idx, _)| *byte_idx < col).count();
+        (line_obj, idx, col_chars)
       });
 
       let (line_no, col_no) = line_and_col
@@ -346,7 +351,7 @@ impl Emitter for HumanReadableEmitter {
       multi_labels_with_message
         .sort_by_key(|m| -(Span::no_file(m.char_span.start, m.char_span.end).len() as isize));
 
-      let write_margin = |w: &mut Stderr,
+      let write_margin = |w: &mut dyn Write,
                           idx: usize,
                           is_line: bool,
                           is_ellipsis: bool,
@@ -574,7 +579,7 @@ impl Emitter for HumanReadableEmitter {
             is_ellipsis = true;
           } else {
             if !is_ellipsis {
-              write_margin(&mut w, idx, false, is_ellipsis, false, None, &[], &None)?;
+              write_margin(w, idx, false, is_ellipsis, false, None, &[], &None)?;
               writeln!(w)?;
             }
             is_ellipsis = true;
@@ -611,17 +616,6 @@ impl Emitter for HumanReadableEmitter {
             .map(|(_, ll)| ll)
         };
 
-        let get_highlight = |col| {
-          margin_label
-            .iter()
-            .map(|ll| &ll.label)
-            .chain(multi_labels.iter())
-            .chain(line_labels.iter().map(|l| &l.label))
-            .filter(|l| l.char_span.contains(&(line.offset() + col)))
-            // Prioritise displaying smaller spans
-            .min_by_key(|l| (-l.info.priority, ExactSizeIterator::len(&l.char_span)))
-        };
-
         let get_underline = |col| {
           line_labels
             .iter()
@@ -638,23 +632,18 @@ impl Emitter for HumanReadableEmitter {
 
         // Margin
 
-        write_margin(&mut w, idx, true, is_ellipsis, true, None, &line_labels, &margin_label)?;
+        write_margin(w, idx, true, is_ellipsis, true, None, &line_labels, &margin_label)?;
 
         // Line
         if !is_ellipsis {
           for (col, c) in src.get_line_text(line).unwrap().trim_end().chars().enumerate() {
-            let color = if let Some(highlight) = get_highlight(col) {
-              highlight.info.color().filter(|_| !self.color)
-            } else {
-              self.unimportant_color()
-            };
             let (c, width) = self.char_width(c, col);
             if c.is_whitespace() {
               for _ in 0..width {
-                write!(w, "{}", c.fg(color))?;
+                write!(w, "{}", c)?;
               }
             } else {
-              write!(w, "{}", c.fg(color))?;
+              write!(w, "{}", c)?;
             };
           }
         }
@@ -669,7 +658,7 @@ impl Emitter for HumanReadableEmitter {
           }
           // Margin alternate
           write_margin(
-            &mut w,
+            w,
             idx,
             false,
             is_ellipsis,
@@ -720,7 +709,7 @@ impl Emitter for HumanReadableEmitter {
 
           // Margin
           write_margin(
-            &mut w,
+            w,
             idx,
             false,
             is_ellipsis,
@@ -791,14 +780,14 @@ impl Emitter for HumanReadableEmitter {
       // Help
       if is_final_group {
         for (i, help) in diag.helps.iter().enumerate() {
-          write_margin(&mut w, 0, false, false, true, Some((0, false)), &[], &None)?;
+          write_margin(w, 0, false, false, true, Some((0, false)), &[], &None)?;
           writeln!(w)?;
 
           let help_prefix = format!("{} {}", "Help", i + 1);
           let help_prefix_len = if diag.helps.len() > 1 { help_prefix.len() } else { 4 };
           let mut lines = help.lines();
           if let Some(line) = lines.next() {
-            write_margin(&mut w, 0, false, false, true, Some((0, false)), &[], &None)?;
+            write_margin(w, 0, false, false, true, Some((0, false)), &[], &None)?;
             if diag.helps.len() > 1 {
               writeln!(w, "{}: {}", help_prefix.fg(self.note_color()), line)?;
             } else {
@@ -806,7 +795,7 @@ impl Emitter for HumanReadableEmitter {
             }
           }
           for line in lines {
-            write_margin(&mut w, 0, false, false, true, Some((0, false)), &[], &None)?;
+            write_margin(w, 0, false, false, true, Some((0, false)), &[], &None)?;
             writeln!(w, "{:>pad$}{}", "", line, pad = help_prefix_len + 2)?;
           }
         }
@@ -815,14 +804,14 @@ impl Emitter for HumanReadableEmitter {
       // Note
       if is_final_group {
         for (i, note) in diag.notes.iter().enumerate() {
-          write_margin(&mut w, 0, false, false, true, Some((0, false)), &[], &None)?;
+          write_margin(w, 0, false, false, true, Some((0, false)), &[], &None)?;
           writeln!(w)?;
 
           let note_prefix = format!("{} {}", "Note", i + 1);
           let note_prefix_len = if diag.notes.len() > 1 { note_prefix.len() } else { 4 };
           let mut lines = note.lines();
           if let Some(line) = lines.next() {
-            write_margin(&mut w, 0, false, false, true, Some((0, false)), &[], &None)?;
+            write_margin(w, 0, false, false, true, Some((0, false)), &[], &None)?;
             if diag.notes.len() > 1 {
               writeln!(w, "{}: {}", note_prefix.fg(self.note_color()), line)?;
             } else {
@@ -830,7 +819,7 @@ impl Emitter for HumanReadableEmitter {
             }
           }
           for line in lines {
-            write_margin(&mut w, 0, false, false, true, Some((0, false)), &[], &None)?;
+            write_margin(w, 0, false, false, true, Some((0, false)), &[], &None)?;
             writeln!(w, "{:>pad$}{}", "", line, pad = note_prefix_len + 2)?;
           }
         }

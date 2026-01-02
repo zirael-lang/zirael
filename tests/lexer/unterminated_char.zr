@@ -1,0 +1,2 @@
+//#error: unterminated character literal
+var c = 'a;

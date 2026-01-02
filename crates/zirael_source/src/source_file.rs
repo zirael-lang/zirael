@@ -10,7 +10,7 @@ new_id!(SourceFileId);
 pub struct SourceFile {
   content: String,
   path: PathBuf,
-  file_id: SourceFileId,
+  pub file_id: SourceFileId,
   lines: Vec<Line>,
   len: usize,
   byte_len: usize,

@@ -1,0 +1,2 @@
+//#error: missing digits after '{}' prefix
+var n = 0x;

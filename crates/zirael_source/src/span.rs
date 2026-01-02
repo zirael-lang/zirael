@@ -1,7 +1,8 @@
-use crate::arena::source_file::SourceFileId;
+use crate::source_file::SourceFileId;
+use std::fmt::{Debug, Formatter};
 use std::ops::Range;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Span {
   pub start: usize,
   pub end: usize,
@@ -119,5 +120,11 @@ impl Iterator for Span {
 impl Default for Span {
   fn default() -> Self {
     Self { start: 0, end: 0, file_id: SourceFileId(usize::MAX - 1) }
+  }
+}
+
+impl Debug for Span {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    writeln!(f, "Span({}..{} - {:?})", self.start, self.end, self.file_id)
   }
 }

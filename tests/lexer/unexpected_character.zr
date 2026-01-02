@@ -1,0 +1,2 @@
+//#error: unexpected character '$'
+var $ = 1;

@@ -1,0 +1,2 @@
+//#error: non-ASCII whitespace U+{} not allowed
+ var a = 1;

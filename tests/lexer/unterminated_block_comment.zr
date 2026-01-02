@@ -1,0 +1,2 @@
+//#error: unterminated block comment
+/* a block comment that never closes

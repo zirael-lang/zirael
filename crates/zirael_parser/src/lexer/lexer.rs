@@ -2,7 +2,7 @@ use crate::lexer::lexer_errors::{LexError, LexErrorKind, LexResult};
 use crate::lexer::nfc::is_xid_start;
 use crate::lexer::tokens::{Token, TokenType};
 use zirael_diagnostics::DiagnosticCtx;
-use zirael_utils::context::Context;
+use zirael_source::prelude::SourceFile;
 use zirael_utils::prelude::{SourceFileId, Span};
 
 #[derive(Debug)]
@@ -15,19 +15,18 @@ pub struct Lexer<'ctx> {
   pub offset: usize,
   current: Option<char>,
 
-  pub errors: Vec<LexError>,
-  pub ctx: &'ctx Context<'ctx>,
+  pub dcx: &'ctx DiagnosticCtx,
 }
 
 impl<'ctx> Lexer<'ctx> {
-  pub fn new(source: String, file_id: SourceFileId, ctx: &'ctx Context<'ctx>) -> Self {
-    let source = Self::strip_bom(source);
+  pub fn new(sf: &SourceFile, dcx: &'ctx DiagnosticCtx) -> Self {
+    let source = Self::strip_bom(sf.content().to_string());
     let source = Self::strip_shebang(source);
 
     let chars: Vec<char> = source.chars().collect();
     let current = chars.get(0).copied();
 
-    Lexer { source, chars, file_id, pos: 0, offset: 0, current, errors: Vec::new(), ctx }
+    Lexer { source, chars, file_id: sf.file_id, pos: 0, offset: 0, current, dcx }
   }
 
   pub(crate) fn current_position(&self) -> usize {
@@ -35,7 +34,7 @@ impl<'ctx> Lexer<'ctx> {
   }
 
   pub fn dcx(&self) -> &DiagnosticCtx {
-    &self.ctx.session.dcx()
+    self.dcx
   }
 
   fn strip_bom(source: String) -> String {
@@ -92,7 +91,7 @@ impl<'ctx> Lexer<'ctx> {
   /// Skip the current character and record an error
   pub(crate) fn skip_with_error(&mut self, kind: LexErrorKind) {
     let span = self.make_char_span();
-    self.errors.push(LexError::new(kind, span));
+    self.dcx.emit(LexError::new(kind, span));
     self.advance();
   }
 
@@ -154,33 +153,38 @@ impl<'ctx> Lexer<'ctx> {
   }
 
   /// Tokenize an entire source into a vector of tokens
-  pub fn tokenize(&mut self) -> (Vec<Token>, Vec<LexError>) {
+  pub fn tokenize(&mut self) -> Option<Vec<Token>> {
     let mut tokens = Vec::new();
 
     loop {
+      let offset_before = self.offset;
       match self.next_token() {
         Ok(token) => {
-          let is_eof = token.token_type == TokenType::Eof;
+          let is_eof = token.kind == TokenType::Eof;
           tokens.push(token);
           if is_eof {
             break;
           }
         }
         Err(err) => {
-          self.errors.push(err);
+          self.dcx.emit(err);
 
-          if !self.is_eof() {
-            self.advance();
-          } else {
+          if self.is_eof() {
             let pos = self.offset;
             let span = Span::new(pos, pos, self.file_id);
             tokens.push(Token::new(TokenType::Eof, span, String::new()));
             break;
           }
+
+          self.advance();
+
+          if self.offset == offset_before {
+            return None;
+          }
         }
       }
     }
 
-    (tokens, self.errors.clone())
+    Some(tokens)
   }
 }

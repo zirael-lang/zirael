@@ -1,0 +1,2 @@
+//#error: `mod` takes a path to the module (eg. path::to::module), not a string literal
+mod "./utils.zr";

@@ -1,3 +1,4 @@
+use crate::errors::ZiraelError;
 use anyhow::Result;
 use std::path::{Path, PathBuf};
 
@@ -26,7 +27,7 @@ pub fn strip_same_root(path: &Path, reference_path: &Path) -> PathBuf {
 /// # Errors
 ///
 /// Returns an error if the path cannot be canonicalized
-pub fn canonicalize_with_strip<P: AsRef<Path>>(path: P) -> Result<PathBuf> {
+pub fn canonicalize_with_strip<P: AsRef<Path>>(path: P) -> Result<PathBuf, ZiraelError> {
   let canonical = fs_err::canonicalize(path)?;
   Ok(strip_windows_long_path_prefix(canonical))
 }

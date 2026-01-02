@@ -1,0 +1,19 @@
+[package]
+name = "casadei"
+version = "0.1.0"
+description = "Test suite runner for Zirael compiler"
+license = "MIT"
+edition = "2024"
+
+[dependencies]
+color-eyre = "0.6.3"
+itertools = { workspace = true }
+glob = "0.3.3"
+zirael_core = { workspace = true }
+zirael_diagnostics = { workspace = true }
+log = "0.4.29"
+zirael_cli = { workspace = true }
+zirael_source = { workspace = true }
+parking_lot = { workspace = true }
+indicatif = "0.18.3"
+spinners = "4.1.1"

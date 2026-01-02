@@ -8,7 +8,6 @@ description = "Zirael shared source/span utilities"
 
 [dependencies]
 dashmap = { workspace = true }
-generational-arena = { workspace = true }
 parking_lot = { workspace = true }
 paste = "1.0.15"
 

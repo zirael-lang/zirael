@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
+use std::str::FromStr;
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -20,5 +21,17 @@ impl Display for PackageType {
         Self::Library => "library",
       }
     )
+  }
+}
+
+impl FromStr for PackageType {
+  type Err = ();
+
+  fn from_str(s: &str) -> Result<Self, Self::Err> {
+    match s.to_ascii_lowercase().as_str() {
+      "binary" | "bin" => Ok(Self::Binary),
+      "library" | "lib" => Ok(Self::Library),
+      _ => Err(()),
+    }
   }
 }

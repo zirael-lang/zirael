@@ -12,9 +12,10 @@ dashmap = { workspace = true }
 generational-arena = { workspace = true }
 parking_lot = { workspace = true }
 zirael_source = { workspace = true }
-yansi = "1.0.1"
+yansi = { workspace = true }
 unicode-width = "0.2.1"
-log = "0.4.29"
+log = { workspace = true }
+derivative = { workspace = true }
 
 [lints]
 workspace = true

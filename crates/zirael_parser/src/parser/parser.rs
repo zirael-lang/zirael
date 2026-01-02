@@ -1,50 +1,44 @@
+use crate::identifier::Ident;
 use crate::lexer::{Token, TokenType};
-use std::fmt;
+use crate::parser::errors::{ExpectedIdentifier, ExpectedTokens, UnexpectedToken};
+use zirael_diagnostics::DiagnosticCtx;
+use zirael_diagnostics::ToDiagnostic;
 use zirael_utils::prelude::Span;
 
-pub type ParseResult<T> = Result<T, ParserError>;
+pub const ITEM_TOKENS: &'static [TokenType] = &[TokenType::Mod];
 
-#[derive(Debug, Clone)]
-pub struct ParserError {
-  pub kind: ParserErrorKind,
-  pub span: Span,
-  pub message: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ParserErrorKind {
-  UnexpectedToken,
-  UnexpectedEof,
-  InvalidSyntax,
-  ExpectedExpression,
-  ExpectedStatement,
-  ExpectedType,
-  ExpectedIdentifier,
-  ExpectedPattern,
-  InvalidLiteral,
-}
-
-impl fmt::Display for ParserError {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "{:?}: {} at {:?}", self.kind, self.message, self.span)
-  }
-}
-
-impl std::error::Error for ParserError {}
-
-pub struct Parser {
+pub struct Parser<'dcx> {
   tokens: Vec<Token>,
   pos: usize,
-  /// Errors collected during parsing for error recovery
-  pub errors: Vec<ParserError>,
+
+  /// doc comments on current item
+  pub doc_comment: Option<Vec<String>>,
+
+  dcx: &'dcx DiagnosticCtx,
 }
 
-impl Parser {
-  pub fn new(tokens: Vec<Token>) -> Self {
+impl<'dcx> Parser<'dcx> {
+  pub fn new(tokens: Vec<Token>, dcx: &'dcx DiagnosticCtx) -> Self {
     let tokens: Vec<Token> =
-      tokens.into_iter().filter(|t| !matches!(t.token_type, TokenType::Whitespace)).collect();
+      tokens.into_iter().filter(|t| !matches!(t.kind, TokenType::Whitespace)).collect();
 
-    Self { tokens, pos: 0, errors: Vec::new() }
+    Self { tokens, pos: 0, dcx, doc_comment: None }
+  }
+
+  pub fn push_comment(&mut self, comment: String) {
+    if let Some(comments) = &mut self.doc_comment {
+      comments.push(comment);
+    } else {
+      self.doc_comment = Some(vec![comment])
+    }
+  }
+
+  pub fn has_doc_comment(&self) -> bool {
+    self.doc_comment.is_some()
+  }
+
+  pub fn emit(&self, error: impl ToDiagnostic) {
+    self.dcx.emit(error);
   }
 
   /// Get the current token without consuming
@@ -56,6 +50,12 @@ impl Parser {
       .unwrap_or_else(|| self.tokens.last().expect("Token stream should never be empty"))
   }
 
+  /// Get the previous token
+  #[inline]
+  pub fn previous(&self) -> &Token {
+    self.tokens.get(self.pos - 1).unwrap()
+  }
+
   /// Get token at offset from the current position
   #[inline]
   pub fn peek_ahead(&self, offset: usize) -> Option<&Token> {
@@ -65,7 +65,12 @@ impl Parser {
   /// Check if the current token matches a type
   #[inline]
   pub fn check(&self, token_type: &TokenType) -> bool {
-    &self.peek().token_type == token_type
+    &self.peek().kind == token_type
+  }
+
+  #[inline]
+  pub fn check_if(&self, predicate: fn(&TokenType) -> bool) -> bool {
+    (predicate)(&self.peek().kind)
   }
 
   /// Check if any of the token types match
@@ -78,7 +83,7 @@ impl Parser {
   #[inline]
   pub fn advance(&mut self) -> Token {
     let token = self.peek().clone();
-    if !matches!(token.token_type, TokenType::Eof) {
+    if !matches!(token.kind, TokenType::Eof) {
       self.pos += 1;
     }
     token
@@ -95,56 +100,54 @@ impl Parser {
   }
 
   /// Expect a specific token and consume it or report an error
-  pub fn expect(&mut self, token_type: TokenType, context: &str) -> ParseResult<Token> {
+  pub fn expect(&mut self, token_type: TokenType, context: &str) -> Option<Token> {
     if self.check(&token_type) {
-      Ok(self.advance())
+      Some(self.advance())
     } else {
       let current = self.peek();
-      Err(ParserError {
-        kind: ParserErrorKind::UnexpectedToken,
-        span: current.span.clone(),
-        message: format!("Expected {} {}, found {}", token_type, context, current.token_type),
-      })
+      self.emit(UnexpectedToken {
+        span: current.span,
+        expected: ExpectedTokens::one(token_type),
+        found: current.kind.clone(),
+        context: context.to_string(),
+      });
+      None
     }
   }
 
-  pub fn report_error(&mut self, error: ParserError) {
-    self.errors.push(error);
+  pub fn expect_any(&mut self, types: &[TokenType], context: &str) -> Option<Token> {
+    let current = self.peek();
+
+    if types.contains(&current.kind) {
+      Some(self.advance())
+    } else {
+      self.emit(UnexpectedToken {
+        span: current.span,
+        expected: ExpectedTokens::many(types.to_vec()),
+        found: current.kind.clone(),
+        context: context.to_string(),
+      });
+      None
+    }
   }
 
-  /// Synchronize the parser state after an error by advancing to a recovery point
-  pub fn synchronize(&mut self) {
-    self.advance();
-
-    while !matches!(self.peek().token_type, TokenType::Eof) {
-      if matches!(
-        self.tokens.get(self.pos.saturating_sub(1)).map(|t| &t.token_type),
-        Some(TokenType::Semicolon)
-      ) {
-        return;
-      }
-
-      match self.peek().token_type {
-        TokenType::Func
-        | TokenType::Struct
-        | TokenType::Import
-        | TokenType::Pub
-        | TokenType::If
-        | TokenType::While
-        | TokenType::For
-        | TokenType::Loop
-        | TokenType::Return
-        | TokenType::LeftBrace => return,
-        _ => {}
+  pub fn advance_until_one_of(&mut self, types: &[TokenType]) {
+    loop {
+      if types.contains(&self.peek().kind) || self.is_at_end() {
+        break;
       }
 
       self.advance();
     }
   }
 
+  pub fn is(&mut self, token_type: TokenType) -> Option<Token> {
+    if self.check(&token_type) { Some(self.advance()) } else { None }
+  }
+
   #[inline]
   pub fn is_at_end(&self) -> bool {
-    matches!(self.peek().token_type, TokenType::Eof)
+    matches!(self.peek().kind, TokenType::Eof) || self.pos >= self.tokens.len()
   }
 
   pub fn span_from(&self, start: Span) -> Span {
@@ -154,5 +157,26 @@ impl Parser {
 
   pub fn current_span(&self) -> Span {
     self.peek().span.clone()
+  }
+
+  pub fn parse_identifier(&mut self) -> Ident {
+    let token = self.advance();
+    match &token.kind {
+      TokenType::Identifier(name) => Ident::new(name.as_str(), token.span),
+      _ => {
+        self.emit(ExpectedIdentifier { span: token.span, found: token.kind });
+        Ident::dummy()
+      }
+    }
+  }
+
+  pub fn eat_all(&mut self, token: TokenType) {
+    while self.peek().kind == token {
+      self.advance();
+    }
+  }
+
+  pub fn eat_semis(&mut self) {
+    self.eat_all(TokenType::Semicolon);
   }
 }

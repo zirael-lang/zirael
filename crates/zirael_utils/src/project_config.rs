@@ -16,5 +16,3 @@ pub struct ProjectConfig {
   pub diagnostic_output_type: DiagnosticOutputType,
   pub color: bool,
 }
-
-impl ProjectConfig {}

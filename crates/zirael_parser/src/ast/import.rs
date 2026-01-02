@@ -1,6 +1,6 @@
-use zirael_utils::prelude::Span;
-use crate::ast::identifier::Ident;
 use crate::ast::NodeId;
+use crate::ast::identifier::Ident;
+use zirael_utils::prelude::Span;
 
 #[derive(Debug, Clone)]
 pub struct ImportDecl {
@@ -40,7 +40,10 @@ pub struct Path {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PathRoot {
+  /// Absolute from the package root
   Package,
+  /// Relative from current directory
   SelfMod,
+  /// Relative from the parent
   Super,
 }

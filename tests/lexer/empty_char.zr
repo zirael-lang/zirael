@@ -1,0 +1,2 @@
+//#error: empty character literal
+var c = '';

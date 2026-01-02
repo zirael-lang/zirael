@@ -67,6 +67,7 @@ impl<'ctx> Lexer<'ctx> {
       "super" => TokenType::Super,
       "await" => TokenType::Await,
       "async" => TokenType::Async,
+       "mod" => TokenType::Mod,
       _ => TokenType::Identifier(normalized.clone()),
     };
 

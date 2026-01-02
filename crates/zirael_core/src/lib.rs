@@ -9,6 +9,7 @@ pub mod prelude {
   pub use crate::{check::*, unit::*, vars::*};
   pub use zirael_diagnostics::prelude::*;
   pub use zirael_parser::*;
+  pub use zirael_source::prelude::*;
   pub use zirael_utils::context::*;
   pub use zirael_utils::{prelude::*, *};
 }

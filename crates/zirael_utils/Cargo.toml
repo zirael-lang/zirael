@@ -17,8 +17,7 @@ once_cell = { workspace = true }
 parking_lot = { workspace = true }
 rayon = { workspace = true }
 serde = { workspace = true }
-generational-arena = { workspace = true }
-dashmap = { workspace = true }
+thiserror = { workspace = true }
 zirael_source = { workspace = true }
 zirael_diagnostics = { workspace = true }
 

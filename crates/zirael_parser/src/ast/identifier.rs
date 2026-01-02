@@ -4,11 +4,16 @@ use zirael_utils::prelude::{Identifier, Span, get_or_intern, resolve as resolve_
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Ident {
   pub ident: Identifier,
+  is_dummy: bool,
 }
 
 impl Ident {
   pub fn new(name: &str, span: Span) -> Self {
-    Self { ident: get_or_intern(name, Some(span)) }
+    Self { ident: get_or_intern(name, Some(span)), is_dummy: false }
+  }
+
+  pub fn dummy() -> Self {
+    Self { ident: get_or_intern("", None), is_dummy: true }
   }
 
   pub fn span(&self) -> &Span {

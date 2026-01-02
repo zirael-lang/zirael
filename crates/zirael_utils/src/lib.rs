@@ -2,6 +2,7 @@ mod article;
 pub mod context;
 pub mod dependency;
 pub mod enums;
+mod errors;
 pub mod ident_table;
 mod path;
 pub mod project_config;
@@ -22,6 +23,7 @@ pub mod prelude {
   pub use crate::enums::lib_type::*;
   pub use crate::enums::mode::*;
   pub use crate::enums::project_type::*;
+  pub use crate::errors::*;
   pub use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,

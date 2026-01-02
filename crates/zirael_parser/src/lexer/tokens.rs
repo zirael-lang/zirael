@@ -33,6 +33,7 @@ pub enum TokenType {
   Mut,       // mut
 
   // Modules
+  Mod,       // mod
   Import,    // import
   As,        // as
   Package,   // package
@@ -135,14 +136,14 @@ pub enum IntBase {
 
 #[derive(Debug, Clone)]
 pub struct Token {
-  pub token_type: TokenType,
+  pub kind: TokenType,
   pub span: Span,
   pub lexeme: String,
 }
 
 impl Token {
   pub fn new(token_type: TokenType, span: Span, lexeme: String) -> Self {
-    Token { token_type, span, lexeme }
+    Token { kind: token_type, span, lexeme }
   }
 }
 
@@ -180,6 +181,7 @@ impl fmt::Display for TokenType {
       TokenType::Mut => write!(f, "keyword `mut`"),
 
       // Keywords - Modules
+      TokenType::Mod => write!(f, "keyword `mod`"),
       TokenType::Import => write!(f, "keyword `import`"),
       TokenType::As => write!(f, "keyword `as`"),
       TokenType::Package => write!(f, "keyword `package`"),

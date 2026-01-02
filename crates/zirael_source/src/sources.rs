@@ -1,4 +1,4 @@
-use crate::arena::source_file::{SourceFile, SourceFileId};
+use crate::source_file::{SourceFile, SourceFileId};
 use dashmap::DashMap;
 use dashmap::iter::Iter;
 use dashmap::mapref::one::Ref;

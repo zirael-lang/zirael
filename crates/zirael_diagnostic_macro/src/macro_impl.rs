@@ -1,5 +1,6 @@
 use proc_macro::TokenStream;
 use quote::quote;
+use std::collections::{BTreeSet, HashMap};
 use syn::{DeriveInput, Expr, parse_macro_input, spanned::Spanned};
 use thiserror::Error;
 
@@ -36,6 +37,99 @@ fn get_lit_str(expr: &Expr) -> Result<syn::LitStr, MacroFunctionError> {
     }
     _ => Err(MacroFunctionError::InvalidAttribute("Message must be a string literal".to_string())),
   }
+}
+
+fn is_valid_format_ident(ident: &str) -> bool {
+  let ident = ident.strip_prefix("r#").unwrap_or(ident);
+  let mut chars = ident.chars();
+  let Some(first) = chars.next() else {
+    return false;
+  };
+  if !(first == '_' || first.is_ascii_alphabetic()) {
+    return false;
+  }
+  chars.all(|c| c == '_' || c.is_ascii_alphanumeric())
+}
+
+/// Extracts *named* formatting placeholders used by a Rust format string.
+///
+/// - Supports escaped braces (`{{` and `}}`).
+/// - Rejects positional placeholders (`{}`, `{0}`, `{:?}`), since this macro
+///   only permits `{name}`.
+/// - Ignores format specifiers (e.g. `{name:?}`, `{name:>10}`) when extracting the name.
+fn extract_named_placeholders(fmt: &str) -> Result<Vec<String>, MacroFunctionError> {
+  let mut out: BTreeSet<String> = BTreeSet::new();
+  let mut chars = fmt.chars().peekable();
+
+  while let Some(ch) = chars.next() {
+    match ch {
+      '{' => {
+        if chars.peek() == Some(&'{') {
+          chars.next();
+          continue;
+        }
+
+        let mut inner = String::new();
+        let mut closed = false;
+        while let Some(next) = chars.next() {
+          if next == '}' {
+            closed = true;
+            break;
+          }
+          inner.push(next);
+        }
+
+        if !closed {
+          return Err(MacroFunctionError::InvalidAttribute(
+            "unclosed `{` in format string".to_string(),
+          ));
+        }
+
+        let inner = inner.trim();
+        if inner.is_empty() {
+          return Err(MacroFunctionError::InvalidAttribute(
+            "positional formatting (`{}`) is not supported; use `{field}`".to_string(),
+          ));
+        }
+
+        // Split off formatting spec (e.g. name:? or name:>10)
+        let name_part = inner.split(|c| c == ':' || c == '!').next().unwrap_or("").trim();
+
+        if name_part.is_empty() {
+          return Err(MacroFunctionError::InvalidAttribute(
+            "positional formatting (`{:...}`) is not supported; use `{field}`".to_string(),
+          ));
+        }
+
+        if name_part.chars().next().is_some_and(|c| c.is_ascii_digit()) {
+          return Err(MacroFunctionError::InvalidAttribute(
+            "positional formatting (`{0}`) is not supported; use `{field}`".to_string(),
+          ));
+        }
+
+        if !is_valid_format_ident(name_part) {
+          return Err(MacroFunctionError::InvalidAttribute(format!(
+            "invalid format placeholder `{{{}}}`; use a field name like `{{expected}}`",
+            name_part
+          )));
+        }
+
+        out.insert(name_part.to_string());
+      }
+      '}' => {
+        if chars.peek() == Some(&'}') {
+          chars.next();
+        } else {
+          return Err(MacroFunctionError::InvalidAttribute(
+            "unmatched `}` in format string".to_string(),
+          ));
+        }
+      }
+      _ => {}
+    }
+  }
+
+  Ok(out.into_iter().collect())
 }
 
 fn collect_struct_messages(
@@ -180,7 +274,8 @@ fn impl_diagnostic_derive(ast: &DeriveInput) -> Result<TokenStream, MacroFunctio
     .ok_or(MacroFunctionError::MissingAttribute)?;
 
   let severity = diagnostic_attr.path().segments.last().unwrap().ident.to_string().to_lowercase();
-  let error_message = get_string_literal(&diagnostic_attr.parse_args::<Expr>()?)?;
+  let error_message_lit = get_lit_str(&diagnostic_attr.parse_args::<Expr>()?)?;
+  let error_message = error_message_lit.value();
 
   let fields = match &ast.data {
     syn::Data::Struct(data) => match &data.fields {
@@ -214,7 +309,20 @@ fn impl_diagnostic_derive(ast: &DeriveInput) -> Result<TokenStream, MacroFunctio
     })
     .collect();
 
-  let message_fields_for_quote = &message_fields;
+  let message_field_map: HashMap<String, &syn::Ident> =
+    message_fields.iter().map(|&ident| (ident.to_string(), ident)).collect();
+
+  let main_message_used_names = extract_named_placeholders(&error_message)?;
+  let mut main_message_used_fields: Vec<&syn::Ident> = Vec::new();
+  for name in main_message_used_names {
+    let Some(ident) = message_field_map.get(&name) else {
+      return Err(MacroFunctionError::InvalidAttribute(format!(
+        "unknown format placeholder `{{{}}}` in #[{}(...)]",
+        name, severity
+      )));
+    };
+    main_message_used_fields.push(*ident);
+  }
 
   // Fields with #[note] attribute
   let note_fields: Vec<_> = fields
@@ -264,33 +372,57 @@ fn impl_diagnostic_derive(ast: &DeriveInput) -> Result<TokenStream, MacroFunctio
     })
     .collect();
 
-  let message_field_refs = message_fields.iter().map(|&ident| {
+  let main_message_field_refs = main_message_used_fields.iter().map(|&ident| {
     quote! { let #ident = &self.#ident; }
   });
 
-  let label_implementations = label_fields.iter().map(|(ident, message, severity)| {
+  let mut label_implementations: Vec<proc_macro2::TokenStream> = Vec::new();
+  for (ident, message, severity) in &label_fields {
     let diagnostic_level = get_diagnostic_level(severity);
 
     if message.is_empty() {
-      quote! {
+      label_implementations.push(quote! {
         zirael_diagnostics::Label::new(String::new(), self.#ident, #diagnostic_level)
-      }
-    } else if message_fields.is_empty() {
-      quote! {
-        {
-          let message = format!(#message);
-          zirael_diagnostics::Label::new(message, self.#ident, #diagnostic_level)
-        }
-      }
-    } else {
-      quote! {
-        {
-          let message = format!(#message, #(#message_fields_for_quote),*);
-          zirael_diagnostics::Label::new(message, self.#ident, #diagnostic_level)
-        }
-      }
+      });
+      continue;
     }
-  });
+
+    let message_lit = syn::LitStr::new(message, proc_macro2::Span::call_site());
+    let used_names = extract_named_placeholders(message)?;
+    let mut used_fields: Vec<&syn::Ident> = Vec::new();
+    for name in used_names {
+      let Some(field_ident) = message_field_map.get(&name) else {
+        return Err(MacroFunctionError::InvalidAttribute(format!(
+          "unknown format placeholder `{{{}}}` in label message",
+          name
+        )));
+      };
+      used_fields.push(*field_ident);
+    }
+
+    if used_fields.is_empty() {
+      label_implementations.push(quote! {
+        {
+          let message = format!(#message_lit);
+          zirael_diagnostics::Label::new(message, self.#ident, #diagnostic_level)
+        }
+      });
+    } else {
+      let field_refs = used_fields.iter().map(|&field_ident| {
+        quote! { let #field_ident = &self.#field_ident; }
+      });
+      let field_args = used_fields.iter().map(|&field_ident| {
+        quote! { #field_ident = #field_ident }
+      });
+      label_implementations.push(quote! {
+        {
+          #(#field_refs)*
+          let message = format!(#message_lit, #(#field_args),*);
+          zirael_diagnostics::Label::new(message, self.#ident, #diagnostic_level)
+        }
+      });
+    }
+  }
 
   let note_field_refs = note_fields.iter().map(|&ident| {
     quote! { let #ident = &self.#ident; }
@@ -346,14 +478,17 @@ fn impl_diagnostic_derive(ast: &DeriveInput) -> Result<TokenStream, MacroFunctio
     }
   };
 
-  let message_impl = if message_fields.is_empty() {
+  let message_impl = if main_message_used_fields.is_empty() {
     quote! {
-      let message = format!(#error_message);
+      let message = format!(#error_message_lit);
     }
   } else {
+    let field_args = main_message_used_fields.iter().map(|&ident| {
+      quote! { #ident = #ident }
+    });
     quote! {
-      #(#message_field_refs)*
-      let message = format!(#error_message, #(#message_fields_for_quote),*);
+      #(#main_message_field_refs)*
+      let message = format!(#error_message_lit, #(#field_args),*);
     }
   };
 

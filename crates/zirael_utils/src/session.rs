@@ -1,9 +1,10 @@
 use crate::project_config::ProjectConfig;
+use parking_lot::Mutex;
+use std::io::Write;
 use std::sync::Arc;
-use zirael_diagnostics::DiagnosticCtx;
+use zirael_diagnostics::{DiagnosticCtx, DiagnosticWriter};
 use zirael_source::prelude::Sources;
 
-#[derive(Debug)]
 /// Struct that holds information about current package
 pub struct Session {
   config: ProjectConfig,
@@ -11,9 +12,14 @@ pub struct Session {
 }
 
 impl Session {
-  pub fn new(config: ProjectConfig, sources: Arc<Sources>) -> Self {
+  pub fn new(config: ProjectConfig, sources: Arc<Sources>, w: DiagnosticWriter) -> Self {
     Self {
-      dcx: DiagnosticCtx::new(sources, config.color.clone(), config.diagnostic_output_type.clone()),
+      dcx: DiagnosticCtx::new(
+        sources.clone(),
+        config.color.clone(),
+        config.diagnostic_output_type.clone(),
+        w,
+      ),
       config,
     }
   }

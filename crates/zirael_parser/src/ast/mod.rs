@@ -51,5 +51,4 @@ pub struct ProgramNode {
   pub attributes: Vec<Attribute>,
   pub imports: Vec<ImportDecl>,
   pub items: Vec<Item>,
-  pub span: Span,
 }

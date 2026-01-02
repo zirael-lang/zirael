@@ -1,0 +1,2 @@
+//#error: invalid escape sequence '\q'
+var s = "\q";

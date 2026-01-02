@@ -2,12 +2,11 @@ use generational_arena::{Arena, Index};
 use std::fmt::{Debug, Display};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use yansi::Color;
-use zirael_source::arena::source_file::SourceFileId;
-use zirael_source::arena::{ArenaId, GenArena};
 use zirael_source::new_id;
+use zirael_source::source_file::SourceFileId;
 use zirael_source::span::Span;
 
-use crate::DiagnosticCode;
+use crate::{DiagnosticCode, ToDiagnostic};
 
 new_id!(DiagnosticId);
 
@@ -15,10 +14,18 @@ new_id!(DiagnosticId);
 #[derive(Clone, Debug)]
 pub struct Diagnostic {
   pub id: DiagnosticId,
-  pub diag: Option<Box<Diag>>,
+  pub diag: Box<Diag>,
+  pub(crate) emitted: bool,
+  pub(crate) cancelled: bool,
 }
 
-#[derive(Clone, Debug)]
+impl ToDiagnostic for Diagnostic {
+  fn to_diagnostic(&self) -> Diag {
+    *self.diag.clone()
+  }
+}
+
+#[derive(Clone, Debug, Default)]
 pub struct Diag {
   pub message: String,
   pub level: DiagnosticLevel,
@@ -26,6 +33,12 @@ pub struct Diag {
   pub notes: Vec<String>,
   pub helps: Vec<String>,
   pub code: Option<DiagnosticCode>,
+}
+
+impl Diag {
+  pub fn new(message: String, level: DiagnosticLevel) -> Self {
+    Self { message, level, ..Default::default() }
+  }
 }
 
 #[derive(Clone, Debug)]
@@ -63,9 +76,10 @@ impl Label {
   }
 }
 
-#[derive(Debug, Copy, PartialEq, Eq, Clone, Hash)]
+#[derive(Debug, Copy, PartialEq, Eq, Clone, Hash, Default)]
 pub enum DiagnosticLevel {
   /// Error that prevents the compilation from continuing
+  #[default]
   Error,
 
   /// Warning that doesn't affect the compilation.
@@ -95,8 +109,8 @@ impl DiagnosticLevel {
 
 impl Drop for Diagnostic {
   fn drop(&mut self) {
-    if self.diag.is_some() {
-      panic!("Diagnostic {:?} dropped but it wasn't emitted or cancelled", self.id)
+    if !self.emitted && !self.cancelled {
+      panic!("Diagnostic {:?} dropped but it wasn't emitted or cancelled", self.id);
     }
   }
 }

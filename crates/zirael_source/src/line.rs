@@ -1,4 +1,4 @@
-use crate::arena::source_file::SourceFileId;
+use crate::source_file::SourceFileId;
 use crate::span::Span;
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
