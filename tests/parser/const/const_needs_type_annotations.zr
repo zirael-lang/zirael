@@ -1,0 +1,2 @@
+//#error: const items need type annotations
+pub const VALUE = 10;

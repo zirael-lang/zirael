@@ -7,7 +7,8 @@ use zirael_diagnostics::DiagnosticCtx;
 use zirael_diagnostics::ToDiagnostic;
 use zirael_utils::prelude::Span;
 
-pub const ITEM_TOKENS: &[TokenType] = &[TokenType::Mod];
+pub const ITEM_TOKENS: &[TokenType] =
+  &[TokenType::Mod, TokenType::Const, TokenType::Func];
 
 pub struct Parser<'dcx> {
   tokens: Vec<Token>,
@@ -188,7 +189,9 @@ impl<'dcx> Parser<'dcx> {
 
   pub fn parse_identifier(&mut self) -> Ident {
     let token = self.advance();
-    if let TokenType::Identifier(name) = &token.kind { Ident::new(name.as_str(), token.span) } else {
+    if let TokenType::Identifier(name) = &token.kind {
+      Ident::new(name.as_str(), token.span)
+    } else {
       self.emit(ExpectedIdentifier {
         span: token.span,
         found: token.kind,

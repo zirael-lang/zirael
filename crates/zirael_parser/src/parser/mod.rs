@@ -1,7 +1,9 @@
 mod errors;
+mod expr;
 mod parser;
 mod path;
 mod program;
+mod ty;
 
 pub use parser::Parser;
 

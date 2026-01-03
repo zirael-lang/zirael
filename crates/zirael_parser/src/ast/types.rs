@@ -8,10 +8,13 @@ pub enum Type {
   Primitive(PrimitiveType),
   Path(TypePath),
   Function(FunctionType),
-  Reference(ReferenceType),
+  Pointer(PointerType),
+  Optional(OptionalType),
   Array(ArrayType),
   Tuple(TupleType),
   Unit(UnitType),
+  // most likely means that the parsing failed
+  Invalid,
 }
 
 #[derive(Debug, Clone)]
@@ -54,6 +57,12 @@ pub enum PrimitiveKind {
   Char,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Mutability {
+  Mut,
+  Const,
+}
+
 #[derive(Debug, Clone)]
 pub struct TypePath {
   pub id: NodeId,
@@ -68,12 +77,20 @@ pub struct FunctionType {
   pub params: Vec<Type>,
   pub return_type: Box<Type>,
   pub span: Span,
+  pub is_const: bool,
 }
 
 #[derive(Debug, Clone)]
-pub struct ReferenceType {
+pub struct PointerType {
   pub id: NodeId,
-  pub is_mut: bool,
+  pub mutability: Mutability,
+  pub inner: Box<Type>,
+  pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct OptionalType {
+  pub id: NodeId,
   pub inner: Box<Type>,
   pub span: Span,
 }
@@ -99,10 +116,12 @@ impl Type {
       Self::Primitive(p) => p.span,
       Self::Path(p) => p.span,
       Self::Function(f) => f.span,
-      Self::Reference(r) => r.span,
+      Self::Pointer(r) => r.span,
       Self::Array(a) => a.span,
       Self::Tuple(t) => t.span,
       Self::Unit(u) => u.span,
+      Self::Optional(o) => o.span,
+      Self::Invalid => Span::dummy()
     }
   }
 }

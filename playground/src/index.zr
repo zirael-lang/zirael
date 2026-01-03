@@ -1,2 +1,1 @@
-//#expect-error:
-mod "./utils.zr";
+pub const VALUE: i32 = 10;

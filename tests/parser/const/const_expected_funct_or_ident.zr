@@ -1,0 +1,2 @@
+//#error: expected a function or an identifier after const, found keyword `{}`
+const var ax = 10;

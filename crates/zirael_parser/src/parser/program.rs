@@ -1,11 +1,16 @@
+use crate::expressions::Expr;
 use crate::items::Item;
 use crate::parser::Parser;
-use crate::parser::errors::ModStringLit;
+use crate::parser::errors::{
+  ConstCannotBeUninitialized, ConstExpectedFuncOrIdent,
+  ConstItemsNeedTypeAnnotation, ModStringLit,
+};
 use crate::parser::parser::ITEM_TOKENS;
 use crate::{
-  ItemKind, ModItem, NodeId, ProgramNode, TokenType, Visibility,
-  log_parse_failure,
+  Block, ConstItem, FunctionItem, ItemKind, ModItem, NodeId, ProgramNode,
+  TokenType, Type, Visibility, log_parse_failure,
 };
+use zirael_source::span::Span;
 use zirael_utils::prelude::debug;
 
 impl Parser<'_> {
@@ -63,6 +68,75 @@ impl Parser<'_> {
     })
   }
 
+  fn parse_function(
+    &mut self,
+    is_const: bool,
+    span_start: Span,
+  ) -> Option<FunctionItem> {
+    let name = self.parse_identifier();
+
+    Some(FunctionItem {
+      id: NodeId::new(),
+      is_const,
+      name,
+      generics: None,
+      params: vec![],
+      return_type: None,
+      body: Block {
+        id: NodeId::new(),
+        statements: vec![],
+        span: Span::dummy(),
+      },
+      span: Default::default(),
+    })
+  }
+
+  fn parse_const(&mut self, span: Span) -> Option<ItemKind> {
+    match self.peek().kind {
+      TokenType::Func => Some(ItemKind::Function(log_parse_failure!(
+        self.parse_function(true, span),
+        "module item"
+      )?)),
+      TokenType::Identifier(_) => {
+        let ident = self.parse_identifier();
+
+        let colon = self.eat(TokenType::Colon);
+        let ty = self.parse_type();
+        if !colon || matches!(ty, Type::Invalid) {
+          self.emit(ConstItemsNeedTypeAnnotation {
+            span: self.previous().span,
+          });
+        }
+
+        let expr = if !self.eat(TokenType::Assign) {
+          self.emit(ConstCannotBeUninitialized {
+            span: self.peek().span,
+          });
+          Expr::dummy()
+        } else {
+          self.parse_expr()
+        };
+
+        Some(ItemKind::Const(ConstItem {
+          id: NodeId::new(),
+          name: ident,
+          ty,
+          value: expr,
+          span: self.span_from(span),
+        }))
+      }
+
+      _ => {
+        self.emit(ConstExpectedFuncOrIdent {
+          span: self.peek().span,
+          found: self.peek().kind.clone(),
+        });
+
+        None
+      }
+    }
+  }
+
   fn parse_item(&mut self) -> Option<Item> {
     self.doc_comment = None;
     self.check_possible_comment();
@@ -79,6 +153,13 @@ impl Parser<'_> {
       TokenType::Mod => {
         ItemKind::Mod(log_parse_failure!(self.parse_mod(), "module item")?)
       }
+      TokenType::Const => {
+        log_parse_failure!(self.parse_const(span_start), "const item")?
+      }
+      TokenType::Func => ItemKind::Function(log_parse_failure!(
+        self.parse_function(false, span_start),
+        "function item"
+      )?),
       _ => unreachable!(),
     };
 

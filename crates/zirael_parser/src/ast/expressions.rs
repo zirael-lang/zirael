@@ -85,6 +85,18 @@ pub enum ExprKind {
   // Composite literals
   Tuple(Vec<Expr>),
   Array(Vec<Expr>),
+
+  Dummy,
+}
+
+impl Expr {
+  pub fn dummy() -> Expr {
+    Expr {
+      id: NodeId::new(),
+      kind: ExprKind::Dummy,
+      span: Span::default(),
+    }
+  }
 }
 
 #[derive(Debug, Clone)]

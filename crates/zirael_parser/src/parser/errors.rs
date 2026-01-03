@@ -65,3 +65,45 @@ pub struct ExpectedIdentifier {
   #[error("expected identifier here")]
   pub span: Span,
 }
+
+#[derive(Diagnostic)]
+#[error("found `const` alone in a type")]
+#[code(PARSE_CONST_ALONE_IN_A_TYPE)]
+#[help("if you meant to type a const pointer add a star like this: *const <>")]
+pub struct ConstAloneInType {
+  #[error("alone `const` found here")]
+  pub span: Span,
+}
+
+#[derive(Diagnostic)]
+#[error("expected a function or an identifier after const, found {found}")]
+#[code(PARSE_CONST_EXPECTED_FUNC_OR_IDENT)]
+pub struct ConstExpectedFuncOrIdent {
+  pub found: TokenType,
+  #[error("unexpected part found here")]
+  pub span: Span,
+}
+
+#[derive(Diagnostic)]
+#[error("const items need type annotations")]
+#[code(PARSE_CONST_NEED_TYPE_ANNOTATIONS)]
+pub struct ConstItemsNeedTypeAnnotation {
+  #[error("valid type expected for this item")]
+  pub span: Span,
+}
+
+#[derive(Diagnostic)]
+#[error("const items cannot be uninitialized")]
+#[code(PARSE_CONST_CANNOT_BE_UNINITIALIZED)]
+pub struct ConstCannotBeUninitialized {
+  #[error("valid expression expected for this item")]
+  pub span: Span,
+}
+
+#[derive(Diagnostic)]
+#[error("expected a type")]
+#[code(PARSE_EXPECTED_TYPE)]
+pub struct ExpectedType {
+  #[error("type expected here")]
+  pub span: Span,
+}
