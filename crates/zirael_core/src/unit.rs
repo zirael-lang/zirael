@@ -1,5 +1,4 @@
 use crate::prelude::*;
-use std::collections::HashSet;
 use zirael_parser::parser::parse;
 // use zirael_parser::parser::parse;
 use zirael_source::source_file::SourceFileId;
@@ -25,13 +24,13 @@ impl<'ctx> CompilationUnit<'ctx> {
     let dcx = self.ctx.dcx();
 
     let source_file = self.ctx.sources.get(id).unwrap_or_else(|| {
-      dcx.bug(format!("Source file {:?} not found", id));
+      dcx.bug(format!("Source file {id:?} not found"));
       unreachable!();
     });
 
     let mut lexer = Lexer::new(source_file.value(), dcx);
     let tokens = lexer.tokenize().unwrap_or_else(|| {
-      dcx.bug(format!("lexer made no progress for source file {:?}", id));
+      dcx.bug(format!("lexer made no progress for source file {id:?}"));
       unreachable!();
     });
     dcx.emit_all();

@@ -2,7 +2,7 @@ use crate::lexer::lexer::Lexer;
 use crate::lexer::lexer_errors::{LexError, LexErrorKind, LexResult};
 use crate::lexer::tokens::{Token, TokenType};
 
-impl<'ctx> Lexer<'ctx> {
+impl Lexer<'_> {
   pub(crate) fn lex_string(&mut self) -> LexResult<Token> {
     let start_offset = self.offset;
     let mut value = String::new();
@@ -12,7 +12,7 @@ impl<'ctx> Lexer<'ctx> {
 
     loop {
       match self.peek() {
-        None | Some('\n') | Some('\r') => {
+        None | Some('\n' | '\r') => {
           let span = self.make_span(start_offset);
           return Err(LexError::new(LexErrorKind::UnterminatedString, span));
         }
@@ -58,35 +58,35 @@ impl<'ctx> Lexer<'ctx> {
     match self.peek() {
       Some('\\') => {
         self.advance();
-        Ok("\\".to_string())
+        Ok("\\".to_owned())
       }
       Some('"') => {
         self.advance();
-        Ok("\"".to_string())
+        Ok("\"".to_owned())
       }
       Some('\'') => {
         self.advance();
-        Ok("'".to_string())
+        Ok("'".to_owned())
       }
       Some('n') => {
         self.advance();
-        Ok("\n".to_string())
+        Ok("\n".to_owned())
       }
       Some('r') => {
         self.advance();
-        Ok("\r".to_string())
+        Ok("\r".to_owned())
       }
       Some('t') => {
         self.advance();
-        Ok("\t".to_string())
+        Ok("\t".to_owned())
       }
       Some('b') => {
         self.advance();
-        Ok("\u{0008}".to_string())
+        Ok("\u{0008}".to_owned())
       }
       Some('f') => {
         self.advance();
-        Ok("\u{000C}".to_string())
+        Ok("\u{000C}".to_owned())
       }
       Some('x') => {
         self.advance();
@@ -98,38 +98,32 @@ impl<'ctx> Lexer<'ctx> {
         self.advance();
         let hex = self.read_hex_digits(4)?;
         let value = u32::from_str_radix(&hex, 16).unwrap();
-        match char::from_u32(value) {
-          Some(ch) => Ok(ch.to_string()),
-          None => {
-            let span = self.make_span(start_offset);
-            Err(LexError::new(
-              LexErrorKind::InvalidEscape {
-                escape: format!("\\u{}", hex),
-              },
-              span,
-            ))
-          }
+        if let Some(ch) = char::from_u32(value) { Ok(ch.to_string()) } else {
+          let span = self.make_span(start_offset);
+          Err(LexError::new(
+            LexErrorKind::InvalidEscape {
+              escape: format!("\\u{hex}"),
+            },
+            span,
+          ))
         }
       }
       Some('U') if allow_unicode => {
         self.advance();
         let hex = self.read_hex_digits(8)?;
         let value = u32::from_str_radix(&hex, 16).unwrap();
-        match char::from_u32(value) {
-          Some(ch) => Ok(ch.to_string()),
-          None => {
-            let span = self.make_span(start_offset);
-            Err(LexError::new(
-              LexErrorKind::InvalidEscape {
-                escape: format!("\\U{}", hex),
-              },
-              span,
-            ))
-          }
+        if let Some(ch) = char::from_u32(value) { Ok(ch.to_string()) } else {
+          let span = self.make_span(start_offset);
+          Err(LexError::new(
+            LexErrorKind::InvalidEscape {
+              escape: format!("\\U{hex}"),
+            },
+            span,
+          ))
         }
       }
       Some(ch) => {
-        let escape = format!("\\{}", ch);
+        let escape = format!("\\{ch}");
         let span = self.make_span(start_offset);
         Err(LexError::new(LexErrorKind::InvalidEscape { escape }, span))
       }
@@ -137,7 +131,7 @@ impl<'ctx> Lexer<'ctx> {
         let span = self.make_span(start_offset);
         Err(LexError::new(
           LexErrorKind::InvalidEscape {
-            escape: "\\".to_string(),
+            escape: "\\".to_owned(),
           },
           span,
         ))
@@ -159,7 +153,7 @@ impl<'ctx> Lexer<'ctx> {
           let span = self.make_span(start_offset);
           return Err(LexError::new(
             LexErrorKind::InvalidEscape {
-              escape: format!("\\x{}", digits),
+              escape: format!("\\x{digits}"),
             },
             span,
           ));
@@ -177,7 +171,7 @@ impl<'ctx> Lexer<'ctx> {
     self.advance();
 
     let value = match self.peek() {
-      None | Some('\n') | Some('\r') => {
+      None | Some('\n' | '\r') => {
         let span = self.make_span(start_offset);
         return Err(LexError::new(LexErrorKind::UnterminatedChar, span));
       }
@@ -206,15 +200,12 @@ impl<'ctx> Lexer<'ctx> {
       }
     };
 
-    match self.peek() {
-      Some('\'') => {
-        lexeme.push('\'');
-        self.advance();
-      }
-      _ => {
-        let span = self.make_span(start_offset);
-        return Err(LexError::new(LexErrorKind::UnterminatedChar, span));
-      }
+    if self.peek() == Some('\'') {
+      lexeme.push('\'');
+      self.advance();
+    } else {
+      let span = self.make_span(start_offset);
+      return Err(LexError::new(LexErrorKind::UnterminatedChar, span));
     }
 
     let span = self.make_span(start_offset);
@@ -231,7 +222,7 @@ impl<'ctx> Lexer<'ctx> {
     self.advance();
 
     let value = match self.peek() {
-      None | Some('\n') | Some('\r') => {
+      None | Some('\n' | '\r') => {
         let span = self.make_span(start_offset);
         return Err(LexError::new(LexErrorKind::UnterminatedChar, span));
       }
@@ -270,15 +261,12 @@ impl<'ctx> Lexer<'ctx> {
       ));
     }
 
-    match self.peek() {
-      Some('\'') => {
-        lexeme.push('\'');
-        self.advance();
-      }
-      _ => {
-        let span = self.make_span(start_offset);
-        return Err(LexError::new(LexErrorKind::UnterminatedChar, span));
-      }
+    if self.peek() == Some('\'') {
+      lexeme.push('\'');
+      self.advance();
+    } else {
+      let span = self.make_span(start_offset);
+      return Err(LexError::new(LexErrorKind::UnterminatedChar, span));
     }
 
     let span = self.make_span(start_offset);

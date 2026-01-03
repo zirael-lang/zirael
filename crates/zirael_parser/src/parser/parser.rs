@@ -7,7 +7,7 @@ use zirael_diagnostics::DiagnosticCtx;
 use zirael_diagnostics::ToDiagnostic;
 use zirael_utils::prelude::Span;
 
-pub const ITEM_TOKENS: &'static [TokenType] = &[TokenType::Mod];
+pub const ITEM_TOKENS: &[TokenType] = &[TokenType::Mod];
 
 pub struct Parser<'dcx> {
   tokens: Vec<Token>,
@@ -38,7 +38,7 @@ impl<'dcx> Parser<'dcx> {
     if let Some(comments) = &mut self.doc_comment {
       comments.push(comment);
     } else {
-      self.doc_comment = Some(vec![comment])
+      self.doc_comment = Some(vec![comment]);
     }
   }
 
@@ -64,7 +64,7 @@ impl<'dcx> Parser<'dcx> {
   /// Get the previous token
   #[inline]
   pub fn previous(&self) -> &Token {
-    self.tokens.get(self.pos - 1).unwrap()
+    &self.tokens[self.pos - 1]
   }
 
   /// Get token at offset from the current position
@@ -124,7 +124,7 @@ impl<'dcx> Parser<'dcx> {
         span: current.span,
         expected: ExpectedTokens::one(token_type),
         found: current.kind.clone(),
-        context: context.to_string(),
+        context: context.to_owned(),
       });
       None
     }
@@ -144,7 +144,7 @@ impl<'dcx> Parser<'dcx> {
         span: current.span,
         expected: ExpectedTokens::many(types.to_vec()),
         found: current.kind.clone(),
-        context: context.to_string(),
+        context: context.to_owned(),
       });
       None
     }
@@ -183,20 +183,17 @@ impl<'dcx> Parser<'dcx> {
   }
 
   pub fn current_span(&self) -> Span {
-    self.peek().span.clone()
+    self.peek().span
   }
 
   pub fn parse_identifier(&mut self) -> Ident {
     let token = self.advance();
-    match &token.kind {
-      TokenType::Identifier(name) => Ident::new(name.as_str(), token.span),
-      _ => {
-        self.emit(ExpectedIdentifier {
-          span: token.span,
-          found: token.kind,
-        });
-        Ident::dummy()
-      }
+    if let TokenType::Identifier(name) = &token.kind { Ident::new(name.as_str(), token.span) } else {
+      self.emit(ExpectedIdentifier {
+        span: token.span,
+        found: token.kind,
+      });
+      Ident::dummy()
     }
   }
 

@@ -20,11 +20,11 @@ pub struct Lexer<'ctx> {
 
 impl<'ctx> Lexer<'ctx> {
   pub fn new(sf: &SourceFile, dcx: &'ctx DiagnosticCtx) -> Self {
-    let source = Self::strip_bom(sf.content().to_string());
+    let source = Self::strip_bom(sf.content().to_owned());
     let source = Self::strip_shebang(source);
 
     let chars: Vec<char> = source.chars().collect();
-    let current = chars.get(0).copied();
+    let current = chars.first().copied();
 
     Lexer {
       source,
@@ -146,7 +146,7 @@ impl<'ctx> Lexer<'ctx> {
       Some(ch) if ch.is_ascii_digit() => self.lex_number(),
 
       // Float starting with dot (.5)
-      Some('.') if self.peek_ahead(1).map_or(false, |c| c.is_ascii_digit()) => {
+      Some('.') if self.peek_ahead(1).is_some_and(|c| c.is_ascii_digit()) => {
         self.lex_decimal_or_float()
       }
 

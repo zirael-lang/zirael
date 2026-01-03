@@ -80,7 +80,7 @@ fn extract_named_placeholders(
 
         let mut inner = String::new();
         let mut closed = false;
-        while let Some(next) = chars.next() {
+        for next in chars.by_ref() {
           if next == '}' {
             closed = true;
             break;
@@ -104,7 +104,7 @@ fn extract_named_placeholders(
 
         // Split off formatting spec (e.g. name:? or name:>10)
         let name_part = inner
-          .split(|c| c == ':' || c == '!')
+          .split([':', '!'])
           .next()
           .unwrap_or("")
           .trim();

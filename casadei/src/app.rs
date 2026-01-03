@@ -1,6 +1,6 @@
 use crate::output::TestResult;
 use indicatif::{
-  MultiProgress, ProgressBar, ProgressDrawTarget, ProgressStyle,
+  MultiProgress, ProgressBar, ProgressStyle,
 };
 use parking_lot::Mutex;
 use std::sync::Arc;

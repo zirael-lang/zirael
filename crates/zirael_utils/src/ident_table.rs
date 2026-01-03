@@ -1,6 +1,5 @@
 use crate::prelude::Span;
 use lasso::{Spur, ThreadedRodeo};
-use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::{Hash, Hasher};
@@ -76,8 +75,8 @@ impl Display for Identifier {
   }
 }
 
-pub static GLOBAL_TABLE: Lazy<Mutex<IdentTable>> =
-  Lazy::new(|| Mutex::new(IdentTable::new()));
+pub static GLOBAL_TABLE: std::sync::LazyLock<Mutex<IdentTable>> =
+  std::sync::LazyLock::new(|| Mutex::new(IdentTable::new()));
 
 #[inline]
 pub fn get_or_intern(name: &str, span: Option<Span>) -> Identifier {

@@ -2,7 +2,7 @@ use crate::lexer::lexer::Lexer;
 use crate::lexer::lexer_errors::{LexError, LexErrorKind};
 use crate::lexer::tokens::{Token, TokenType};
 
-impl<'ctx> Lexer<'ctx> {
+impl Lexer<'_> {
   pub(crate) fn skip_line_comment(&mut self) {
     self.advance();
     self.advance();
@@ -67,7 +67,7 @@ impl<'ctx> Lexer<'ctx> {
     Token::new(
       TokenType::DocComment(content.clone()),
       span,
-      format!("///{}", content),
+      format!("///{content}"),
     )
   }
 }

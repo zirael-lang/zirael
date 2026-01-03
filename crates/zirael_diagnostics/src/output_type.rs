@@ -1,5 +1,4 @@
 use std::fmt::Display;
-use std::io::BufWriter;
 
 #[derive(Clone, Debug)]
 pub enum DiagnosticOutputType {

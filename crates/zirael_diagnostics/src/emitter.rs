@@ -1,12 +1,10 @@
-use crate::fmt::Fmt;
+use crate::fmt::Fmt as _;
 use crate::show::Show;
-use crate::writer::Writer;
-use crate::{Diag, DiagnosticLevel, Label};
-use std::io;
-use std::io::{Write, stderr};
+use crate::{Diag, Label};
+use std::io::Write;
 use std::ops::Range;
 use std::sync::Arc;
-use unicode_width::UnicodeWidthChar;
+use unicode_width::UnicodeWidthChar as _;
 use yansi::Color;
 use zirael_source::prelude::Sources;
 use zirael_source::source_file::SourceFileId;
@@ -126,16 +124,13 @@ impl HumanReadableEmitter {
 
   fn get_source_groups<'a>(&self, diag: &'a Diag) -> Vec<SourceGroup<'a>> {
     let mut labels = Vec::new();
-    for label in diag.labels.iter() {
+    for label in &diag.labels {
       let label_source = label.span.file_id;
 
       let src_display = self.sources.display(label_source);
-      let src = match self.sources.get(label_source) {
-        Some(src) => src,
-        None => {
-          eprintln!("Unable to fetch source '{}'", Show(src_display));
-          continue;
-        }
+      let src = if let Some(src) = self.sources.get(label_source) { src } else {
+        eprintln!("Unable to fetch source '{}'", Show(src_display));
+        continue;
       };
 
       let given_label_span = label.span.start()..label.span.end();
@@ -198,7 +193,7 @@ impl HumanReadableEmitter {
             && group
               .labels
               .last()
-              .map_or(true, |last| last.end_line <= label.end_line) =>
+              .is_none_or(|last| last.end_line <= label.end_line) =>
         {
           group.char_span.start =
             group.char_span.start.min(label.char_span.start);
@@ -278,7 +273,7 @@ impl Emitter for HumanReadableEmitter {
     let draw = self.characters.clone();
 
     // --- Header ---
-    let code = diag.code.as_ref().map(|c| format!("[{}] ", c));
+    let code = diag.code.as_ref().map(|c| format!("[{c}] "));
     let id = format!("{}{}:", Show(code), diag.level.name());
     let kind_color = diag.level.color();
     writeln!(w, "{} {}", id.fg(kind_color), diag.message)?;
@@ -296,14 +291,11 @@ impl Emitter for HumanReadableEmitter {
             .sources
             .display(*src_id)
             .map(|d| d.to_string())
-            .unwrap_or_else(|| "<unknown>".to_string());
+            .unwrap_or_else(|| "<unknown>".to_owned());
 
-          let src = match self.sources.get(*src_id) {
-            Some(src) => src,
-            None => {
-              eprintln!("Unable to fetch source {}", src_name);
-              return None;
-            }
+          let src = if let Some(src) = self.sources.get(*src_id) { src } else {
+            eprintln!("Unable to fetch source {src_name}");
+            return None;
           };
 
           let line_range = src.get_line_range(char_span.clone());
@@ -335,14 +327,11 @@ impl Emitter for HumanReadableEmitter {
         .sources
         .display(src_id)
         .map(|d| d.to_string())
-        .unwrap_or_else(|| "<unknown>".to_string());
+        .unwrap_or_else(|| "<unknown>".to_owned());
 
-      let src = match self.sources.get(src_id) {
-        Some(src) => src,
-        None => {
-          eprintln!("Unable to fetch source {}", src_name);
-          continue;
-        }
+      let src = if let Some(src) = self.sources.get(src_id) { src } else {
+        eprintln!("Unable to fetch source {src_name}");
+        continue;
       };
 
       let line_range = src.get_line_range(char_span);
@@ -368,7 +357,7 @@ impl Emitter for HumanReadableEmitter {
           )
         })
         .unwrap_or_else(|| ('?'.to_string(), '?'.to_string()));
-      let line_ref = format!("{}:{}:{}", src_name, line_no, col_no);
+      let line_ref = format!("{src_name}:{line_no}:{col_no}");
 
       writeln!(
         w,
@@ -451,7 +440,7 @@ impl Emitter for HumanReadableEmitter {
           .fg(self.skipped_margin_color())
         };
 
-        write!(w, " {}{}", line_no_margin, ' ')?;
+        write!(w, " {line_no_margin} ")?;
 
         // Multi-line margins
         if draw_labels {
@@ -519,7 +508,7 @@ impl Emitter for HumanReadableEmitter {
 
             if let (Some((margin, _is_start)), true) = (margin_ptr, is_line) {
               let is_col =
-                multi_label.map_or(false, |ml| std::ptr::eq(*ml, margin.label));
+                multi_label.is_some_and(|ml| std::ptr::eq(*ml, margin.label));
               let is_limit = col + 1 == multi_labels_with_message.len();
               if !is_col && !is_limit {
                 hbar = hbar.or(Some(margin.label));
@@ -529,7 +518,7 @@ impl Emitter for HumanReadableEmitter {
             hbar = hbar.filter(|l| {
               margin_label
                 .as_ref()
-                .map_or(true, |margin| !std::ptr::eq(margin.label, *l))
+                .is_none_or(|margin| !std::ptr::eq(margin.label, *l))
                 || !is_line
             });
 
@@ -565,7 +554,7 @@ impl Emitter for HumanReadableEmitter {
               (margin_ptr, is_line)
             {
               let is_col =
-                multi_label.map_or(false, |ml| std::ptr::eq(*ml, margin.label));
+                multi_label.is_some_and(|ml| std::ptr::eq(*ml, margin.label));
               let is_limit = col == multi_labels_with_message.len();
               (
                 if is_limit {
@@ -582,8 +571,8 @@ impl Emitter for HumanReadableEmitter {
             } else {
               (' '.fg(None), ' '.fg(None))
             };
-            write!(w, "{}", a)?;
-            write!(w, "{}", b)?;
+            write!(w, "{a}")?;
+            write!(w, "{b}")?;
           }
         }
 
@@ -600,8 +589,7 @@ impl Emitter for HumanReadableEmitter {
 
         let margin_label = multi_labels_with_message
           .iter()
-          .enumerate()
-          .filter_map(|(_i, label)| {
+          .filter_map(|label| {
             let is_start = line.span().contains(label.char_span.start);
             let is_end = line.span().contains(label.last_offset());
             if is_start {
@@ -628,14 +616,13 @@ impl Emitter for HumanReadableEmitter {
         // Generate a list of labels for this line, along with their label columns
         let mut line_labels = multi_labels_with_message
           .iter()
-          .enumerate()
-          .filter_map(|(_i, label)| {
+          .filter_map(|label| {
             let is_start = line.span().contains(label.char_span.start);
             let is_end = line.span().contains(label.last_offset());
             if is_start
               && margin_label
                 .as_ref()
-                .map_or(true, |m| !std::ptr::eq(*label, m.label))
+                .is_none_or(|m| !std::ptr::eq(*label, m.label))
             {
               // TODO: Check to see whether multi is the first on the start line or first on the end line
               Some(LineLabel {
@@ -727,7 +714,7 @@ impl Emitter for HumanReadableEmitter {
               ll.label.info.message.is_some()
                 && margin_label
                   .as_ref()
-                  .map_or(true, |m| !std::ptr::eq(ll.label, m.label))
+                  .is_none_or(|m| !std::ptr::eq(ll.label, m.label))
             })
             .find(|(j, ll)| ll.col == col && row <= *j)
             .map(|(_, ll)| ll)
@@ -777,11 +764,11 @@ impl Emitter for HumanReadableEmitter {
             let (c, width) = self.char_width(c, col);
             if c.is_whitespace() {
               for _ in 0..width {
-                write!(w, "{}", c)?;
+                write!(w, "{c}")?;
               }
             } else {
-              write!(w, "{}", c)?;
-            };
+              write!(w, "{c}")?;
+            }
           }
         }
         writeln!(w)?;
@@ -816,7 +803,7 @@ impl Emitter for HumanReadableEmitter {
                 // TODO: Is this good?
                 // The `true` is used here because it's temporarily disabling a
                 // feature that might be reenabled later.
-                #[allow(clippy::overly_complex_bool_expr)]
+                #[expect(clippy::overly_complex_bool_expr)]
                 if ExactSizeIterator::len(&vbar_ll.label.char_span) <= 1 || true
                 {
                   [draw.underbar, draw.underline]
@@ -873,7 +860,7 @@ impl Emitter for HumanReadableEmitter {
               && line_label.label.info.message.is_some()
               && margin_label
                 .as_ref()
-                .map_or(true, |m| !std::ptr::eq(line_label.label, m.label))
+                .is_none_or(|m| !std::ptr::eq(line_label.label, m.label))
             {
               [
                 if line_label.multi {
@@ -916,10 +903,10 @@ impl Emitter for HumanReadableEmitter {
             };
 
             if width > 0 {
-              write!(w, "{}", c)?;
+              write!(w, "{c}")?;
             }
             for _ in 1..width {
-              write!(w, "{}", tail)?;
+              write!(w, "{tail}")?;
             }
           }
           if line_label.draw_msg {

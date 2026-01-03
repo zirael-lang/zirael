@@ -1,5 +1,5 @@
 use clap::Parser as _;
-use std::io::{Cursor, Write, stderr};
+use std::io::{Cursor, Write as _, stderr};
 use std::sync::Arc;
 use zirael_cli::Cli;
 use zirael_cli::logger::setup_logger;

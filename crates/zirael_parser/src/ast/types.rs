@@ -96,13 +96,13 @@ pub struct TupleType {
 impl Type {
   pub fn span(&self) -> Span {
     match self {
-      Type::Primitive(p) => p.span,
-      Type::Path(p) => p.span,
-      Type::Function(f) => f.span,
-      Type::Reference(r) => r.span,
-      Type::Array(a) => a.span,
-      Type::Tuple(t) => t.span,
-      Type::Unit(u) => u.span,
+      Self::Primitive(p) => p.span,
+      Self::Path(p) => p.span,
+      Self::Function(f) => f.span,
+      Self::Reference(r) => r.span,
+      Self::Array(a) => a.span,
+      Self::Tuple(t) => t.span,
+      Self::Unit(u) => u.span,
     }
   }
 }

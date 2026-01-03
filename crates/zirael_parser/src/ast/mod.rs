@@ -13,7 +13,6 @@ use crate::ast::import::ImportDecl;
 use crate::ast::items::Item;
 pub use expressions::*;
 pub use generics::*;
-pub use identifier::*;
 pub use import::*;
 pub use items::*;
 pub use params::*;

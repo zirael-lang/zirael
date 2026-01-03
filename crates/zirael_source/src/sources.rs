@@ -25,7 +25,7 @@ impl Sources {
 
   pub fn add(&self, input: String, path: PathBuf) -> SourceFileId {
     if let Some(existing_id) = self.get_by_path(&path) {
-      return existing_id.value().clone();
+      return *existing_id.value();
     }
 
     let id =

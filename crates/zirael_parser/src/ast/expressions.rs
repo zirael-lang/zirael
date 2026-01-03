@@ -167,16 +167,16 @@ pub enum BinaryOp {
 impl BinaryOp {
   pub fn precedence(&self) -> u8 {
     match self {
-      BinaryOp::Or => 12,
-      BinaryOp::And => 11,
-      BinaryOp::BitOr => 10,
-      BinaryOp::BitXor => 9,
-      BinaryOp::BitAnd => 8,
-      BinaryOp::Eq | BinaryOp::Ne => 7,
-      BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => 6,
-      BinaryOp::Shl | BinaryOp::Shr => 5,
-      BinaryOp::Add | BinaryOp::Sub => 4,
-      BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => 3,
+      Self::Or => 12,
+      Self::And => 11,
+      Self::BitOr => 10,
+      Self::BitXor => 9,
+      Self::BitAnd => 8,
+      Self::Eq | Self::Ne => 7,
+      Self::Lt | Self::Le | Self::Gt | Self::Ge => 6,
+      Self::Shl | Self::Shr => 5,
+      Self::Add | Self::Sub => 4,
+      Self::Mul | Self::Div | Self::Mod => 3,
     }
   }
 

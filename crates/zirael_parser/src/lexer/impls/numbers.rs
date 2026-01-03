@@ -2,13 +2,13 @@ use crate::lexer::lexer::Lexer;
 use crate::lexer::lexer_errors::{LexError, LexErrorKind, LexResult};
 use crate::lexer::tokens::{IntBase, Token, TokenType};
 
-impl<'ctx> Lexer<'ctx> {
+impl Lexer<'_> {
   pub(crate) fn lex_number(&mut self) -> LexResult<Token> {
     if self.peek() == Some('0') {
       match self.peek_ahead(1) {
-        Some('b') | Some('B') => return self.lex_binary(),
-        Some('o') | Some('O') => return self.lex_octal(),
-        Some('x') | Some('X') => return self.lex_hexadecimal(),
+        Some('b' | 'B') => return self.lex_binary(),
+        Some('o' | 'O') => return self.lex_octal(),
+        Some('x' | 'X') => return self.lex_hexadecimal(),
         _ => {} // Continue as decimal or float
       }
     }
@@ -38,7 +38,7 @@ impl<'ctx> Lexer<'ctx> {
           return Err(LexError::new(
             LexErrorKind::InvalidDigitForBase {
               digit: ch,
-              base: "binary".to_string(),
+              base: "binary".to_owned(),
             },
             span,
           ));
@@ -51,7 +51,7 @@ impl<'ctx> Lexer<'ctx> {
       let span = self.make_span(start_offset);
       return Err(LexError::new(
         LexErrorKind::MissingDigitsAfterBase {
-          base: "0b".to_string(),
+          base: "0b".to_owned(),
         },
         span,
       ));
@@ -90,7 +90,7 @@ impl<'ctx> Lexer<'ctx> {
           return Err(LexError::new(
             LexErrorKind::InvalidDigitForBase {
               digit: ch,
-              base: "octal".to_string(),
+              base: "octal".to_owned(),
             },
             span,
           ));
@@ -103,7 +103,7 @@ impl<'ctx> Lexer<'ctx> {
       let span = self.make_span(start_offset);
       return Err(LexError::new(
         LexErrorKind::MissingDigitsAfterBase {
-          base: "0o".to_string(),
+          base: "0o".to_owned(),
         },
         span,
       ));
@@ -139,7 +139,7 @@ impl<'ctx> Lexer<'ctx> {
         return Err(LexError::new(
           LexErrorKind::InvalidDigitForBase {
             digit: ch,
-            base: "hexadecimal".to_string(),
+            base: "hexadecimal".to_owned(),
           },
           span,
         ));
@@ -152,7 +152,7 @@ impl<'ctx> Lexer<'ctx> {
       let span = self.make_span(start_offset);
       return Err(LexError::new(
         LexErrorKind::MissingDigitsAfterBase {
-          base: "0x".to_string(),
+          base: "0x".to_owned(),
         },
         span,
       ));
@@ -183,7 +183,7 @@ impl<'ctx> Lexer<'ctx> {
     }
 
     if self.peek() == Some('.')
-      && self.peek_ahead(1).map_or(false, |c| c.is_ascii_digit())
+      && self.peek_ahead(1).is_some_and(|c| c.is_ascii_digit())
     {
       has_dot = true;
       lexeme.push('.');
@@ -200,11 +200,11 @@ impl<'ctx> Lexer<'ctx> {
       }
     }
 
-    if matches!(self.peek(), Some('e') | Some('E')) {
+    if matches!(self.peek(), Some('e' | 'E')) {
       has_exponent = true;
       lexeme.push(self.advance().unwrap());
 
-      if matches!(self.peek(), Some('+') | Some('-')) {
+      if matches!(self.peek(), Some('+' | '-')) {
         lexeme.push(self.advance().unwrap());
       }
 

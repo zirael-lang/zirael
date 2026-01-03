@@ -6,13 +6,13 @@ use zirael_diagnostics::prelude::{
 };
 use zirael_utils::prelude::Span;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LexError {
   pub kind: LexErrorKind,
   pub span: Span,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LexErrorKind {
   // Literal errors
   UnterminatedString,
@@ -48,7 +48,7 @@ pub enum LexErrorKind {
 
 impl LexError {
   pub fn new(kind: LexErrorKind, span: Span) -> Self {
-    LexError { kind, span }
+    Self { kind, span }
   }
 
   pub fn code(&self) -> DiagnosticCode {
@@ -100,36 +100,36 @@ impl LexError {
   pub fn message(&self) -> String {
     match &self.kind {
       LexErrorKind::UnterminatedString => {
-        "unterminated string literal".to_string()
+        "unterminated string literal".to_owned()
       }
       LexErrorKind::UnterminatedChar => {
-        "unterminated character literal".to_string()
+        "unterminated character literal".to_owned()
       }
       LexErrorKind::UnterminatedBlockComment => {
-        "unterminated block comment".to_string()
+        "unterminated block comment".to_owned()
       }
       LexErrorKind::InvalidEscape { escape } => {
-        format!("invalid escape sequence '{}'", escape)
+        format!("invalid escape sequence '{escape}'")
       }
       LexErrorKind::InvalidByteValue { value } => {
-        format!("byte value {} is out of range (must be 0-255)", value)
+        format!("byte value {value} is out of range (must be 0-255)")
       }
-      LexErrorKind::EmptyCharLiteral => "empty character literal".to_string(),
+      LexErrorKind::EmptyCharLiteral => "empty character literal".to_owned(),
       LexErrorKind::MultiCharLiteral => {
-        "character literal contains multiple characters".to_string()
+        "character literal contains multiple characters".to_owned()
       }
       LexErrorKind::MissingDigitsAfterBase { base } => {
-        format!("missing digits after '{}' prefix", base)
+        format!("missing digits after '{base}' prefix")
       }
       LexErrorKind::InvalidDigitForBase { digit, base } => {
-        format!("invalid digit '{}' for {} literal", digit, base)
+        format!("invalid digit '{digit}' for {base} literal")
       }
       LexErrorKind::MalformedExponent => {
-        "exponent requires at least one digit".to_string()
+        "exponent requires at least one digit".to_owned()
       }
-      LexErrorKind::InvalidUtf8 => "invalid UTF-8 encoding".to_string(),
+      LexErrorKind::InvalidUtf8 => "invalid UTF-8 encoding".to_owned(),
       LexErrorKind::UnexpectedBom => {
-        "unexpected BOM (U+FEFF) - only allowed at file start".to_string()
+        "unexpected BOM (U+FEFF) - only allowed at file start".to_owned()
       }
       LexErrorKind::DisallowedCodePoint { code_point } => {
         format!("disallowed code point U+{:04X}", *code_point as u32)
@@ -141,38 +141,38 @@ impl LexError {
         )
       }
       LexErrorKind::InvalidIdentifierStart { char } => {
-        format!("invalid character '{}' at start of identifier", char)
+        format!("invalid character '{char}' at start of identifier")
       }
       LexErrorKind::InvalidIdentifierContinue { char } => {
-        format!("invalid character '{}' in identifier", char)
+        format!("invalid character '{char}' in identifier")
       }
       LexErrorKind::JoinControlInIdentifier => {
-        "zero-width joiner/non-joiner not allowed in identifiers".to_string()
+        "zero-width joiner/non-joiner not allowed in identifiers".to_owned()
       }
       LexErrorKind::UnattachedDocComment => {
-        "documentation comment not attached to any item".to_string()
+        "documentation comment not attached to any item".to_owned()
       }
       LexErrorKind::UnexpectedCharacter { char } => {
-        format!("unexpected character '{}'", char)
+        format!("unexpected character '{char}'")
       }
     }
   }
 
   pub fn label(&self) -> String {
     match &self.kind {
-      LexErrorKind::UnterminatedString => "string started here".to_string(),
+      LexErrorKind::UnterminatedString => "string started here".to_owned(),
       LexErrorKind::UnterminatedChar => {
-        "character literal started here".to_string()
+        "character literal started here".to_owned()
       }
       LexErrorKind::UnterminatedBlockComment => {
-        "comment started here".to_string()
+        "comment started here".to_owned()
       }
-      LexErrorKind::InvalidEscape { .. } => "invalid escape".to_string(),
+      LexErrorKind::InvalidEscape { .. } => "invalid escape".to_owned(),
       LexErrorKind::InvalidByteValue { .. } => {
-        "byte value too large".to_string()
+        "byte value too large".to_owned()
       }
-      LexErrorKind::UnexpectedBom => "BOM not allowed here".to_string(),
-      _ => "error here".to_string(),
+      LexErrorKind::UnexpectedBom => "BOM not allowed here".to_owned(),
+      _ => "error here".to_owned(),
     }
   }
 
@@ -180,26 +180,25 @@ impl LexError {
     match &self.kind {
       LexErrorKind::InvalidEscape { escape } if escape.starts_with("\\u") => {
         Some(
-          "Unicode escapes must have exactly 4 hex digits: \\uXXXX".to_string(),
+          "Unicode escapes must have exactly 4 hex digits: \\uXXXX".to_owned(),
         )
       }
       LexErrorKind::InvalidEscape { escape } if escape.starts_with("\\U") => {
         Some(
-          "Unicode escapes must have exactly 8 hex digits: \\UXXXXXXXX"
-            .to_string(),
+          "Unicode escapes must have exactly 8 hex digits: \\UXXXXXXXX".to_owned(),
         )
       }
       LexErrorKind::InvalidEscape { escape } if escape.starts_with("\\x") => {
-        Some("Hex escapes must have exactly 2 hex digits: \\xXX".to_string())
+        Some("Hex escapes must have exactly 2 hex digits: \\xXX".to_owned())
       }
       LexErrorKind::UnterminatedChar => {
-        Some("add closing quote (') to terminate character literal".to_string())
+        Some("add closing quote (') to terminate character literal".to_owned())
       }
       LexErrorKind::UnterminatedBlockComment => {
-        Some("add closing */ to terminate block comment".to_string())
+        Some("add closing */ to terminate block comment".to_owned())
       }
       LexErrorKind::MissingDigitsAfterBase { base } => {
-        Some(format!("add at least one digit after '{}'", base))
+        Some(format!("add at least one digit after '{base}'"))
       }
       _ => None,
     }

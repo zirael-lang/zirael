@@ -1,4 +1,4 @@
-use colored::Colorize;
+use colored::Colorize as _;
 use log::LevelFilter;
 use std::fmt::Display;
 
@@ -21,7 +21,7 @@ pub fn setup_logger(verbose: bool, no_color: bool) {
         "{}{} {}",
         record.level().to_string().to_lowercase(),
         if verbose {
-          record.module_path().unwrap_or("unknown").to_string()
+          record.module_path().unwrap_or("unknown").to_owned()
         } else {
           String::new()
         },

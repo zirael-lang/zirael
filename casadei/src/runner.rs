@@ -1,9 +1,9 @@
 use crate::app::AppState;
 use crate::directives::{Directive, LineDirection};
 use crate::output::{FailureType, TestResult, TestStatus};
-use crate::test::{Test, TestId};
+use crate::test::Test;
 use parking_lot::Mutex;
-use std::io::{Cursor, Write};
+use std::io::Cursor;
 use std::sync::Arc;
 use zirael_core::prelude::*;
 
@@ -75,41 +75,28 @@ impl<'tests> TestRunner<'tests> {
           })
           .collect();
 
-        let mut matched_directives = vec![false; error_directives.len()];
-
-        for diagnostic in sess.dcx().diagnostics.iter() {
-          let diag = diagnostic.value();
-
-          for (idx, (directive_line, direction, pattern)) in
-            error_directives.iter().enumerate()
-          {
-            if matched_directives[idx] {
-              continue;
-            }
-
-            if matches_directive(
-              diag,
-              *directive_line,
-              direction,
-              pattern,
-              &sources,
-            ) {
-              matched_directives[idx] = true;
-              break;
-            }
-          }
-        }
-
-        for (idx, matched) in matched_directives.iter().enumerate() {
-          if !*matched {
-            let (line, direction, pattern) = &error_directives[idx];
-            failures.push(FailureType::ExpectedErrorNotFound {
-              line: *line,
-              direction: direction.clone(),
-              pattern: pattern.clone(),
-            });
-          }
-        }
+        failures.extend(
+          error_directives
+            .iter()
+            .filter(|(directive_line, direction, pattern)| {
+              !sess.dcx().diagnostics.iter().any(|diagnostic| {
+                matches_directive(
+                  diagnostic.value(),
+                  *directive_line,
+                  direction,
+                  pattern,
+                  sources,
+                )
+              })
+            })
+            .map(|(line, direction, pattern)| {
+              FailureType::ExpectedErrorNotFound {
+                line: *line,
+                direction: direction.clone(),
+                pattern: pattern.clone(),
+              }
+            }),
+        );
 
         if failures.is_empty() {
           TestStatus::Passed
@@ -198,12 +185,10 @@ fn matches_pattern(message: &str, pattern: &str) -> bool {
       if !message[pos..].ends_with(part) {
         return false;
       }
+    } else if let Some(found_pos) = message[pos..].find(part) {
+      pos += found_pos + part.len();
     } else {
-      if let Some(found_pos) = message[pos..].find(part) {
-        pos += found_pos + part.len();
-      } else {
-        return false;
-      }
+      return false;
     }
   }
 

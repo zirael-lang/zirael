@@ -1,7 +1,7 @@
 use crate::lexer::lexer::Lexer;
 use crate::lexer::lexer_errors::LexErrorKind;
 
-impl<'ctx> Lexer<'ctx> {
+impl Lexer<'_> {
   pub(crate) fn skip_whitespace(&mut self) {
     while let Some(ch) = self.peek() {
       match ch {

@@ -1,6 +1,5 @@
 use crate::line::Line;
 use crate::new_id;
-use crate::span::Span;
 use std::ops::Range;
 use std::path::PathBuf;
 

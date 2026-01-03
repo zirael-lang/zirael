@@ -6,10 +6,9 @@ use crate::{
   ItemKind, ModItem, NodeId, ProgramNode, TokenType, Visibility,
   log_parse_failure,
 };
-use std::fmt::Debug;
 use zirael_utils::prelude::debug;
 
-impl<'dcx> Parser<'dcx> {
+impl Parser<'_> {
   pub fn parse_program(&mut self) -> Option<ProgramNode> {
     let mut items: Vec<Item> = vec![];
 
@@ -43,7 +42,7 @@ impl<'dcx> Parser<'dcx> {
 
   /// tries to find next item to start parsing from.
   fn synchronize_to_next_item(&mut self) {
-    self.advance_until_one_of(ITEM_TOKENS)
+    self.advance_until_one_of(ITEM_TOKENS);
   }
 
   fn parse_mod(&mut self) -> Option<ModItem> {

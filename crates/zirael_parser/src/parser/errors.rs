@@ -1,5 +1,4 @@
 use crate::TokenType;
-use itertools::Itertools;
 use std::fmt;
 use std::fmt::{Display, Formatter};
 use zirael_diagnostic_macro::Diagnostic;

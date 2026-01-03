@@ -119,7 +119,7 @@ impl From<Span> for Range<usize> {
 
 impl From<Range<usize>> for Span {
   fn from(value: Range<usize>) -> Self {
-    Span::no_file(value.start, value.end)
+    Self::no_file(value.start, value.end)
   }
 }
 

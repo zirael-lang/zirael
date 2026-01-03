@@ -13,8 +13,8 @@ impl Dependency {
   pub fn new(name: String, entrypoint: PathBuf, root: PathBuf) -> Self {
     Self {
       name,
-      entrypoint,
       root,
+      entrypoint,
     }
   }
 

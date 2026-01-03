@@ -1,6 +1,4 @@
 use crate::project_config::ProjectConfig;
-use parking_lot::Mutex;
-use std::io::Write;
 use std::sync::Arc;
 use zirael_diagnostics::{DiagnosticCtx, DiagnosticWriter};
 use zirael_source::prelude::Sources;
@@ -20,7 +18,7 @@ impl Session {
     Self {
       dcx: DiagnosticCtx::new(
         sources.clone(),
-        config.color.clone(),
+        config.color,
         config.diagnostic_output_type.clone(),
         w,
       ),

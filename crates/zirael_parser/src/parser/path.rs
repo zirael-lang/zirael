@@ -1,7 +1,7 @@
 use crate::parser::Parser;
 use crate::{NodeId, Path, PathRoot, TokenType};
 
-impl<'dcx> Parser<'dcx> {
+impl Parser<'_> {
   pub fn parse_path(&mut self) -> Option<Path> {
     let start = self.current_span();
 

@@ -31,6 +31,6 @@ pub mod prelude {
     path::PathBuf,
   };
   pub use zirael_diagnostics::prelude::*;
-  pub use zirael_source::id::*;
+  
   pub use zirael_source::prelude::*;
 }

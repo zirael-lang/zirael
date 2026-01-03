@@ -1,7 +1,7 @@
 use std::fmt;
 use zirael_utils::prelude::Span;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TokenType {
   // Literals
   StringLiteral(String),   // "hello"
@@ -126,7 +126,7 @@ pub enum TokenType {
 }
 
 /// Integer literal base
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IntBase {
   Decimal(String),     // 123
   Binary(String),      // 0b1010
@@ -143,7 +143,7 @@ pub struct Token {
 
 impl Token {
   pub fn new(token_type: TokenType, span: Span, lexeme: String) -> Self {
-    Token {
+    Self {
       kind: token_type,
       span,
       lexeme,
@@ -155,119 +155,119 @@ impl fmt::Display for TokenType {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     match self {
       // Literals
-      TokenType::StringLiteral(s) => write!(f, "string literal \"{}\"", s),
-      TokenType::ByteLiteral(b) => write!(f, "byte literal b'{}'", *b as char),
-      TokenType::CharLiteral(c) => write!(f, "character literal '{}'", c),
-      TokenType::IntegerLiteral(_) => write!(f, "integer literal"),
-      TokenType::FloatLiteral(s) => write!(f, "float literal {}", s),
-      TokenType::Identifier(s) => write!(f, "identifier `{}`", s),
-      TokenType::DocComment(_) => write!(f, "doc comment"),
+      Self::StringLiteral(s) => write!(f, "string literal \"{s}\""),
+      Self::ByteLiteral(b) => write!(f, "byte literal b'{}'", *b as char),
+      Self::CharLiteral(c) => write!(f, "character literal '{c}'"),
+      Self::IntegerLiteral(_) => write!(f, "integer literal"),
+      Self::FloatLiteral(s) => write!(f, "float literal {s}"),
+      Self::Identifier(s) => write!(f, "identifier `{s}`"),
+      Self::DocComment(_) => write!(f, "doc comment"),
 
       // Keywords - Control flow
-      TokenType::If => write!(f, "keyword `if`"),
-      TokenType::Else => write!(f, "keyword `else`"),
-      TokenType::While => write!(f, "keyword `while`"),
-      TokenType::For => write!(f, "keyword `for`"),
-      TokenType::Loop => write!(f, "keyword `loop`"),
-      TokenType::Return => write!(f, "keyword `return`"),
-      TokenType::Match => write!(f, "keyword `match`"),
-      TokenType::In => write!(f, "keyword `in`"),
+      Self::If => write!(f, "keyword `if`"),
+      Self::Else => write!(f, "keyword `else`"),
+      Self::While => write!(f, "keyword `while`"),
+      Self::For => write!(f, "keyword `for`"),
+      Self::Loop => write!(f, "keyword `loop`"),
+      Self::Return => write!(f, "keyword `return`"),
+      Self::Match => write!(f, "keyword `match`"),
+      Self::In => write!(f, "keyword `in`"),
 
       // Keywords - Declarations
-      TokenType::Func => write!(f, "keyword `func`"),
-      TokenType::Struct => write!(f, "keyword `struct`"),
-      TokenType::Enum => write!(f, "keyword `enum`"),
-      TokenType::Interface => write!(f, "keyword `interface`"),
-      TokenType::Impl => write!(f, "keyword `impl`"),
-      TokenType::Type => write!(f, "keyword `type`"),
-      TokenType::Var => write!(f, "keyword `var`"),
-      TokenType::Const => write!(f, "keyword `const`"),
-      TokenType::Mut => write!(f, "keyword `mut`"),
+      Self::Func => write!(f, "keyword `func`"),
+      Self::Struct => write!(f, "keyword `struct`"),
+      Self::Enum => write!(f, "keyword `enum`"),
+      Self::Interface => write!(f, "keyword `interface`"),
+      Self::Impl => write!(f, "keyword `impl`"),
+      Self::Type => write!(f, "keyword `type`"),
+      Self::Var => write!(f, "keyword `var`"),
+      Self::Const => write!(f, "keyword `const`"),
+      Self::Mut => write!(f, "keyword `mut`"),
 
       // Keywords - Modules
-      TokenType::Mod => write!(f, "keyword `mod`"),
-      TokenType::Import => write!(f, "keyword `import`"),
-      TokenType::As => write!(f, "keyword `as`"),
-      TokenType::Package => write!(f, "keyword `package`"),
-      TokenType::SelfValue => write!(f, "keyword `self`"),
-      TokenType::Super => write!(f, "keyword `super`"),
+      Self::Mod => write!(f, "keyword `mod`"),
+      Self::Import => write!(f, "keyword `import`"),
+      Self::As => write!(f, "keyword `as`"),
+      Self::Package => write!(f, "keyword `package`"),
+      Self::SelfValue => write!(f, "keyword `self`"),
+      Self::Super => write!(f, "keyword `super`"),
 
       // Keywords - Visibility
-      TokenType::Pub => write!(f, "keyword `pub`"),
+      Self::Pub => write!(f, "keyword `pub`"),
 
       // Keywords - Literals
-      TokenType::True => write!(f, "keyword `true`"),
-      TokenType::False => write!(f, "keyword `false`"),
+      Self::True => write!(f, "keyword `true`"),
+      Self::False => write!(f, "keyword `false`"),
 
       // Keywords - Reserved
-      TokenType::Await => write!(f, "keyword `await`"),
-      TokenType::Async => write!(f, "keyword `async`"),
+      Self::Await => write!(f, "keyword `await`"),
+      Self::Async => write!(f, "keyword `async`"),
 
       // Punctuation
-      TokenType::LeftParen => write!(f, "`(`"),
-      TokenType::RightParen => write!(f, "`)`"),
-      TokenType::LeftBrace => write!(f, "`{{`"),
-      TokenType::RightBrace => write!(f, "`}}`"),
-      TokenType::LeftBracket => write!(f, "`[`"),
-      TokenType::RightBracket => write!(f, "`]`"),
-      TokenType::Comma => write!(f, "`,`"),
-      TokenType::Semicolon => write!(f, "`;`"),
-      TokenType::Colon => write!(f, "`:`"),
-      TokenType::Dot => write!(f, "`.`"),
-      TokenType::Hash => write!(f, "`#`"),
-      TokenType::At => write!(f, "`@`"),
-      TokenType::Underscore => write!(f, "`_`"),
-      TokenType::DotDotDot => write!(f, "`...`"),
+      Self::LeftParen => write!(f, "`(`"),
+      Self::RightParen => write!(f, "`)`"),
+      Self::LeftBrace => write!(f, "`{{`"),
+      Self::RightBrace => write!(f, "`}}`"),
+      Self::LeftBracket => write!(f, "`[`"),
+      Self::RightBracket => write!(f, "`]`"),
+      Self::Comma => write!(f, "`,`"),
+      Self::Semicolon => write!(f, "`;`"),
+      Self::Colon => write!(f, "`:`"),
+      Self::Dot => write!(f, "`.`"),
+      Self::Hash => write!(f, "`#`"),
+      Self::At => write!(f, "`@`"),
+      Self::Underscore => write!(f, "`_`"),
+      Self::DotDotDot => write!(f, "`...`"),
 
       // Operators - Arithmetic
-      TokenType::Plus => write!(f, "`+`"),
-      TokenType::Minus => write!(f, "`-`"),
-      TokenType::Star => write!(f, "`*`"),
-      TokenType::Slash => write!(f, "`/`"),
-      TokenType::Percent => write!(f, "`%`"),
+      Self::Plus => write!(f, "`+`"),
+      Self::Minus => write!(f, "`-`"),
+      Self::Star => write!(f, "`*`"),
+      Self::Slash => write!(f, "`/`"),
+      Self::Percent => write!(f, "`%`"),
 
       // Operators - Assignment
-      TokenType::Assign => write!(f, "`=`"),
-      TokenType::PlusAssign => write!(f, "`+=`"),
-      TokenType::MinusAssign => write!(f, "`-=`"),
-      TokenType::StarAssign => write!(f, "`*=`"),
-      TokenType::SlashAssign => write!(f, "`/=`"),
-      TokenType::PercentAssign => write!(f, "`%=`"),
-      TokenType::AmpAssign => write!(f, "`&=`"),
-      TokenType::PipeAssign => write!(f, "`|=`"),
-      TokenType::CaretAssign => write!(f, "`^=`"),
-      TokenType::ShlAssign => write!(f, "`<<=`"),
-      TokenType::ShrAssign => write!(f, "`>>=`"),
-      TokenType::AndAssign => write!(f, "`&&=`"),
-      TokenType::OrAssign => write!(f, "`||=`"),
+      Self::Assign => write!(f, "`=`"),
+      Self::PlusAssign => write!(f, "`+=`"),
+      Self::MinusAssign => write!(f, "`-=`"),
+      Self::StarAssign => write!(f, "`*=`"),
+      Self::SlashAssign => write!(f, "`/=`"),
+      Self::PercentAssign => write!(f, "`%=`"),
+      Self::AmpAssign => write!(f, "`&=`"),
+      Self::PipeAssign => write!(f, "`|=`"),
+      Self::CaretAssign => write!(f, "`^=`"),
+      Self::ShlAssign => write!(f, "`<<=`"),
+      Self::ShrAssign => write!(f, "`>>=`"),
+      Self::AndAssign => write!(f, "`&&=`"),
+      Self::OrAssign => write!(f, "`||=`"),
 
       // Operators - Comparison
-      TokenType::EqEq => write!(f, "`==`"),
-      TokenType::NotEq => write!(f, "`!=`"),
-      TokenType::Lt => write!(f, "`<`"),
-      TokenType::LtEq => write!(f, "`<=`"),
-      TokenType::Gt => write!(f, "`>`"),
-      TokenType::GtEq => write!(f, "`>=`"),
+      Self::EqEq => write!(f, "`==`"),
+      Self::NotEq => write!(f, "`!=`"),
+      Self::Lt => write!(f, "`<`"),
+      Self::LtEq => write!(f, "`<=`"),
+      Self::Gt => write!(f, "`>`"),
+      Self::GtEq => write!(f, "`>=`"),
 
       // Operators - Logical
-      TokenType::AndAnd => write!(f, "`&&`"),
-      TokenType::OrOr => write!(f, "`||`"),
-      TokenType::Not => write!(f, "`!`"),
+      Self::AndAnd => write!(f, "`&&`"),
+      Self::OrOr => write!(f, "`||`"),
+      Self::Not => write!(f, "`!`"),
 
       // Operators - Bitwise
-      TokenType::Amp => write!(f, "`&`"),
-      TokenType::Pipe => write!(f, "`|`"),
-      TokenType::Caret => write!(f, "`^`"),
-      TokenType::Tilde => write!(f, "`~`"),
-      TokenType::Shl => write!(f, "`<<`"),
-      TokenType::Shr => write!(f, "`>>`"),
+      Self::Amp => write!(f, "`&`"),
+      Self::Pipe => write!(f, "`|`"),
+      Self::Caret => write!(f, "`^`"),
+      Self::Tilde => write!(f, "`~`"),
+      Self::Shl => write!(f, "`<<`"),
+      Self::Shr => write!(f, "`>>`"),
 
       // Other
-      TokenType::Question => write!(f, "`?`"),
-      TokenType::Arrow => write!(f, "`->`"),
-      TokenType::ColonColon => write!(f, "`::`"),
-      TokenType::Whitespace => write!(f, "whitespace"),
-      TokenType::Eof => write!(f, "end of file"),
+      Self::Question => write!(f, "`?`"),
+      Self::Arrow => write!(f, "`->`"),
+      Self::ColonColon => write!(f, "`::`"),
+      Self::Whitespace => write!(f, "whitespace"),
+      Self::Eof => write!(f, "end of file"),
     }
   }
 }

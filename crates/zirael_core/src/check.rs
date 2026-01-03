@@ -1,14 +1,11 @@
-use crate::prelude::{Colorize as _, CompilationUnit, FILE_EXTENSION, error};
+use crate::prelude::{Colorize as _, CompilationUnit, FILE_EXTENSION};
 use anyhow::Result;
 use anyhow::bail;
-use std::io::Write;
-use std::path::PathBuf;
 use std::sync::Arc;
 use zirael_diagnostics::DiagnosticWriter;
 use zirael_source::prelude::Sources;
-use zirael_source::source_file::SourceFile;
 use zirael_utils::context::Context;
-use zirael_utils::prelude::{PackageType, ProjectConfig, Session, info};
+use zirael_utils::prelude::{ProjectConfig, Session, info};
 
 pub fn check_project(
   config: &ProjectConfig,
@@ -39,9 +36,9 @@ pub fn check_project(
   let contents = fs_err::read_to_string(file.clone())?;
 
   let file_id = sources.add(contents, file.clone());
-  let mut unit = CompilationUnit::new(file_id, &context);
+  let mut unit = CompilationUnit::new(file_id, context);
 
-  let _ = unit.check();
+  unit.check();
 
   Ok(sess)
 }

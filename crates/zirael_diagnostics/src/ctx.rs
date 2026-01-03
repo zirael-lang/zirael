@@ -1,18 +1,14 @@
 use crate::emitter::{Emitter, HumanReadableEmitter};
 use crate::output_type::DiagnosticOutputType;
-use crate::writer::Writer;
 use crate::{Diag, Diagnostic, DiagnosticId, DiagnosticLevel};
 use dashmap::mapref::one::{Ref, RefMut};
 use dashmap::{DashMap, DashSet};
 use derivative::Derivative;
-use generational_arena::Arena;
-use log::{debug, error};
-use parking_lot::{Mutex, RwLock};
-use std::fmt::{Debug, Display};
-use std::io::{Cursor, Write, stderr};
-use std::process::exit;
+use log::debug;
+use parking_lot::Mutex;
+use std::io::Cursor;
 use std::sync::Arc;
-use zirael_source::prelude::{Sources, Span};
+use zirael_source::prelude::Sources;
 
 #[derive(Derivative)]
 #[derivative(Debug)]
@@ -54,7 +50,7 @@ impl DiagnosticCtx {
   }
 
   pub fn sources(&self) -> &Arc<Sources> {
-    &self.emitter.sources()
+    self.emitter.sources()
   }
 
   pub fn add(&self, diag: Diag) -> DiagnosticId {
@@ -90,14 +86,14 @@ impl DiagnosticCtx {
     if let Some(mut diag) = self.get_mut(id) {
       diag.cancelled = true;
     }
-    debug!("cancelled diagnostic {:?}", id)
+    debug!("cancelled diagnostic {id:?}");
   }
 
   pub fn emit(&self, diag: impl ToDiagnostic) {
     let diagnostic = diag.to_diagnostic();
     let id = self.add(diagnostic.clone());
 
-    if let DiagnosticLevel::Bug = diagnostic.level {
+    if diagnostic.level == DiagnosticLevel::Bug {
       self.emit_diag(id);
       panic!("look at the emitted diagnostic")
     }
@@ -109,7 +105,7 @@ impl DiagnosticCtx {
       diag: Box::new(Diag::new(msg.into(), DiagnosticLevel::Bug)),
       cancelled: false,
       emitted: false,
-    })
+    });
   }
 
   // actually emits the diagnostic to stderr
@@ -120,7 +116,7 @@ impl DiagnosticCtx {
 
     let diagnostic = {
       let Some(diagnostic) = self.get(id) else {
-        panic!("No diagnostic found for {:?}", id);
+        panic!("No diagnostic found for {id:?}");
       };
 
       // won't emit cancelled diagnostic
@@ -134,7 +130,7 @@ impl DiagnosticCtx {
     let mut writer = self.writer.lock();
     self
       .emitter
-      .emit_diagnostic(&*diagnostic, &mut *writer)
+      .emit_diagnostic(&diagnostic, &mut *writer)
       .expect("TODO: panic message");
 
     if let Some(mut diag) = self.get_mut(id) {

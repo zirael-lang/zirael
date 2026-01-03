@@ -3,7 +3,7 @@ use crate::lexer::lexer_errors::{LexError, LexErrorKind, LexResult};
 use crate::lexer::nfc::is_xid_continue;
 use crate::lexer::tokens::{Token, TokenType};
 
-impl<'ctx> Lexer<'ctx> {
+impl Lexer<'_> {
   pub(crate) fn lex_operator_or_punctuation(&mut self) -> LexResult<Token> {
     let start_offset = self.offset;
 
@@ -232,7 +232,7 @@ impl<'ctx> Lexer<'ctx> {
       Some('_') => {
         self.advance();
         // Check if this is just a standalone underscore (not an identifier)
-        if self.peek().map_or(true, |ch| !is_xid_continue(ch)) {
+        if self.peek().is_none_or(|ch| !is_xid_continue(ch)) {
           TokenType::Underscore
         } else {
           // It's an identifier starting with underscore

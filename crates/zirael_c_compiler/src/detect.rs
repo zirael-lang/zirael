@@ -29,7 +29,7 @@ pub fn detect_compiler() -> Result<Compiler> {
         return Ok(compiler);
       }
       Err(e) => {
-        warn!("MSVC compiler not available: {}", e);
+        warn!("MSVC compiler not available: {e}");
       }
     }
   }
@@ -211,7 +211,7 @@ fn apply_env_vars(env_vars: &HashMap<String, String>) {
   for (key, value) in env_vars {
     #[expect(unsafe_code)]
     unsafe {
-      env::set_var(key, value)
+      env::set_var(key, value);
     };
   }
   debug!("Applied {} environment variables", env_vars.len());

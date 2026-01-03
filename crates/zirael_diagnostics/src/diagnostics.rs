@@ -1,6 +1,4 @@
-use generational_arena::{Arena, Index};
-use std::fmt::{Debug, Display};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::fmt::Debug;
 use yansi::Color;
 use zirael_source::new_id;
 use zirael_source::source_file::SourceFileId;
@@ -63,7 +61,7 @@ impl Label {
     span: Span,
     level: DiagnosticLevel,
   ) -> Self {
-    Label {
+    Self {
       message: Some(message.into()),
       span,
       file: None,
@@ -79,7 +77,7 @@ impl Label {
     level: DiagnosticLevel,
     file_id: SourceFileId,
   ) -> Self {
-    Label {
+    Self {
       message: Some(message.into()),
       span,
       file: Some(file_id),
@@ -114,28 +112,26 @@ pub enum DiagnosticLevel {
 impl DiagnosticLevel {
   pub fn name(&self) -> &'static str {
     match self {
-      DiagnosticLevel::Error => "error",
-      DiagnosticLevel::Warning => "warn",
-      DiagnosticLevel::Bug => "bug",
+      Self::Error => "error",
+      Self::Warning => "warn",
+      Self::Bug => "bug",
     }
   }
 
   pub fn color(&self) -> Color {
     match self {
-      DiagnosticLevel::Error => Color::BrightRed,
-      DiagnosticLevel::Warning => Color::BrightYellow,
-      DiagnosticLevel::Bug => Color::Red,
+      Self::Error => Color::BrightRed,
+      Self::Warning => Color::BrightYellow,
+      Self::Bug => Color::Red,
     }
   }
 }
 
 impl Drop for Diagnostic {
   fn drop(&mut self) {
-    if !self.emitted && !self.cancelled {
-      panic!(
+    assert!(!(!self.emitted && !self.cancelled), 
         "Diagnostic {:?} dropped but it wasn't emitted or cancelled",
         self.id
       );
-    }
   }
 }
