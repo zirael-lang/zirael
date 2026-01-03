@@ -1,7 +1,7 @@
-use std::io::Write;
 use crate::prelude::{Colorize as _, CompilationUnit, FILE_EXTENSION, error};
 use anyhow::Result;
 use anyhow::bail;
+use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
 use zirael_diagnostics::DiagnosticWriter;
@@ -10,9 +10,16 @@ use zirael_source::source_file::SourceFile;
 use zirael_utils::context::Context;
 use zirael_utils::prelude::{PackageType, ProjectConfig, Session, info};
 
-pub fn check_project(config: &ProjectConfig, writer: DiagnosticWriter) -> Result<Session> {
+pub fn check_project(
+  config: &ProjectConfig,
+  writer: DiagnosticWriter,
+) -> Result<Session> {
   let file = &config.entrypoint;
-  info!("checking entrypoint: {} with {} mode", file.display(), config.mode);
+  info!(
+    "checking entrypoint: {} with {} mode",
+    file.display(),
+    config.mode
+  );
 
   if let Some(ext) = file.extension() {
     if ext != FILE_EXTENSION {

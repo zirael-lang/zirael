@@ -24,11 +24,13 @@ impl Test {
     let lines = contents.lines().collect_vec();
 
     let directives = lines
-        .iter()
-        .enumerate()
-        .filter(|(_, line)| line.starts_with("//#"))
-        .map(|(line_num, line)| parse_directive(line.to_string(), line_num, &path))
-        .collect_vec();
+      .iter()
+      .enumerate()
+      .filter(|(_, line)| line.starts_with("//#"))
+      .map(|(line_num, line)| {
+        parse_directive(line.to_string(), line_num, &path)
+      })
+      .collect_vec();
 
     Ok(Test {
       id: TestId::new(),

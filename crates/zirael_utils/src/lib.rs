@@ -10,7 +10,9 @@ mod session;
 pub mod term_style;
 
 pub mod prelude {
-  pub use crate::{article::*, ident_table::*, path::*, project_config::*, session::*};
+  pub use crate::{
+    article::*, ident_table::*, path::*, project_config::*, session::*,
+  };
   pub use anyhow::{Result, anyhow, bail};
   pub use colored::Colorize;
   pub use fs_err as fs;

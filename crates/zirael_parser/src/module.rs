@@ -10,6 +10,9 @@ pub struct Module {
 
 impl Module {
   pub fn new(source_file_id: SourceFileId, node: ProgramNode) -> Self {
-    Self { source_file_id, node }
+    Self {
+      source_file_id,
+      node,
+    }
   }
 }

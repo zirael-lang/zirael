@@ -49,7 +49,10 @@ impl<'ctx> Lexer<'ctx> {
     Ok(Token::new(TokenType::StringLiteral(value), span, lexeme))
   }
 
-  fn parse_escape_sequence(&mut self, allow_unicode: bool) -> LexResult<String> {
+  fn parse_escape_sequence(
+    &mut self,
+    allow_unicode: bool,
+  ) -> LexResult<String> {
     let start_offset = self.offset;
 
     match self.peek() {
@@ -99,7 +102,12 @@ impl<'ctx> Lexer<'ctx> {
           Some(ch) => Ok(ch.to_string()),
           None => {
             let span = self.make_span(start_offset);
-            Err(LexError::new(LexErrorKind::InvalidEscape { escape: format!("\\u{}", hex) }, span))
+            Err(LexError::new(
+              LexErrorKind::InvalidEscape {
+                escape: format!("\\u{}", hex),
+              },
+              span,
+            ))
           }
         }
       }
@@ -111,7 +119,12 @@ impl<'ctx> Lexer<'ctx> {
           Some(ch) => Ok(ch.to_string()),
           None => {
             let span = self.make_span(start_offset);
-            Err(LexError::new(LexErrorKind::InvalidEscape { escape: format!("\\U{}", hex) }, span))
+            Err(LexError::new(
+              LexErrorKind::InvalidEscape {
+                escape: format!("\\U{}", hex),
+              },
+              span,
+            ))
           }
         }
       }
@@ -122,7 +135,12 @@ impl<'ctx> Lexer<'ctx> {
       }
       None => {
         let span = self.make_span(start_offset);
-        Err(LexError::new(LexErrorKind::InvalidEscape { escape: "\\".to_string() }, span))
+        Err(LexError::new(
+          LexErrorKind::InvalidEscape {
+            escape: "\\".to_string(),
+          },
+          span,
+        ))
       }
     }
   }
@@ -140,7 +158,9 @@ impl<'ctx> Lexer<'ctx> {
         _ => {
           let span = self.make_span(start_offset);
           return Err(LexError::new(
-            LexErrorKind::InvalidEscape { escape: format!("\\x{}", digits) },
+            LexErrorKind::InvalidEscape {
+              escape: format!("\\x{}", digits),
+            },
             span,
           ));
         }
@@ -244,7 +264,10 @@ impl<'ctx> Lexer<'ctx> {
 
     if value > 255 {
       let span = self.make_span(start_offset);
-      return Err(LexError::new(LexErrorKind::InvalidByteValue { value }, span));
+      return Err(LexError::new(
+        LexErrorKind::InvalidByteValue { value },
+        span,
+      ));
     }
 
     match self.peek() {
@@ -260,6 +283,10 @@ impl<'ctx> Lexer<'ctx> {
 
     let span = self.make_span(start_offset);
 
-    Ok(Token::new(TokenType::ByteLiteral(value as u8), span, lexeme))
+    Ok(Token::new(
+      TokenType::ByteLiteral(value as u8),
+      span,
+      lexeme,
+    ))
   }
 }

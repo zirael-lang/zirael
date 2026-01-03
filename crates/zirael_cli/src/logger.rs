@@ -3,7 +3,11 @@ use log::LevelFilter;
 use std::fmt::Display;
 
 pub fn setup_logger(verbose: bool, no_color: bool) {
-  let level = if verbose { LevelFilter::Debug } else { LevelFilter::Info };
+  let level = if verbose {
+    LevelFilter::Debug
+  } else {
+    LevelFilter::Info
+  };
 
   let mut builder = env_logger::Builder::from_default_env();
   builder.filter_level(level);
@@ -16,7 +20,11 @@ pub fn setup_logger(verbose: bool, no_color: bool) {
         buf,
         "{}{} {}",
         record.level().to_string().to_lowercase(),
-        if verbose { record.module_path().unwrap_or("unknown").to_string() } else { String::new() },
+        if verbose {
+          record.module_path().unwrap_or("unknown").to_string()
+        } else {
+          String::new()
+        },
         record.args()
       )
     } else {
@@ -34,7 +42,10 @@ pub fn setup_logger(verbose: bool, no_color: bool) {
         level_color,
         record.level().to_string().to_lowercase(),
         if verbose {
-          format!(" \x1b[90m{}\x1b[0m", record.module_path().unwrap_or("unknown"))
+          format!(
+            " \x1b[90m{}\x1b[0m",
+            record.module_path().unwrap_or("unknown")
+          )
         } else {
           String::new()
         },

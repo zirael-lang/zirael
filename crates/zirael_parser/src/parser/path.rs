@@ -29,6 +29,11 @@ impl<'dcx> Parser<'dcx> {
       segments.push(self.parse_identifier());
     }
 
-    Some(Path { id: NodeId::new(), root, segments, span: self.span_from(start) })
+    Some(Path {
+      id: NodeId::new(),
+      root,
+      segments,
+      span: self.span_from(start),
+    })
   }
 }

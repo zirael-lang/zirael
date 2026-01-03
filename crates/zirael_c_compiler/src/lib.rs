@@ -48,8 +48,11 @@ impl CBuild {
       fs_err::create_dir_all(parent)?;
     }
 
-    let compiler =
-      if let Some(kind) = compiler { resolve_from_kind(kind)? } else { detect_compiler()? };
+    let compiler = if let Some(kind) = compiler {
+      resolve_from_kind(kind)?
+    } else {
+      detect_compiler()?
+    };
     Ok(Self {
       compiler,
       source_files: HashSet::new(),
@@ -138,19 +141,28 @@ impl CBuild {
     }
   }
 
-  fn compile_static_library(&self, output_name: &OsStr, pb: &ProgressBar) -> Result<PathBuf> {
+  fn compile_static_library(
+    &self,
+    output_name: &OsStr,
+    pb: &ProgressBar,
+  ) -> Result<PathBuf> {
     let mut object_files = Vec::new();
 
     for (i, source_file) in self.source_files.iter().enumerate() {
       pb.set_message(format!(
         "Compiling {} ({}/{})",
-        Path::new(source_file).file_name().unwrap_or(source_file).to_string_lossy(),
+        Path::new(source_file)
+          .file_name()
+          .unwrap_or(source_file)
+          .to_string_lossy(),
         i + 1,
         self.source_files.len()
       ));
 
-      let obj_name =
-        Path::new(source_file).file_stem().unwrap_or_else(|| OsStr::new("obj")).to_string_lossy();
+      let obj_name = Path::new(source_file)
+        .file_stem()
+        .unwrap_or_else(|| OsStr::new("obj"))
+        .to_string_lossy();
       let obj_file = format!("{obj_name}.o");
 
       let mut command = Command::new(self.compiler.path());
@@ -158,14 +170,22 @@ impl CBuild {
 
       debug!("Executing compilation command: {command:?}");
 
-      let output =
-        command.current_dir(&*self.build_dir).output().context("Failed to execute compiler")?;
+      let output = command
+        .current_dir(&*self.build_dir)
+        .output()
+        .context("Failed to execute compiler")?;
 
       if !output.stdout.is_empty() {
-        debug!("Compilation stdout: {}", String::from_utf8_lossy(&output.stdout));
+        debug!(
+          "Compilation stdout: {}",
+          String::from_utf8_lossy(&output.stdout)
+        );
       }
       if !output.stderr.is_empty() {
-        debug!("Compilation stderr: {}", String::from_utf8_lossy(&output.stderr));
+        debug!(
+          "Compilation stderr: {}",
+          String::from_utf8_lossy(&output.stderr)
+        );
       }
 
       if !output.status.success() {
@@ -188,7 +208,11 @@ impl CBuild {
       let obj_path = self.build_dir.join(obj_file);
       if obj_path.exists() {
         if let Err(e) = std::fs::remove_file(&obj_path) {
-          warn!("Failed to clean up object file {}: {}", obj_path.display(), e);
+          warn!(
+            "Failed to clean up object file {}: {}",
+            obj_path.display(),
+            e
+          );
         }
       }
     }
@@ -208,22 +232,37 @@ impl CBuild {
     Ok(output_path)
   }
 
-  fn compile_direct(&self, output_name: &OsStr, pb: &ProgressBar) -> Result<PathBuf> {
+  fn compile_direct(
+    &self,
+    output_name: &OsStr,
+    pb: &ProgressBar,
+  ) -> Result<PathBuf> {
     let mut command = Command::new(self.compiler.path());
     self.configure_command(&mut command, output_name)?;
 
     debug!("Executing compilation command: {command:?}");
 
-    pb.set_message(format!("Running {} compiler...", self.compiler.kind().name()));
+    pb.set_message(format!(
+      "Running {} compiler...",
+      self.compiler.kind().name()
+    ));
 
-    let output =
-      command.current_dir(&*self.build_dir).output().context("Failed to execute compiler")?;
+    let output = command
+      .current_dir(&*self.build_dir)
+      .output()
+      .context("Failed to execute compiler")?;
 
     if !output.stdout.is_empty() {
-      debug!("Compilation stdout: {}", String::from_utf8_lossy(&output.stdout));
+      debug!(
+        "Compilation stdout: {}",
+        String::from_utf8_lossy(&output.stdout)
+      );
     }
     if !output.stderr.is_empty() {
-      debug!("Compilation stderr: {}", String::from_utf8_lossy(&output.stderr));
+      debug!(
+        "Compilation stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+      );
     }
 
     if !output.status.success() {
@@ -263,12 +302,20 @@ impl CBuild {
     command.arg(source_file);
 
     for dir in &self.include_dirs {
-      command.arg(if self.compiler.kind() == &CompilerKind::Msvc { "/I" } else { "-I" });
+      command.arg(if self.compiler.kind() == &CompilerKind::Msvc {
+        "/I"
+      } else {
+        "-I"
+      });
       command.arg(dir.as_os_str());
     }
 
     for define in &self.defines {
-      command.arg(if self.compiler.kind() == &CompilerKind::Msvc { "/D" } else { "-D" });
+      command.arg(if self.compiler.kind() == &CompilerKind::Msvc {
+        "/D"
+      } else {
+        "-D"
+      });
       command.arg(define);
     }
 
@@ -291,7 +338,11 @@ impl CBuild {
     Ok(())
   }
 
-  fn create_static_library(&self, output_name: &OsStr, object_files: &[String]) -> Result<PathBuf> {
+  fn create_static_library(
+    &self,
+    output_name: &OsStr,
+    object_files: &[String],
+  ) -> Result<PathBuf> {
     let output_path = self.get_output_path(output_name);
 
     let mut command = if self.compiler.kind() == &CompilerKind::Msvc {
@@ -317,10 +368,16 @@ impl CBuild {
       .context("Failed to execute library archiver")?;
 
     if !output.stdout.is_empty() {
-      debug!("Library creation stdout: {}", String::from_utf8_lossy(&output.stdout));
+      debug!(
+        "Library creation stdout: {}",
+        String::from_utf8_lossy(&output.stdout)
+      );
     }
     if !output.stderr.is_empty() {
-      debug!("Library creation stderr: {}", String::from_utf8_lossy(&output.stderr));
+      debug!(
+        "Library creation stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+      );
     }
 
     if !output.status.success() {
@@ -335,28 +392,48 @@ impl CBuild {
     Ok(output_path)
   }
 
-  fn configure_command(&self, command: &mut Command, output_name: &OsStr) -> Result<()> {
+  fn configure_command(
+    &self,
+    command: &mut Command,
+    output_name: &OsStr,
+  ) -> Result<()> {
     for file in &self.source_files {
       command.arg(file);
     }
 
     for dir in &self.include_dirs {
-      command.arg(if self.compiler.kind() == &CompilerKind::Msvc { "/I" } else { "-I" });
+      command.arg(if self.compiler.kind() == &CompilerKind::Msvc {
+        "/I"
+      } else {
+        "-I"
+      });
       command.arg(dir.as_os_str());
     }
 
     for dir in &self.library_dirs {
-      command.arg(if self.compiler.kind() == &CompilerKind::Msvc { "/LIBPATH:" } else { "-L" });
+      command.arg(if self.compiler.kind() == &CompilerKind::Msvc {
+        "/LIBPATH:"
+      } else {
+        "-L"
+      });
       command.arg(dir.as_os_str());
     }
 
     for lib in &self.libraries {
-      command.arg(if self.compiler.kind() == &CompilerKind::Msvc { "/DEFAULTLIB:" } else { "-l" });
+      command.arg(if self.compiler.kind() == &CompilerKind::Msvc {
+        "/DEFAULTLIB:"
+      } else {
+        "-l"
+      });
       command.arg(lib);
     }
 
     for define in &self.defines {
-      command.arg(if self.compiler.kind() == &CompilerKind::Msvc { "/D" } else { "-D" });
+      command.arg(if self.compiler.kind() == &CompilerKind::Msvc {
+        "/D"
+      } else {
+        "-D"
+      });
       command.arg(define);
     }
 
@@ -378,7 +455,11 @@ impl CBuild {
     }
   }
 
-  fn add_c_standard_flag(&self, command: &mut Command, standard: Option<&str>) -> Result<()> {
+  fn add_c_standard_flag(
+    &self,
+    command: &mut Command,
+    standard: Option<&str>,
+  ) -> Result<()> {
     let std_version = standard.unwrap_or("c17");
 
     if !self.compiler.supports_c_standard(std_version) {
@@ -399,7 +480,11 @@ impl CBuild {
     Ok(())
   }
 
-  fn configure_output(&self, command: &mut Command, output_name: &OsStr) -> Result<()> {
+  fn configure_output(
+    &self,
+    command: &mut Command,
+    output_name: &OsStr,
+  ) -> Result<()> {
     match self.project_type {
       PackageType::Library => match self.lib_type {
         LibType::Static => {
@@ -441,7 +526,11 @@ impl CBuild {
   }
 
   pub fn disable_warnings(&mut self) -> &mut Self {
-    self.add_flag(if self.compiler.kind() == &CompilerKind::Msvc { "/W0" } else { "-w" });
+    self.add_flag(if self.compiler.kind() == &CompilerKind::Msvc {
+      "/W0"
+    } else {
+      "-w"
+    });
     self.add_flag("-Waddress-of-temporary");
     self
   }

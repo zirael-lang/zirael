@@ -49,7 +49,9 @@ impl Display for ExpectedTokens {
 }
 
 #[derive(Diagnostic)]
-#[error("`mod` takes a path to the module (eg. path::to::module), not a string literal")]
+#[error(
+  "`mod` takes a path to the module (eg. path::to::module), not a string literal"
+)]
 #[code(PARSE_MOD_STRING_LIT)]
 pub struct ModStringLit {
   #[error("invalid use here")]

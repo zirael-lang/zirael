@@ -11,7 +11,11 @@ pub enum TestStatus {
 #[derive(Debug, Clone)]
 pub enum FailureType {
   OtherCompilerError,
-  ExpectedErrorNotFound { line: usize, pattern: String, direction: LineDirection },
+  ExpectedErrorNotFound {
+    line: usize,
+    pattern: String,
+    direction: LineDirection,
+  },
   ExpectedErrorsButCompiled,
 }
 

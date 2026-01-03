@@ -7,7 +7,11 @@ use zirael_core::prelude::PackageType;
 pub enum Directive {
   PackageType(PackageType),
   // the pattern can include {} that means that any value matches this part.
-  Error { line: usize, direction: LineDirection, pattern: String },
+  Error {
+    line: usize,
+    direction: LineDirection,
+    pattern: String,
+  },
   Invalid,
 }
 
@@ -17,7 +21,11 @@ pub enum LineDirection {
   Down,
 }
 
-pub fn parse_directive(directive: String, line: usize, file: &PathBuf) -> Directive {
+pub fn parse_directive(
+  directive: String,
+  line: usize,
+  file: &PathBuf,
+) -> Directive {
   let stripped = directive.strip_prefix("//#").unwrap_or(&directive);
 
   let (name_with_attrs, value) = match stripped.split_once(':') {
@@ -56,11 +64,18 @@ pub fn parse_directive(directive: String, line: usize, file: &PathBuf) -> Direct
           })
           .unwrap_or(LineDirection::Down);
 
-        Directive::Error { line, direction, pattern: value.to_string() }
+        Directive::Error {
+          line,
+          direction,
+          pattern: value.to_string(),
+        }
       }
     }
     _ => {
-      println!("warn: {name} found in {} is not a valid directive", file.display());
+      println!(
+        "warn: {name} found in {} is not a valid directive",
+        file.display()
+      );
       Directive::Invalid
     }
   }
@@ -71,7 +86,11 @@ fn parse_attributes(attrs_str: &str) -> Vec<(String, String)> {
     .split(',')
     .filter_map(|attr| {
       let parts: Vec<&str> = attr.split('=').map(|s| s.trim()).collect();
-      if parts.len() == 2 { Some((parts[0].to_string(), parts[1].to_string())) } else { None }
+      if parts.len() == 2 {
+        Some((parts[0].to_string(), parts[1].to_string()))
+      } else {
+        None
+      }
     })
     .collect()
 }

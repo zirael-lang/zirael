@@ -37,7 +37,11 @@ pub struct Diag {
 
 impl Diag {
   pub fn new(message: String, level: DiagnosticLevel) -> Self {
-    Self { message, level, ..Default::default() }
+    Self {
+      message,
+      level,
+      ..Default::default()
+    }
   }
 }
 
@@ -54,8 +58,19 @@ pub struct Label {
 }
 
 impl Label {
-  pub fn new(message: impl Into<String>, span: Span, level: DiagnosticLevel) -> Self {
-    Label { message: Some(message.into()), span, file: None, level, order: 0, priority: 0 }
+  pub fn new(
+    message: impl Into<String>,
+    span: Span,
+    level: DiagnosticLevel,
+  ) -> Self {
+    Label {
+      message: Some(message.into()),
+      span,
+      file: None,
+      level,
+      order: 0,
+      priority: 0,
+    }
   }
 
   pub fn new_with_file(
@@ -64,7 +79,14 @@ impl Label {
     level: DiagnosticLevel,
     file_id: SourceFileId,
   ) -> Self {
-    Label { message: Some(message.into()), span, file: Some(file_id), level, order: 0, priority: 0 }
+    Label {
+      message: Some(message.into()),
+      span,
+      file: Some(file_id),
+      level,
+      order: 0,
+      priority: 0,
+    }
   }
 
   pub fn file(&self) -> SourceFileId {
@@ -110,7 +132,10 @@ impl DiagnosticLevel {
 impl Drop for Diagnostic {
   fn drop(&mut self) {
     if !self.emitted && !self.cancelled {
-      panic!("Diagnostic {:?} dropped but it wasn't emitted or cancelled", self.id);
+      panic!(
+        "Diagnostic {:?} dropped but it wasn't emitted or cancelled",
+        self.id
+      );
     }
   }
 }

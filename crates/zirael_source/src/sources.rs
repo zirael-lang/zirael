@@ -28,21 +28,34 @@ impl Sources {
       return existing_id.value().clone();
     }
 
-    let id = SourceFileId(self.inner.last_id.fetch_add(1, Ordering::Relaxed) + 1);
-    self.inner.sources.insert(id, SourceFile::new(input, path.clone(), id));
+    let id =
+      SourceFileId(self.inner.last_id.fetch_add(1, Ordering::Relaxed) + 1);
+    self
+      .inner
+      .sources
+      .insert(id, SourceFile::new(input, path.clone(), id));
     self.inner.path_to_id.insert(path, id);
     id
   }
 
-  pub fn get_by_path(&self, path: &PathBuf) -> Option<Ref<'_, PathBuf, SourceFileId>> {
+  pub fn get_by_path(
+    &self,
+    path: &PathBuf,
+  ) -> Option<Ref<'_, PathBuf, SourceFileId>> {
     self.inner.path_to_id.get(path)
   }
 
-  pub fn get(&self, id: SourceFileId) -> Option<Ref<'_, SourceFileId, SourceFile>> {
+  pub fn get(
+    &self,
+    id: SourceFileId,
+  ) -> Option<Ref<'_, SourceFileId, SourceFile>> {
     self.inner.sources.get(&id)
   }
 
-  pub fn get_unchecked(&self, id: SourceFileId) -> Ref<'_, SourceFileId, SourceFile> {
+  pub fn get_unchecked(
+    &self,
+    id: SourceFileId,
+  ) -> Ref<'_, SourceFileId, SourceFile> {
     self.inner.sources.get(&id).unwrap()
   }
 

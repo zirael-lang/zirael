@@ -36,7 +36,10 @@ impl<'ctx> Lexer<'ctx> {
         _ if ch.is_ascii_alphanumeric() => {
           let span = self.make_char_span();
           return Err(LexError::new(
-            LexErrorKind::InvalidDigitForBase { digit: ch, base: "binary".to_string() },
+            LexErrorKind::InvalidDigitForBase {
+              digit: ch,
+              base: "binary".to_string(),
+            },
             span,
           ));
         }
@@ -47,14 +50,20 @@ impl<'ctx> Lexer<'ctx> {
     if digits.is_empty() {
       let span = self.make_span(start_offset);
       return Err(LexError::new(
-        LexErrorKind::MissingDigitsAfterBase { base: "0b".to_string() },
+        LexErrorKind::MissingDigitsAfterBase {
+          base: "0b".to_string(),
+        },
         span,
       ));
     }
 
     let span = self.make_span(start_offset);
 
-    Ok(Token::new(TokenType::IntegerLiteral(IntBase::Binary(digits)), span, lexeme))
+    Ok(Token::new(
+      TokenType::IntegerLiteral(IntBase::Binary(digits)),
+      span,
+      lexeme,
+    ))
   }
 
   /// Lex octal integer (0o...)
@@ -79,7 +88,10 @@ impl<'ctx> Lexer<'ctx> {
         _ if ch.is_ascii_alphanumeric() => {
           let span = self.make_char_span();
           return Err(LexError::new(
-            LexErrorKind::InvalidDigitForBase { digit: ch, base: "octal".to_string() },
+            LexErrorKind::InvalidDigitForBase {
+              digit: ch,
+              base: "octal".to_string(),
+            },
             span,
           ));
         }
@@ -90,14 +102,20 @@ impl<'ctx> Lexer<'ctx> {
     if digits.is_empty() {
       let span = self.make_span(start_offset);
       return Err(LexError::new(
-        LexErrorKind::MissingDigitsAfterBase { base: "0o".to_string() },
+        LexErrorKind::MissingDigitsAfterBase {
+          base: "0o".to_string(),
+        },
         span,
       ));
     }
 
     let span = self.make_span(start_offset);
 
-    Ok(Token::new(TokenType::IntegerLiteral(IntBase::Octal(digits)), span, lexeme))
+    Ok(Token::new(
+      TokenType::IntegerLiteral(IntBase::Octal(digits)),
+      span,
+      lexeme,
+    ))
   }
 
   /// Lex hexadecimal integer (0x...)
@@ -119,7 +137,10 @@ impl<'ctx> Lexer<'ctx> {
       } else if ch.is_ascii_alphanumeric() {
         let span = self.make_char_span();
         return Err(LexError::new(
-          LexErrorKind::InvalidDigitForBase { digit: ch, base: "hexadecimal".to_string() },
+          LexErrorKind::InvalidDigitForBase {
+            digit: ch,
+            base: "hexadecimal".to_string(),
+          },
           span,
         ));
       } else {
@@ -130,14 +151,20 @@ impl<'ctx> Lexer<'ctx> {
     if digits.is_empty() {
       let span = self.make_span(start_offset);
       return Err(LexError::new(
-        LexErrorKind::MissingDigitsAfterBase { base: "0x".to_string() },
+        LexErrorKind::MissingDigitsAfterBase {
+          base: "0x".to_string(),
+        },
         span,
       ));
     }
 
     let span = self.make_span(start_offset);
 
-    Ok(Token::new(TokenType::IntegerLiteral(IntBase::Hexadecimal(digits)), span, lexeme))
+    Ok(Token::new(
+      TokenType::IntegerLiteral(IntBase::Hexadecimal(digits)),
+      span,
+      lexeme,
+    ))
   }
 
   pub(crate) fn lex_decimal_or_float(&mut self) -> LexResult<Token> {
@@ -155,7 +182,9 @@ impl<'ctx> Lexer<'ctx> {
       }
     }
 
-    if self.peek() == Some('.') && self.peek_ahead(1).map_or(false, |c| c.is_ascii_digit()) {
+    if self.peek() == Some('.')
+      && self.peek_ahead(1).map_or(false, |c| c.is_ascii_digit())
+    {
       has_dot = true;
       lexeme.push('.');
       self.advance();

@@ -1,7 +1,6 @@
-mod whitespaces;
-mod strings;
-mod numbers;
-mod idents;
-mod ops;
 mod comments;
-
+mod idents;
+mod numbers;
+mod ops;
+mod strings;
+mod whitespaces;

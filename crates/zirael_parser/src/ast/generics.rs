@@ -1,6 +1,6 @@
+use crate::ast::NodeId;
 use crate::ast::identifier::Ident;
 use crate::ast::types::TypePath;
-use crate::ast::NodeId;
 use zirael_utils::prelude::Span;
 
 #[derive(Debug, Clone)]

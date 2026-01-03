@@ -10,8 +10,18 @@ pub struct Line {
 }
 
 impl Line {
-  pub fn new(offset: usize, char_len: usize, byte_offset: usize, byte_len: usize) -> Self {
-    Self { offset, char_len, byte_offset, byte_len }
+  pub fn new(
+    offset: usize,
+    char_len: usize,
+    byte_offset: usize,
+    byte_len: usize,
+  ) -> Self {
+    Self {
+      offset,
+      char_len,
+      byte_offset,
+      byte_len,
+    }
   }
 
   /// Get the offset of this line in the original [`Source`] (i.e: the number of characters that precede it).

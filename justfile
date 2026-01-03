@@ -20,9 +20,7 @@ lint:
     cargo clippy --workspace --all-targets --all-features --fix --allow-dirty -- --deny warnings
 
 fmt:
-    cargo shear --fix
     cargo fmt --all
-    dprint fmt
 
 playground args='':
     cargo run -p zirael playground/test.zr {{ args }} --name playground -o playground/build --type binary

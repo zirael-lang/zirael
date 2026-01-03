@@ -41,7 +41,11 @@ pub fn detect_compiler() -> Result<Compiler> {
     }
     Err(e) => Err(anyhow!(
       "No suitable C compiler found. Tried Clang, {}, and GCC. Last error: {}",
-      if cfg!(windows) { "MSVC" } else { "system compilers" },
+      if cfg!(windows) {
+        "MSVC"
+      } else {
+        "system compilers"
+      },
       e
     )),
   }
@@ -52,7 +56,8 @@ fn detect_clang() -> Result<Compiler> {
 
   if let Ok(path) = which::which("clang") {
     debug!("Found Clang at: {}", path.display());
-    return Compiler::new(path, CompilerKind::Clang).context("Failed to initialize Clang compiler");
+    return Compiler::new(path, CompilerKind::Clang)
+      .context("Failed to initialize Clang compiler");
   }
 
   Err(anyhow!("Clang compiler not found in PATH"))
@@ -63,7 +68,8 @@ fn detect_gcc() -> Result<Compiler> {
 
   if let Ok(path) = which::which("gcc") {
     debug!("Found GCC at: {}", path.display());
-    return Compiler::new(path, CompilerKind::Gcc).context("Failed to initialize GCC compiler");
+    return Compiler::new(path, CompilerKind::Gcc)
+      .context("Failed to initialize GCC compiler");
   }
 
   Err(anyhow!("GCC compiler not found in PATH"))
@@ -118,14 +124,21 @@ fn detect_msvc_compiler() -> Result<Compiler> {
           }
         }
         Err(e) => {
-          warn!("Failed to setup MSVC environment for {}: {}", full_path.display(), e);
+          warn!(
+            "Failed to setup MSVC environment for {}: {}",
+            full_path.display(),
+            e
+          );
           continue;
         }
       }
     }
   }
 
-  Err(anyhow!("No working MSVC installation found. Checked paths: {:?}", msvc_paths))
+  Err(anyhow!(
+    "No working MSVC installation found. Checked paths: {:?}",
+    msvc_paths
+  ))
 }
 
 #[cfg(not(target_os = "windows"))]
@@ -133,9 +146,18 @@ fn detect_msvc_compiler() -> Result<Compiler> {
   Err(anyhow!("MSVC compiler not available on this platform"))
 }
 
-fn setup_msvc_environment(vcvars_path: &Path) -> Result<HashMap<String, String>> {
-  debug!("Setting up MSVC environment using: {}", vcvars_path.display());
-  let arch = if vcvars_path.to_string_lossy().contains("vcvars64") { "x64" } else { "x86" };
+fn setup_msvc_environment(
+  vcvars_path: &Path,
+) -> Result<HashMap<String, String>> {
+  debug!(
+    "Setting up MSVC environment using: {}",
+    vcvars_path.display()
+  );
+  let arch = if vcvars_path.to_string_lossy().contains("vcvars64") {
+    "x64"
+  } else {
+    "x86"
+  };
 
   let cmd_line = format!("\"{}\" {} && set", vcvars_path.display(), arch);
   debug!("Executing MSVC setup command: {cmd_line}");
@@ -147,8 +169,14 @@ fn setup_msvc_environment(vcvars_path: &Path) -> Result<HashMap<String, String>>
     .output()
     .context("Failed to execute vcvars script")?;
 
-  debug!("MSVC setup stdout: {}", String::from_utf8_lossy(&output.stdout));
-  debug!("MSVC setup stderr: {}", String::from_utf8_lossy(&output.stderr));
+  debug!(
+    "MSVC setup stdout: {}",
+    String::from_utf8_lossy(&output.stdout)
+  );
+  debug!(
+    "MSVC setup stderr: {}",
+    String::from_utf8_lossy(&output.stderr)
+  );
 
   if !output.status.success() {
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -167,10 +195,15 @@ fn setup_msvc_environment(vcvars_path: &Path) -> Result<HashMap<String, String>>
   }
 
   if env_vars.is_empty() {
-    return Err(anyhow!("No environment variables were set by vcvars script"));
+    return Err(anyhow!(
+      "No environment variables were set by vcvars script"
+    ));
   }
 
-  debug!("Successfully captured {} environment variables from MSVC setup", env_vars.len());
+  debug!(
+    "Successfully captured {} environment variables from MSVC setup",
+    env_vars.len()
+  );
   Ok(env_vars)
 }
 

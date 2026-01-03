@@ -11,7 +11,10 @@ pub struct CompilationUnit<'ctx> {
 
 impl<'ctx> CompilationUnit<'ctx> {
   pub fn new(entry_point: SourceFileId, context: &'ctx Context<'ctx>) -> Self {
-    Self { entry_point, ctx: context }
+    Self {
+      entry_point,
+      ctx: context,
+    }
   }
 
   pub fn check(&mut self) {

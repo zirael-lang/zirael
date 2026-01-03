@@ -66,9 +66,11 @@ impl<'tests> TestRunner<'tests> {
           .directives
           .iter()
           .filter_map(|d| match d {
-            Directive::Error { line, direction, pattern } => {
-              Some((*line, direction.clone(), pattern.clone()))
-            }
+            Directive::Error {
+              line,
+              direction,
+              pattern,
+            } => Some((*line, direction.clone(), pattern.clone())),
             _ => None,
           })
           .collect();
@@ -78,12 +80,20 @@ impl<'tests> TestRunner<'tests> {
         for diagnostic in sess.dcx().diagnostics.iter() {
           let diag = diagnostic.value();
 
-          for (idx, (directive_line, direction, pattern)) in error_directives.iter().enumerate() {
+          for (idx, (directive_line, direction, pattern)) in
+            error_directives.iter().enumerate()
+          {
             if matched_directives[idx] {
               continue;
             }
 
-            if matches_directive(diag, *directive_line, direction, pattern, &sources) {
+            if matches_directive(
+              diag,
+              *directive_line,
+              direction,
+              pattern,
+              &sources,
+            ) {
               matched_directives[idx] = true;
               break;
             }
@@ -101,10 +111,16 @@ impl<'tests> TestRunner<'tests> {
           }
         }
 
-        if failures.is_empty() { TestStatus::Passed } else { TestStatus::Failed(failures) }
+        if failures.is_empty() {
+          TestStatus::Passed
+        } else {
+          TestStatus::Failed(failures)
+        }
       } else {
-        let has_error_directives =
-          test.directives.iter().any(|d| matches!(d, Directive::Error { .. }));
+        let has_error_directives = test
+          .directives
+          .iter()
+          .any(|d| matches!(d, Directive::Error { .. }));
 
         if has_error_directives {
           TestStatus::Failed(vec![FailureType::ExpectedErrorsButCompiled])
@@ -116,7 +132,11 @@ impl<'tests> TestRunner<'tests> {
       TestStatus::Failed(vec![FailureType::OtherCompilerError])
     };
 
-    TestResult { result, output: output.lock().get_ref().clone(), test_id: test.id }
+    TestResult {
+      result,
+      output: output.lock().get_ref().clone(),
+      test_id: test.id,
+    }
   }
 }
 
@@ -143,11 +163,16 @@ fn matches_directive(
   matches_pattern(&diagnostic.diag.message, pattern)
 }
 
-fn get_diagnostic_line(diagnostic: &Diagnostic, sources: &Sources) -> Option<usize> {
+fn get_diagnostic_line(
+  diagnostic: &Diagnostic,
+  sources: &Sources,
+) -> Option<usize> {
   diagnostic.diag.labels.iter().find_map(|label| {
     let file_id = label.file();
     let src = sources.get(file_id)?;
-    src.get_byte_line(label.span.start).map(|(_, line_idx, _)| line_idx)
+    src
+      .get_byte_line(label.span.start)
+      .map(|(_, line_idx, _)| line_idx)
   })
 }
 

@@ -52,25 +52,37 @@ impl DiagnosticCtx {
       writer,
     }
   }
-  
+
   pub fn sources(&self) -> &Arc<Sources> {
     &self.emitter.sources()
   }
 
   pub fn add(&self, diag: Diag) -> DiagnosticId {
     let id = DiagnosticId::new();
-    self
-      .diagnostics
-      .insert(id, Diagnostic { id, diag: Box::new(diag), cancelled: false, emitted: false });
+    self.diagnostics.insert(
+      id,
+      Diagnostic {
+        id,
+        diag: Box::new(diag),
+        cancelled: false,
+        emitted: false,
+      },
+    );
 
     id
   }
 
-  pub fn get(&self, id: DiagnosticId) -> Option<Ref<'_, DiagnosticId, Diagnostic>> {
+  pub fn get(
+    &self,
+    id: DiagnosticId,
+  ) -> Option<Ref<'_, DiagnosticId, Diagnostic>> {
     self.diagnostics.get(&id)
   }
 
-  pub fn get_mut(&self, id: DiagnosticId) -> Option<RefMut<'_, DiagnosticId, Diagnostic>> {
+  pub fn get_mut(
+    &self,
+    id: DiagnosticId,
+  ) -> Option<RefMut<'_, DiagnosticId, Diagnostic>> {
     self.diagnostics.get_mut(&id)
   }
 
@@ -120,7 +132,10 @@ impl DiagnosticCtx {
     };
 
     let mut writer = self.writer.lock();
-    self.emitter.emit_diagnostic(&*diagnostic, &mut *writer).expect("TODO: panic message");
+    self
+      .emitter
+      .emit_diagnostic(&*diagnostic, &mut *writer)
+      .expect("TODO: panic message");
 
     if let Some(mut diag) = self.get_mut(id) {
       diag.emitted = true;
@@ -133,8 +148,11 @@ impl DiagnosticCtx {
       self.emit_diag(id);
     }
   }
-  
+
   pub fn has_errors(&self) -> bool {
-    self.diagnostics.iter().any(|diag| diag.diag.level == DiagnosticLevel::Error)
+    self
+      .diagnostics
+      .iter()
+      .any(|diag| diag.diag.level == DiagnosticLevel::Error)
   }
 }

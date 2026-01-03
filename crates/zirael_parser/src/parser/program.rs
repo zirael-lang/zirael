@@ -2,7 +2,10 @@ use crate::items::Item;
 use crate::parser::Parser;
 use crate::parser::errors::ModStringLit;
 use crate::parser::parser::ITEM_TOKENS;
-use crate::{ItemKind, ModItem, NodeId, ProgramNode, TokenType, Visibility, log_parse_failure};
+use crate::{
+  ItemKind, ModItem, NodeId, ProgramNode, TokenType, Visibility,
+  log_parse_failure,
+};
 use std::fmt::Debug;
 use zirael_utils::prelude::debug;
 
@@ -23,7 +26,12 @@ impl<'dcx> Parser<'dcx> {
       }
     }
 
-    Some(ProgramNode { id: NodeId::new(), attributes: vec![], imports: vec![], items })
+    Some(ProgramNode {
+      id: NodeId::new(),
+      attributes: vec![],
+      imports: vec![],
+      items,
+    })
   }
 
   fn check_possible_comment(&mut self) {
@@ -41,13 +49,19 @@ impl<'dcx> Parser<'dcx> {
   fn parse_mod(&mut self) -> Option<ModItem> {
     let span_start = self.previous().span;
     if let TokenType::StringLiteral(_) = &self.peek().kind {
-      self.emit(ModStringLit { span: self.peek().span });
+      self.emit(ModStringLit {
+        span: self.peek().span,
+      });
 
       return None;
     }
     let path = self.parse_path();
 
-    Some(ModItem { id: NodeId::new(), span: self.span_from(span_start), path })
+    Some(ModItem {
+      id: NodeId::new(),
+      span: self.span_from(span_start),
+      path,
+    })
   }
 
   fn parse_item(&mut self) -> Option<Item> {
@@ -63,7 +77,9 @@ impl<'dcx> Parser<'dcx> {
 
     let token = self.expect_any(ITEM_TOKENS, "as an item beginning")?.kind;
     let kind = match token {
-      TokenType::Mod => ItemKind::Mod(log_parse_failure!(self.parse_mod(), "module item")?),
+      TokenType::Mod => {
+        ItemKind::Mod(log_parse_failure!(self.parse_mod(), "module item")?)
+      }
       _ => unreachable!(),
     };
 

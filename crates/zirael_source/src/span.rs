@@ -12,15 +12,27 @@ pub struct Span {
 
 impl Span {
   pub fn new(start: usize, end: usize, file_id: SourceFileId) -> Self {
-    Self { start, end, file_id }
+    Self {
+      start,
+      end,
+      file_id,
+    }
   }
 
   pub fn no_file(start: usize, end: usize) -> Self {
-    Self { start, end, file_id: SourceFileId::dummy() }
+    Self {
+      start,
+      end,
+      file_id: SourceFileId::dummy(),
+    }
   }
 
   pub fn from_len(start: usize, len: usize, file_id: SourceFileId) -> Self {
-    Self { start, end: start + len, file_id }
+    Self {
+      start,
+      end: start + len,
+      file_id,
+    }
   }
 
   pub fn len(&self) -> usize {
@@ -39,7 +51,15 @@ impl Span {
     let start = self.start.max(other.start);
     let end = self.end.min(other.end);
 
-    if start < end { Some(Self { start, end, file_id: self.file_id }) } else { None }
+    if start < end {
+      Some(Self {
+        start,
+        end,
+        file_id: self.file_id,
+      })
+    } else {
+      None
+    }
   }
 
   pub fn overlaps(&self, other: &Self) -> bool {
@@ -119,7 +139,11 @@ impl Iterator for Span {
 
 impl Default for Span {
   fn default() -> Self {
-    Self { start: 0, end: 0, file_id: SourceFileId(usize::MAX - 1) }
+    Self {
+      start: 0,
+      end: 0,
+      file_id: SourceFileId(usize::MAX - 1),
+    }
   }
 }
 

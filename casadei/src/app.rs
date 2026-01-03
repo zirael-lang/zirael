@@ -1,5 +1,7 @@
 use crate::output::TestResult;
-use indicatif::{MultiProgress, ProgressBar, ProgressDrawTarget, ProgressStyle};
+use indicatif::{
+  MultiProgress, ProgressBar, ProgressDrawTarget, ProgressStyle,
+};
 use parking_lot::Mutex;
 use std::sync::Arc;
 use std::time::Duration;
@@ -13,7 +15,11 @@ pub struct AppState {
 
 impl AppState {
   pub fn new(total_tests: u64) -> Arc<Mutex<Self>> {
-    Arc::new(Mutex::new(Self { total_tests, completed_tests: 0, test_results: vec![] }))
+    Arc::new(Mutex::new(Self {
+      total_tests,
+      completed_tests: 0,
+      test_results: vec![],
+    }))
   }
 
   pub fn increment_completed(&mut self) {
@@ -49,7 +55,11 @@ impl App {
     overall.set_message("Overall");
     overall.enable_steady_tick(Duration::from_millis(100));
 
-    Self { multi, overall, state }
+    Self {
+      multi,
+      overall,
+      state,
+    }
   }
 
   pub fn run(self) -> color_eyre::Result<()> {
@@ -59,9 +69,10 @@ impl App {
 
         self.overall.set_length(state.total_tests.max(1));
         self.overall.set_position(state.completed_tests);
-        self
-          .overall
-          .set_message(format!("All tests {}/{}", state.completed_tests, state.total_tests));
+        self.overall.set_message(format!(
+          "All tests {}/{}",
+          state.completed_tests, state.total_tests
+        ));
 
         state.total_tests == state.completed_tests
       };

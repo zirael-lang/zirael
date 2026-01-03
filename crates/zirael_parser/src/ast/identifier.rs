@@ -1,5 +1,7 @@
 use std::fmt;
-use zirael_utils::prelude::{Identifier, Span, get_or_intern, resolve as resolve_ident};
+use zirael_utils::prelude::{
+  Identifier, Span, get_or_intern, resolve as resolve_ident,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Ident {
@@ -9,11 +11,17 @@ pub struct Ident {
 
 impl Ident {
   pub fn new(name: &str, span: Span) -> Self {
-    Self { ident: get_or_intern(name, Some(span)), is_dummy: false }
+    Self {
+      ident: get_or_intern(name, Some(span)),
+      is_dummy: false,
+    }
   }
 
   pub fn dummy() -> Self {
-    Self { ident: get_or_intern("", None), is_dummy: true }
+    Self {
+      ident: get_or_intern("", None),
+      is_dummy: true,
+    }
   }
 
   pub fn span(&self) -> &Span {

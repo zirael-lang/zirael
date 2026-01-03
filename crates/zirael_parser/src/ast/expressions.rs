@@ -23,28 +23,56 @@ pub enum ExprKind {
   SelfValue,
 
   // Binary operations
-  Binary { op: BinaryOp, left: Box<Expr>, right: Box<Expr> },
+  Binary {
+    op: BinaryOp,
+    left: Box<Expr>,
+    right: Box<Expr>,
+  },
 
   // Unary operations
-  Unary { op: UnaryOp, operand: Box<Expr> },
+  Unary {
+    op: UnaryOp,
+    operand: Box<Expr>,
+  },
 
   // Assignment
-  Assign { op: AssignOp, target: Box<Expr>, value: Box<Expr> },
+  Assign {
+    op: AssignOp,
+    target: Box<Expr>,
+    value: Box<Expr>,
+  },
 
   // Ternary conditional
-  Ternary { condition: Box<Expr>, then_expr: Box<Expr>, else_expr: Box<Expr> },
+  Ternary {
+    condition: Box<Expr>,
+    then_expr: Box<Expr>,
+    else_expr: Box<Expr>,
+  },
 
   // Type cast
-  Cast { expr: Box<Expr>, target_type: Box<Type> },
+  Cast {
+    expr: Box<Expr>,
+    target_type: Box<Type>,
+  },
 
   // Function call
-  Call { callee: Box<Expr>, args: Vec<Argument> },
+  Call {
+    callee: Box<Expr>,
+    args: Vec<Argument>,
+  },
 
   // Field access
-  Field { object: Box<Expr>, field: Ident },
+  Field {
+    object: Box<Expr>,
+    field: Ident,
+  },
 
   // Path qualifier (::)
-  PathQualifier { base: Box<Expr>, segment: Ident, type_args: Option<Vec<Type>> },
+  PathQualifier {
+    base: Box<Expr>,
+    segment: Ident,
+    type_args: Option<Vec<Type>>,
+  },
 
   // Control flow
   If(IfExpr),

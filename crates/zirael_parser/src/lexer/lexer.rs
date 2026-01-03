@@ -26,7 +26,15 @@ impl<'ctx> Lexer<'ctx> {
     let chars: Vec<char> = source.chars().collect();
     let current = chars.get(0).copied();
 
-    Lexer { source, chars, file_id: sf.file_id, pos: 0, offset: 0, current, dcx }
+    Lexer {
+      source,
+      chars,
+      file_id: sf.file_id,
+      pos: 0,
+      offset: 0,
+      current,
+      dcx,
+    }
   }
 
   pub(crate) fn current_position(&self) -> usize {
@@ -63,7 +71,11 @@ impl<'ctx> Lexer<'ctx> {
   }
 
   pub(crate) fn make_char_span(&self) -> Span {
-    Span::new(self.offset, self.offset + self.current.map_or(0, |c| c.len_utf8()), self.file_id)
+    Span::new(
+      self.offset,
+      self.offset + self.current.map_or(0, |c| c.len_utf8()),
+      self.file_id,
+    )
   }
 
   pub(crate) fn peek(&self) -> Option<char> {

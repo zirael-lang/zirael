@@ -19,7 +19,13 @@ macro_rules! log_parse_failure {
   ($value:expr, $item_type:expr) => {{
     let result = $value;
     if result.is_none() {
-      debug!("Failed to parse {} at {}:{}:{}", $item_type, file!(), line!(), column!());
+      debug!(
+        "Failed to parse {} at {}:{}:{}",
+        $item_type,
+        file!(),
+        line!(),
+        column!()
+      );
     }
     result
   }};

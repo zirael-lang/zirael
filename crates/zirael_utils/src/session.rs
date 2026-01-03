@@ -12,7 +12,11 @@ pub struct Session {
 }
 
 impl Session {
-  pub fn new(config: ProjectConfig, sources: Arc<Sources>, w: DiagnosticWriter) -> Self {
+  pub fn new(
+    config: ProjectConfig,
+    sources: Arc<Sources>,
+    w: DiagnosticWriter,
+  ) -> Self {
     Self {
       dcx: DiagnosticCtx::new(
         sources.clone(),

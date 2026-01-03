@@ -99,7 +99,13 @@ pub struct Compiler {
 impl Display for Compiler {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     match &self.version {
-      Some(version) => write!(f, "{} {} at {}", self.kind.name(), version, self.path.display()),
+      Some(version) => write!(
+        f,
+        "{} {} at {}",
+        self.kind.name(),
+        version,
+        self.path.display()
+      ),
       None => write!(f, "{} at {}", self.kind.name(), self.path.display()),
     }
   }
@@ -111,7 +117,12 @@ impl Compiler {
       return Err(CompilerError::NotFound(path));
     }
 
-    let mut compiler = Self { path, kind, version: None, validated: false };
+    let mut compiler = Self {
+      path,
+      kind,
+      version: None,
+      validated: false,
+    };
 
     if let Err(e) = compiler.detect_version() {
       warn!("Failed to detect compiler version: {e}");
@@ -123,7 +134,12 @@ impl Compiler {
   }
 
   pub fn new_unchecked(path: PathBuf, kind: CompilerKind) -> Self {
-    Self { path, kind, version: None, validated: false }
+    Self {
+      path,
+      kind,
+      version: None,
+      validated: false,
+    }
   }
 
   pub fn path(&self) -> &Path {
@@ -181,7 +197,8 @@ impl Compiler {
         for line in output.lines() {
           if line.contains("clang version") {
             if let Some(version_part) = line.split("version ").nth(1) {
-              let version_only = version_part.split_whitespace().next().unwrap_or("");
+              let version_only =
+                version_part.split_whitespace().next().unwrap_or("");
               return self.parse_version_string(version_only, output);
             }
           }
@@ -194,7 +211,11 @@ impl Compiler {
     None
   }
 
-  fn parse_version_string(&self, version_str: &str, raw_output: &str) -> Option<CompilerVersion> {
+  fn parse_version_string(
+    &self,
+    version_str: &str,
+    raw_output: &str,
+  ) -> Option<CompilerVersion> {
     let clean_version = version_str.split('-').next()?.split('+').next()?;
     let parts: Vec<&str> = clean_version.split('.').collect();
 
@@ -203,7 +224,12 @@ impl Compiler {
       let minor = parts[1].parse().ok()?;
       let patch = parts.get(2).and_then(|p| p.parse().ok());
 
-      Some(CompilerVersion { major, minor, patch, raw: raw_output.to_owned() })
+      Some(CompilerVersion {
+        major,
+        minor,
+        patch,
+        raw: raw_output.to_owned(),
+      })
     } else {
       None
     }
@@ -245,8 +271,9 @@ int main() {
         .map_err(|e| CompilerError::ValidationFailed(e.to_string()))?;
     }
 
-    let output =
-      child.wait_with_output().map_err(|e| CompilerError::ValidationFailed(e.to_string()))?;
+    let output = child
+      .wait_with_output()
+      .map_err(|e| CompilerError::ValidationFailed(e.to_string()))?;
 
     if !output.status.success() {
       let stderr = String::from_utf8_lossy(&output.stderr);
@@ -292,10 +319,16 @@ int main() {
         matches!(standard, "c89" | "c90" | "c11" | "c17")
       }
       CompilerKind::Gcc => {
-        matches!(standard, "c89" | "c90" | "c99" | "c11" | "c17" | "c18" | "c23")
+        matches!(
+          standard,
+          "c89" | "c90" | "c99" | "c11" | "c17" | "c18" | "c23"
+        )
       }
       CompilerKind::Clang => {
-        matches!(standard, "c89" | "c90" | "c99" | "c11" | "c17" | "c18" | "c23")
+        matches!(
+          standard,
+          "c89" | "c90" | "c99" | "c11" | "c17" | "c18" | "c23"
+        )
       }
     }
   }

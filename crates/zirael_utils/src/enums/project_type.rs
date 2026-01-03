@@ -2,7 +2,9 @@ use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use std::str::FromStr;
 
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Serialize, Deserialize)]
+#[derive(
+  Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Serialize, Deserialize,
+)]
 #[serde(rename_all = "lowercase")]
 pub enum PackageType {
   #[serde(alias = "bin")]

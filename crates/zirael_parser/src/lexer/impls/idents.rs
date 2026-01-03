@@ -20,11 +20,17 @@ impl<'ctx> Lexer<'ctx> {
       }
       Some(ch) => {
         let span = self.make_char_span();
-        return Err(LexError::new(LexErrorKind::InvalidIdentifierStart { char: ch }, span));
+        return Err(LexError::new(
+          LexErrorKind::InvalidIdentifierStart { char: ch },
+          span,
+        ));
       }
       None => {
         let span = self.make_char_span();
-        return Err(LexError::new(LexErrorKind::UnexpectedCharacter { char: '\0' }, span));
+        return Err(LexError::new(
+          LexErrorKind::UnexpectedCharacter { char: '\0' },
+          span,
+        ));
       }
     }
 
@@ -67,7 +73,7 @@ impl<'ctx> Lexer<'ctx> {
       "super" => TokenType::Super,
       "await" => TokenType::Await,
       "async" => TokenType::Async,
-       "mod" => TokenType::Mod,
+      "mod" => TokenType::Mod,
       _ => TokenType::Identifier(normalized.clone()),
     };
 

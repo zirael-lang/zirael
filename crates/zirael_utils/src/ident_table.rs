@@ -50,7 +50,9 @@ impl Identifier {
 
 impl IdentTable {
   pub fn new() -> Self {
-    Self { interner: ThreadedRodeo::default() }
+    Self {
+      interner: ThreadedRodeo::default(),
+    }
   }
 
   pub fn intern(&self, name: &str) -> Spur {
@@ -74,7 +76,8 @@ impl Display for Identifier {
   }
 }
 
-pub static GLOBAL_TABLE: Lazy<Mutex<IdentTable>> = Lazy::new(|| Mutex::new(IdentTable::new()));
+pub static GLOBAL_TABLE: Lazy<Mutex<IdentTable>> =
+  Lazy::new(|| Mutex::new(IdentTable::new()));
 
 #[inline]
 pub fn get_or_intern(name: &str, span: Option<Span>) -> Identifier {

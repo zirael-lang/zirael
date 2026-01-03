@@ -129,7 +129,12 @@ impl SourceFile {
         .binary_search_by_key(&offset, |line| line.offset)
         .unwrap_or_else(|idx| idx.saturating_sub(1));
       let line = self.line(idx)?;
-      assert!(offset >= line.offset, "offset = {}, line.offset = {}", offset, line.offset);
+      assert!(
+        offset >= line.offset,
+        "offset = {}, line.offset = {}",
+        offset,
+        line.offset
+      );
       Some((line, idx, offset - line.offset))
     } else {
       None
@@ -139,7 +144,10 @@ impl SourceFile {
   /// Get the line that the given byte offset appears on, and the line/byte column numbers of the offset.
   ///
   /// Note that the line/column numbers are zero-indexed.
-  pub fn get_byte_line(&self, byte_offset: usize) -> Option<(Line, usize, usize)> {
+  pub fn get_byte_line(
+    &self,
+    byte_offset: usize,
+  ) -> Option<(Line, usize, usize)> {
     if byte_offset <= self.byte_len {
       let idx = self
         .lines

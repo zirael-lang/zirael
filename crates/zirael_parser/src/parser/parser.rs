@@ -1,6 +1,8 @@
 use crate::identifier::Ident;
 use crate::lexer::{Token, TokenType};
-use crate::parser::errors::{ExpectedIdentifier, ExpectedTokens, UnexpectedToken};
+use crate::parser::errors::{
+  ExpectedIdentifier, ExpectedTokens, UnexpectedToken,
+};
 use zirael_diagnostics::DiagnosticCtx;
 use zirael_diagnostics::ToDiagnostic;
 use zirael_utils::prelude::Span;
@@ -19,10 +21,17 @@ pub struct Parser<'dcx> {
 
 impl<'dcx> Parser<'dcx> {
   pub fn new(tokens: Vec<Token>, dcx: &'dcx DiagnosticCtx) -> Self {
-    let tokens: Vec<Token> =
-      tokens.into_iter().filter(|t| !matches!(t.kind, TokenType::Whitespace)).collect();
+    let tokens: Vec<Token> = tokens
+      .into_iter()
+      .filter(|t| !matches!(t.kind, TokenType::Whitespace))
+      .collect();
 
-    Self { tokens, pos: 0, dcx, doc_comment: None }
+    Self {
+      tokens,
+      pos: 0,
+      dcx,
+      doc_comment: None,
+    }
   }
 
   pub fn push_comment(&mut self, comment: String) {
@@ -44,10 +53,12 @@ impl<'dcx> Parser<'dcx> {
   /// Get the current token without consuming
   #[inline]
   pub fn peek(&self) -> &Token {
-    self
-      .tokens
-      .get(self.pos)
-      .unwrap_or_else(|| self.tokens.last().expect("Token stream should never be empty"))
+    self.tokens.get(self.pos).unwrap_or_else(|| {
+      self
+        .tokens
+        .last()
+        .expect("Token stream should never be empty")
+    })
   }
 
   /// Get the previous token
@@ -100,7 +111,11 @@ impl<'dcx> Parser<'dcx> {
   }
 
   /// Expect a specific token and consume it or report an error
-  pub fn expect(&mut self, token_type: TokenType, context: &str) -> Option<Token> {
+  pub fn expect(
+    &mut self,
+    token_type: TokenType,
+    context: &str,
+  ) -> Option<Token> {
     if self.check(&token_type) {
       Some(self.advance())
     } else {
@@ -115,7 +130,11 @@ impl<'dcx> Parser<'dcx> {
     }
   }
 
-  pub fn expect_any(&mut self, types: &[TokenType], context: &str) -> Option<Token> {
+  pub fn expect_any(
+    &mut self,
+    types: &[TokenType],
+    context: &str,
+  ) -> Option<Token> {
     let current = self.peek();
 
     if types.contains(&current.kind) {
@@ -142,7 +161,11 @@ impl<'dcx> Parser<'dcx> {
   }
 
   pub fn is(&mut self, token_type: TokenType) -> Option<Token> {
-    if self.check(&token_type) { Some(self.advance()) } else { None }
+    if self.check(&token_type) {
+      Some(self.advance())
+    } else {
+      None
+    }
   }
 
   #[inline]
@@ -151,7 +174,11 @@ impl<'dcx> Parser<'dcx> {
   }
 
   pub fn span_from(&self, start: Span) -> Span {
-    let end = if self.pos > 0 { &self.tokens[self.pos - 1].span } else { &start };
+    let end = if self.pos > 0 {
+      &self.tokens[self.pos - 1].span
+    } else {
+      &start
+    };
     Span::new(start.start, end.end, start.file_id)
   }
 
@@ -164,7 +191,10 @@ impl<'dcx> Parser<'dcx> {
     match &token.kind {
       TokenType::Identifier(name) => Ident::new(name.as_str(), token.span),
       _ => {
-        self.emit(ExpectedIdentifier { span: token.span, found: token.kind });
+        self.emit(ExpectedIdentifier {
+          span: token.span,
+          found: token.kind,
+        });
         Ident::dummy()
       }
     }
