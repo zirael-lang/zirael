@@ -11,8 +11,6 @@ use thiserror::Error;
 pub enum CompilerError {
   #[error("Compiler not found at path: {0}")]
   NotFound(PathBuf),
-  #[error("Compiler validation failed: {0}")]
-  ValidationFailed(String),
   #[error("Unsupported compiler version: {0}")]
   UnsupportedVersion(String),
   #[error("Failed to detect compiler version: {0}")]
@@ -93,7 +91,6 @@ pub struct Compiler {
   path: PathBuf,
   kind: CompilerKind,
   version: Option<CompilerVersion>,
-  validated: bool,
 }
 
 impl Display for Compiler {
@@ -121,25 +118,13 @@ impl Compiler {
       path,
       kind,
       version: None,
-      validated: false,
     };
 
     if let Err(e) = compiler.detect_version() {
       warn!("Failed to detect compiler version: {e}");
     }
 
-    compiler.validate()?;
-
     Ok(compiler)
-  }
-
-  pub fn new_unchecked(path: PathBuf, kind: CompilerKind) -> Self {
-    Self {
-      path,
-      kind,
-      version: None,
-      validated: false,
-    }
   }
 
   pub fn path(&self) -> &Path {
@@ -152,10 +137,6 @@ impl Compiler {
 
   pub fn version(&self) -> Option<&CompilerVersion> {
     self.version.as_ref()
-  }
-
-  pub fn is_validated(&self) -> bool {
-    self.validated
   }
 
   fn detect_version(&mut self) -> Result<(), CompilerError> {
@@ -233,58 +214,6 @@ impl Compiler {
     } else {
       None
     }
-  }
-
-  fn validate(&mut self) -> Result<(), CompilerError> {
-    debug!("Validating compiler: {}", self.path.display());
-
-    let test_code = r#"
-#include <stdio.h>
-int main() {
-    printf("Hello, World!\n");
-    return 0;
-}
-"#;
-
-    let mut cmd = self.create_basic_command();
-
-    match self.kind {
-      CompilerKind::Msvc => {
-        cmd.args(["/EP", "/TC"]);
-      }
-      _ => {
-        cmd.args(["-E", "-x", "c", "-"]);
-      }
-    }
-
-    let mut child = cmd
-      .stdin(std::process::Stdio::piped())
-      .stdout(std::process::Stdio::null())
-      .stderr(std::process::Stdio::piped())
-      .spawn()
-      .map_err(|e| CompilerError::ValidationFailed(e.to_string()))?;
-
-    if let Some(stdin) = child.stdin.as_mut() {
-      use std::io::Write as _;
-      stdin
-        .write_all(test_code.as_bytes())
-        .map_err(|e| CompilerError::ValidationFailed(e.to_string()))?;
-    }
-
-    let output = child
-      .wait_with_output()
-      .map_err(|e| CompilerError::ValidationFailed(e.to_string()))?;
-
-    if !output.status.success() {
-      let stderr = String::from_utf8_lossy(&output.stderr);
-      return Err(CompilerError::ValidationFailed(format!(
-        "Compiler validation failed: {stderr}"
-      )));
-    }
-
-    self.validated = true;
-    debug!("Compiler validation successful");
-    Ok(())
   }
 
   pub fn create_basic_command(&self) -> Command {

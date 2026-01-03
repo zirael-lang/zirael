@@ -1,6 +1,5 @@
 use crate::prelude::*;
 use zirael_parser::parser::parse;
-// use zirael_parser::parser::parse;
 use zirael_source::source_file::SourceFileId;
 
 pub struct CompilationUnit<'ctx> {
