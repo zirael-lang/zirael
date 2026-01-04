@@ -133,6 +133,17 @@ impl Parser<'_> {
     }
   }
 
+  pub fn is_module_discovery_beginning(&self) -> bool {
+    matches!(
+      self.peek().kind,
+      TokenType::Identifier(_)
+        | TokenType::SelfValue
+        | TokenType::Package
+        | TokenType::Super
+        | TokenType::StringLiteral(_) // the string is here only because we report an error later
+    )
+  }
+
   fn parse_item(&mut self) -> Option<Item> {
     self.doc_comment = None;
     self.check_possible_comment();
@@ -160,7 +171,7 @@ impl Parser<'_> {
             span: Default::default(),
             items: vec![],
           }))
-        } else if let TokenType::Identifier(_) = self.peek().kind {
+        } else if self.is_module_discovery_beginning() {
           let path = self.parse_module_discovery();
           let Some(path) = path else { return None };
 
