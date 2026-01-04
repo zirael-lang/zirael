@@ -17,7 +17,7 @@ impl Parser<'_> {
       Some(PathRoot::SelfMod)
     } else if self.eat(TokenType::Super) {
       Some(PathRoot::Super)
-    } else if self.check_if(|t| matches!(t, TokenType::Identifier(_))) {
+    } else if self.is_identifier() {
       segments.push(self.parse_identifier());
       None
     } else {

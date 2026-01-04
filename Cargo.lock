@@ -804,6 +804,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "stringcase"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72abeda133c49d7bddece6c154728f83eec8172380c80ab7096da9487e20d27c"
+
+[[package]]
 name = "strsim"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1331,6 +1337,7 @@ name = "zirael_parser"
 version = "0.1.0"
 dependencies = [
  "itertools",
+ "stringcase",
  "unicode-normalization",
  "unicode-xid",
  "zirael_diagnostic_macro",

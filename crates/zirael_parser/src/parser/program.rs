@@ -1,15 +1,17 @@
 use crate::expressions::Expr;
+use crate::identifier::Ident;
 use crate::items::Item;
 use crate::parser::Parser;
 use crate::parser::errors::{
   ConstCannotBeUninitialized, ConstExpectedFuncOrIdent,
-  ConstItemsNeedTypeAnnotation, ModStringLit,
+  ConstItemsNeedTypeAnnotation, FunctionCamelCase, ModStringLit,
 };
 use crate::parser::parser::ITEM_TOKENS;
 use crate::{
   Block, ConstItem, FunctionItem, ItemKind, ModItem, NodeId, Path, ProgramNode,
   TokenType, Type, Visibility, log_parse_failure,
 };
+use stringcase::camel_case;
 use zirael_source::span::Span;
 use zirael_utils::prelude::debug;
 
@@ -70,12 +72,15 @@ impl Parser<'_> {
     span_start: Span,
   ) -> Option<FunctionItem> {
     let name = self.parse_identifier();
+    self.validate_function_name(name);
+    let generics = self.parse_generic_parameters();
+    println!("{:?}", generics);
 
     Some(FunctionItem {
       id: NodeId::new(),
       is_const,
       name,
-      generics: None,
+      generics,
       params: vec![],
       return_type: None,
       body: Block {
@@ -85,6 +90,14 @@ impl Parser<'_> {
       },
       span: Default::default(),
     })
+  }
+
+  fn validate_function_name(&mut self, name: Ident) {
+    if name.text() != camel_case(&name.text()) {
+      self.emit(FunctionCamelCase {
+        span: name.span().clone(),
+      });
+    }
   }
 
   fn parse_const(&mut self, span: Span) -> Option<ItemKind> {
@@ -97,12 +110,21 @@ impl Parser<'_> {
         let ident = self.parse_identifier();
 
         let colon = self.eat(TokenType::Colon);
-        let ty = self.parse_type();
-        if !colon || matches!(ty, Type::Invalid) {
+        let ty = if !colon {
           self.emit(ConstItemsNeedTypeAnnotation {
             span: self.previous().span,
           });
-        }
+          Type::Invalid
+        } else {
+          let ty = self.parse_type();
+          if matches!(ty, Type::Invalid) {
+            self.emit(ConstItemsNeedTypeAnnotation {
+              span: self.previous().span,
+            });
+          }
+
+          ty
+        };
 
         let expr = if !self.eat(TokenType::Assign) {
           self.emit(ConstCannotBeUninitialized {
@@ -158,7 +180,7 @@ impl Parser<'_> {
     let token = self.expect_any(ITEM_TOKENS, "as an item beginning")?.kind;
     let kind = match token {
       TokenType::Mod => {
-        if let TokenType::Identifier(_) = self.peek().kind
+        if self.is_identifier()
           && self.peek_ahead(1)?.kind == TokenType::LeftBrace
         {
           let name = self.parse_identifier();

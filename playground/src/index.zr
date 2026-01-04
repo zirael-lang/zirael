@@ -1,1 +1,1 @@
-mod add;
+func test<T: Display>() {}

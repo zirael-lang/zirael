@@ -125,3 +125,39 @@ pub struct ExpectedSuperOrIdentPath {
   pub span: Span,
   pub found: TokenType,
 }
+
+#[derive(Diagnostic)]
+#[warning("function names have to be camel case")]
+#[code(PARSE_FUNCTION_CAMEL_CASE)]
+// TODO: add suggestion to change the name
+pub struct FunctionCamelCase {
+  #[warning("in this name here")]
+  pub span: Span,
+}
+
+#[derive(Diagnostic)]
+#[error("expected an identifier for a generic parameter, found {found}")]
+#[code(PARSE_EXPECTED_IDENTIFIER_IN_GENERIC)]
+pub struct ExpectedIdentifierInGeneric {
+  #[error("invalid part found here")]
+  pub span: Span,
+  pub found: TokenType,
+}
+
+#[derive(Diagnostic)]
+#[error("expected a type path for a type bound, found {found}")]
+#[code(PARSE_EXPECTED_TYPE_PATH_FOR_BOUND)]
+#[help("type path can be simple like Display or std::math::Add<i32>")]
+pub struct ExpectedTypePathForBound {
+  #[error("invalid part found here")]
+  pub span: Span,
+  pub found: TokenType,
+}
+
+#[derive(Diagnostic)]
+#[error("trailing `+` found in type bound")]
+#[code(PARSE_TRAILING_PLUS_IN_TYPE_BOUND)]
+pub struct TrailingPlusInTypeBound {
+  #[error("trailing plus here")]
+  pub span: Span,
+}

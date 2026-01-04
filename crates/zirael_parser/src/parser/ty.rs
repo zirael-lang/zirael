@@ -1,10 +1,10 @@
 use crate::expressions::Expr;
 use crate::parser::Parser;
-use crate::parser::errors::{ConstAloneInType, ExpectedType};
+use crate::parser::errors::{ConstAloneInType, ExpectedIdentifierInGeneric, ExpectedType, ExpectedTypePathForBound, TrailingPlusInTypeBound};
 use crate::{
   ArrayType, FunctionType, GenericParam, GenericParams, Mutability, NodeId,
   OptionalType, PointerType, PrimitiveKind, PrimitiveType, TokenType,
-  TupleType, Type, TypePath, UnitType,
+  TupleType, Type, TypeBound, TypePath, UnitType,
 };
 use zirael_source::span::Span;
 
@@ -282,5 +282,95 @@ impl Parser<'_> {
       "char" => Some(PrimitiveKind::Char),
       _ => None,
     }
+  }
+
+  pub fn parse_type_bounds(&mut self) -> Vec<TypeBound> {
+    let mut bounds = vec![];
+
+    loop {
+      if self.is_identifier() {
+        let span = self.peek().span;
+        let path = self.parse_path();
+        let args = self.parse_type_arguments();
+
+        bounds.push(TypeBound {
+          id: NodeId::new(),
+          span: self.span_from(span),
+          path: TypePath {
+            span: self.span_from(span),
+            id: NodeId::new(),
+            path,
+            args,
+          },
+        })
+      } else {
+        self.emit(ExpectedTypePathForBound {
+          span: self.peek().span,
+          found: self.peek().kind.clone(),
+        });
+        self.advance_until_one_of(&[TokenType::Comma, TokenType::Gt]);
+      }
+
+      if self.check(&TokenType::Plus) {
+        self.advance();
+        if self.check(&TokenType::Gt) {
+          self.emit(TrailingPlusInTypeBound { span: self.peek().span });
+          break;
+        }
+      } else {
+        break;
+      }
+    }
+
+    bounds
+  }
+
+  pub fn parse_generic_parameters(&mut self) -> Option<GenericParams> {
+    if !self.check(&TokenType::Lt) {
+      return None;
+    }
+    let span = self.peek().span;
+    let mut generics = vec![];
+    self.advance();
+
+    loop {
+      if self.is_identifier() {
+        let name = self.parse_identifier();
+        let bounds = if self.eat(TokenType::Colon) {
+          self.parse_type_bounds()
+        } else {
+          vec![]
+        };
+
+        generics.push(GenericParam {
+          id: NodeId::new(),
+          name,
+          bounds,
+          span: self.span_from(span),
+        });
+      } else {
+        self.emit(ExpectedIdentifierInGeneric {
+          span: self.peek().span,
+          found: self.peek().kind.clone(),
+        });
+        self.advance_until_one_of(&[TokenType::Comma, TokenType::Gt]);
+      }
+
+      if self.check(&TokenType::Comma) {
+        self.advance();
+        if self.check(&TokenType::Gt) {
+          break;
+        }
+      } else {
+        break;
+      }
+    }
+
+    self.expect(TokenType::Gt, "to end generic parameters list");
+    Some(GenericParams {
+      id: NodeId::new(),
+      params: generics,
+      span: self.span_from(span),
+    })
   }
 }

@@ -227,4 +227,8 @@ impl<'dcx> Parser<'dcx> {
   pub fn eat_semis(&mut self) {
     self.eat_all(TokenType::Semicolon);
   }
+
+  pub fn is_identifier(&self) -> bool {
+    self.check_if(|token| matches!(token, TokenType::Identifier(_)))
+  }
 }

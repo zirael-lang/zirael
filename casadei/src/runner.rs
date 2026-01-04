@@ -31,13 +31,13 @@ impl<'tests> TestRunner<'tests> {
 
   fn run_single_test(&'tests self, test: &'tests Test) -> TestResult {
     let project_type = test
-      .directives
-      .iter()
-      .find_map(|directive| match directive {
-        Directive::PackageType(package_type) => Some(*package_type),
-        _ => None,
-      })
-      .unwrap_or(PackageType::Binary);
+        .directives
+        .iter()
+        .find_map(|directive| match directive {
+          Directive::PackageType(package_type) => Some(*package_type),
+          _ => None,
+        })
+        .unwrap_or(PackageType::Binary);
 
     let output = Arc::new(Mutex::new(Cursor::new(vec![])));
     let result = check_project(
@@ -63,23 +63,47 @@ impl<'tests> TestRunner<'tests> {
         let mut failures = vec![];
 
         let error_directives: Vec<_> = test
-          .directives
-          .iter()
-          .filter_map(|d| match d {
-            Directive::Error {
-              line,
-              direction,
-              pattern,
-            } => Some((*line, direction.clone(), pattern.clone())),
-            _ => None,
-          })
-          .collect();
+            .directives
+            .iter()
+            .filter_map(|d| match d {
+              Directive::Error {
+                line,
+                direction,
+                pattern,
+              } => Some((*line, direction.clone(), pattern.clone())),
+              _ => None,
+            })
+            .collect();
 
         failures.extend(
           error_directives
+              .iter()
+              .filter(|(directive_line, direction, pattern)| {
+                !sess.dcx().diagnostics.iter().any(|diagnostic| {
+                  matches_directive(
+                    diagnostic.value(),
+                    *directive_line,
+                    direction,
+                    pattern,
+                    sources,
+                  )
+                })
+              })
+              .map(|(line, direction, pattern)| {
+                FailureType::ExpectedErrorNotFound {
+                  line: *line,
+                  direction: direction.clone(),
+                  pattern: pattern.clone(),
+                }
+              }),
+        );
+
+        let unexpected_errors: Vec<String> = sess
+            .dcx()
+            .diagnostics
             .iter()
-            .filter(|(directive_line, direction, pattern)| {
-              !sess.dcx().diagnostics.iter().any(|diagnostic| {
+            .filter(|diagnostic| {
+              !error_directives.iter().any(|(directive_line, direction, pattern)| {
                 matches_directive(
                   diagnostic.value(),
                   *directive_line,
@@ -89,14 +113,12 @@ impl<'tests> TestRunner<'tests> {
                 )
               })
             })
-            .map(|(line, direction, pattern)| {
-              FailureType::ExpectedErrorNotFound {
-                line: *line,
-                direction: direction.clone(),
-                pattern: pattern.clone(),
-              }
-            }),
-        );
+            .map(|diagnostic| diagnostic.value().diag.message.clone())
+            .collect();
+
+        if !unexpected_errors.is_empty() {
+          failures.push(FailureType::UnexpectedErrors(unexpected_errors));
+        }
 
         if failures.is_empty() {
           TestStatus::Passed
@@ -105,9 +127,9 @@ impl<'tests> TestRunner<'tests> {
         }
       } else {
         let has_error_directives = test
-          .directives
-          .iter()
-          .any(|d| matches!(d, Directive::Error { .. }));
+            .directives
+            .iter()
+            .any(|d| matches!(d, Directive::Error { .. }));
 
         if has_error_directives {
           TestStatus::Failed(vec![FailureType::ExpectedErrorsButCompiled])
