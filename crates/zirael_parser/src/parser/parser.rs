@@ -1,4 +1,6 @@
+use crate::Path;
 use crate::identifier::Ident;
+use crate::import::ImportDecl;
 use crate::lexer::{Token, TokenType};
 use crate::parser::errors::{
   ExpectedIdentifier, ExpectedTokens, UnexpectedToken,
@@ -18,6 +20,9 @@ pub struct Parser<'dcx> {
   pub doc_comment: Option<Vec<String>>,
 
   dcx: &'dcx DiagnosticCtx,
+
+  pub discovery_modules: Vec<Path>,
+  pub imports: Vec<ImportDecl>,
 }
 
 impl<'dcx> Parser<'dcx> {
@@ -32,6 +37,9 @@ impl<'dcx> Parser<'dcx> {
       pos: 0,
       dcx,
       doc_comment: None,
+
+      discovery_modules: vec![],
+      imports: vec![],
     }
   }
 

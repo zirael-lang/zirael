@@ -7,7 +7,7 @@ use crate::parser::errors::{
 use crate::{NodeId, Path, PathRoot, TokenType};
 
 impl Parser<'_> {
-  pub fn parse_path(&mut self) -> Option<Path> {
+  pub fn parse_path(&mut self) -> Path {
     let start = self.current_span();
     let mut segments = Vec::new();
 
@@ -51,11 +51,11 @@ impl Parser<'_> {
       }
     }
 
-    Some(Path {
+    Path {
       id: NodeId::new(),
       root,
       segments,
       span: self.span_from(start),
-    })
+    }
   }
 }

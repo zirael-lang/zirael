@@ -37,7 +37,8 @@ pub enum ItemKind {
 #[derive(Debug, Clone)]
 pub struct ModItem {
   pub id: NodeId,
-  pub path: Option<Path>,
+  pub name: Ident,
+  pub items: Vec<Item>,
   pub span: Span,
 }
 

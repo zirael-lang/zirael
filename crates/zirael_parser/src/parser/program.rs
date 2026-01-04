@@ -7,7 +7,7 @@ use crate::parser::errors::{
 };
 use crate::parser::parser::ITEM_TOKENS;
 use crate::{
-  Block, ConstItem, FunctionItem, ItemKind, ModItem, NodeId, ProgramNode,
+  Block, ConstItem, FunctionItem, ItemKind, ModItem, NodeId, Path, ProgramNode,
   TokenType, Type, Visibility, log_parse_failure,
 };
 use zirael_source::span::Span;
@@ -15,6 +15,8 @@ use zirael_utils::prelude::debug;
 
 impl Parser<'_> {
   pub fn parse_program(&mut self) -> Option<ProgramNode> {
+    self.imports.clear();
+    self.discovery_modules.clear();
     let mut items: Vec<Item> = vec![];
 
     while !self.is_at_end() {
@@ -33,7 +35,8 @@ impl Parser<'_> {
     Some(ProgramNode {
       id: NodeId::new(),
       attributes: vec![],
-      imports: vec![],
+      imports: self.imports.clone(),
+      discover_modules: self.discovery_modules.clone(),
       items,
     })
   }
@@ -50,8 +53,7 @@ impl Parser<'_> {
     self.advance_until_one_of(ITEM_TOKENS);
   }
 
-  fn parse_mod(&mut self) -> Option<ModItem> {
-    let span_start = self.previous().span;
+  fn parse_module_discovery(&mut self) -> Option<Path> {
     if let TokenType::StringLiteral(_) = &self.peek().kind {
       self.emit(ModStringLit {
         span: self.peek().span,
@@ -59,13 +61,7 @@ impl Parser<'_> {
 
       return None;
     }
-    let path = self.parse_path();
-
-    Some(ModItem {
-      id: NodeId::new(),
-      span: self.span_from(span_start),
-      path,
-    })
+    Some(self.parse_path())
   }
 
   fn parse_function(
@@ -151,15 +147,37 @@ impl Parser<'_> {
     let token = self.expect_any(ITEM_TOKENS, "as an item beginning")?.kind;
     let kind = match token {
       TokenType::Mod => {
-        ItemKind::Mod(log_parse_failure!(self.parse_mod(), "module item")?)
+        if let TokenType::Identifier(_) = self.peek().kind
+          && self.peek_ahead(1)?.kind == TokenType::LeftBrace
+        {
+          let name = self.parse_identifier();
+          self.expect(TokenType::LeftBrace, "to open a module declaration");
+
+          todo!("mod decl not implemented");
+          Some(ItemKind::Mod(ModItem {
+            name,
+            id: NodeId::new(),
+            span: Default::default(),
+            items: vec![],
+          }))
+        } else if let TokenType::Identifier(_) = self.peek().kind {
+          let path = self.parse_module_discovery();
+          let Some(path) = path else { return None };
+
+          self.discovery_modules.push(path);
+          self.eat_semis();
+          return None;
+        } else {
+          None
+        }
       }
       TokenType::Const => {
-        log_parse_failure!(self.parse_const(span_start), "const item")?
+        log_parse_failure!(self.parse_const(span_start), "const item")
       }
-      TokenType::Func => ItemKind::Function(log_parse_failure!(
+      TokenType::Func => Some(ItemKind::Function(log_parse_failure!(
         self.parse_function(false, span_start),
         "function item"
-      )?),
+      )?)),
       _ => unreachable!(),
     };
 
@@ -167,7 +185,7 @@ impl Parser<'_> {
 
     Some(Item {
       id: NodeId::new(),
-      kind,
+      kind: kind?,
       // TODO: attributes parsing
       attributes: vec![],
       span: self.span_from(span_start),

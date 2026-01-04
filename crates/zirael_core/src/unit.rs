@@ -36,6 +36,7 @@ impl<'ctx> CompilationUnit<'ctx> {
 
     let node = parse(tokens, dcx);
     dcx.emit_all();
+    println!("{:?}", node);
 
     Module::new(id, node.unwrap())
   }

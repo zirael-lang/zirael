@@ -170,11 +170,7 @@ impl Parser<'_> {
   }
 
   fn parse_path_type(&mut self, start: Span) -> Type {
-    let path = match self.parse_path() {
-      Some(path) => path,
-      None => return Type::Invalid,
-    };
-
+    let path = self.parse_path();
     let args = self.parse_type_arguments();
 
     Type::Path(TypePath {

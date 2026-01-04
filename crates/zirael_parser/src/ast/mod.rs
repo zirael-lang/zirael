@@ -49,5 +49,6 @@ pub struct ProgramNode {
   pub id: NodeId,
   pub attributes: Vec<Attribute>,
   pub imports: Vec<ImportDecl>,
+  pub discover_modules: Vec<Path>,
   pub items: Vec<Item>,
 }
