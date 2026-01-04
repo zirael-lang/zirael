@@ -18,8 +18,7 @@ pub enum ExprKind {
   Literal(Literal),
 
   // Identifiers and paths
-  Ident(Ident),
-  Path(PathExpr),
+  Path(Path),
   SelfValue,
 
   // Binary operations
@@ -67,43 +66,27 @@ pub enum ExprKind {
     field: Ident,
   },
 
-  // Path qualifier (::)
-  PathQualifier {
-    base: Box<Expr>,
-    segment: Ident,
-    type_args: Option<Vec<Type>>,
-  },
-
   // Control flow
   If(IfExpr),
   Match(MatchExpr),
   Block(Block),
 
-  // Grouping
-  Paren(Box<Expr>),
-
   // Composite literals
   Tuple(Vec<Expr>),
   Array(Vec<Expr>),
-
-  Dummy,
 }
 
 impl Expr {
   pub fn dummy() -> Expr {
     Expr {
       id: NodeId::new(),
-      kind: ExprKind::Dummy,
+      kind: ExprKind::Literal(Literal::Unit(UnitLit {
+        id: NodeId::new(),
+        span: Span::default(),
+      })),
       span: Span::default(),
     }
   }
-}
-
-#[derive(Debug, Clone)]
-pub struct PathExpr {
-  pub id: NodeId,
-  pub path: Path,
-  pub span: Span,
 }
 
 #[derive(Debug, Clone)]

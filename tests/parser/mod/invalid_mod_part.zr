@@ -1,0 +1,2 @@
+//#error: expected `super` or an identifier in the path, found {}
+mod self::123;

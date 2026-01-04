@@ -1,2 +1,0 @@
-//#error: expected a type
-pub const VALUE: i3 = 0;

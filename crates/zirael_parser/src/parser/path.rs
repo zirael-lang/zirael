@@ -1,32 +1,54 @@
+use crate::identifier::Ident;
 use crate::parser::Parser;
+use crate::parser::errors::{
+  ExpectedSuperOrIdentPath, ExpectedTokens, SelfAndPackageRootOnly,
+  UnexpectedToken,
+};
 use crate::{NodeId, Path, PathRoot, TokenType};
 
 impl Parser<'_> {
   pub fn parse_path(&mut self) -> Option<Path> {
     let start = self.current_span();
+    let mut segments = Vec::new();
 
     let root = if self.eat(TokenType::Package) {
-      self.expect(TokenType::ColonColon, "after package")?;
       Some(PathRoot::Package)
     } else if self.eat(TokenType::SelfValue) {
-      self.expect(TokenType::ColonColon, "after self")?;
       Some(PathRoot::SelfMod)
     } else if self.eat(TokenType::Super) {
-      self.expect(TokenType::ColonColon, "after super")?;
       Some(PathRoot::Super)
+    } else if self.check_if(|t| matches!(t, TokenType::Identifier(_))) {
+      segments.push(self.parse_identifier());
+      None
     } else {
       None
     };
 
-    let mut segments = Vec::new();
-    segments.push(self.parse_identifier());
-
     while self.eat(TokenType::ColonColon) {
-      // Check if this is the start of turbofish or import items
       if self.check(&TokenType::Lt) || self.check(&TokenType::LeftBrace) {
         break;
       }
-      segments.push(self.parse_identifier());
+
+      match self.peek().kind {
+        TokenType::Super => {
+          segments.push(Ident::new("super", self.peek().span));
+          self.advance();
+        }
+        TokenType::Package | TokenType::SelfValue => {
+          self.emit(SelfAndPackageRootOnly {
+            span: self.peek().span,
+          });
+          self.advance();
+        }
+        TokenType::Identifier(_) => segments.push(self.parse_identifier()),
+        _ => {
+          self.emit(ExpectedSuperOrIdentPath {
+            span: self.peek().span,
+            found: self.peek().kind.clone(),
+          });
+          self.advance();
+        }
+      }
     }
 
     Some(Path {

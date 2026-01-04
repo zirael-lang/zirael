@@ -1,0 +1,2 @@
+//#error: `self` and `package` are only allowed in root of the path
+mod self::utils::package;

@@ -107,3 +107,21 @@ pub struct ExpectedType {
   #[error("type expected here")]
   pub span: Span,
 }
+
+#[derive(Diagnostic)]
+#[error("`self` and `package` are only allowed in root of the path")]
+#[code(PARSE_SELF_AND_PACKAGE_ROOT_ONLY)]
+#[help("only super is allowed at any position")]
+pub struct SelfAndPackageRootOnly {
+  #[error("found here")]
+  pub span: Span,
+}
+
+#[derive(Diagnostic)]
+#[error("expected `super` or an identifier in the path, found {found}")]
+#[code(PARSE_EXPECTED_SUPER_OR_IDENT_PATH)]
+pub struct ExpectedSuperOrIdentPath {
+  #[error("invalid part found here")]
+  pub span: Span,
+  pub found: TokenType,
+}

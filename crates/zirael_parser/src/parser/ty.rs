@@ -2,8 +2,9 @@ use crate::expressions::Expr;
 use crate::parser::Parser;
 use crate::parser::errors::{ConstAloneInType, ExpectedType};
 use crate::{
-  ArrayType, FunctionType, Mutability, NodeId, OptionalType, PointerType,
-  PrimitiveKind, PrimitiveType, TokenType, TupleType, Type, TypePath, UnitType,
+  ArrayType, FunctionType, GenericParam, GenericParams, Mutability, NodeId,
+  OptionalType, PointerType, PrimitiveKind, PrimitiveType, TokenType,
+  TupleType, Type, TypePath, UnitType,
 };
 use zirael_source::span::Span;
 

@@ -101,9 +101,19 @@ impl<'dcx> Parser<'dcx> {
     token
   }
 
+  /// Go back in the position by one.
+  #[inline]
+  pub fn back(&mut self) {
+    self.pos -= 1;
+  }
+
   /// Check if the current token matches and consume it
   pub fn eat(&mut self, token_type: TokenType) -> bool {
-    if self.check(&token_type) {
+    self.eat_if(|t| t.kind == token_type)
+  }
+
+  pub fn eat_if(&mut self, predicate: impl Fn(&Token) -> bool) -> bool {
+    if predicate(self.peek()) {
       self.advance();
       true
     } else {
