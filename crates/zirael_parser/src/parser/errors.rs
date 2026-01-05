@@ -161,3 +161,22 @@ pub struct TrailingPlusInTypeBound {
   #[error("trailing plus here")]
   pub span: Span,
 }
+
+#[derive(Diagnostic)]
+#[error(
+  "expected an identifier or `...` to begin a function parameter, found {found}"
+)]
+#[code(PARSE_EXPECTED_IDENT_OR_DOTS)]
+pub struct ExpectedIdentOrDots {
+  #[error("invalid start here")]
+  pub span: Span,
+  pub found: TokenType,
+}
+
+#[derive(Diagnostic)]
+#[error("variadic parameters do not accept default values")]
+#[code(PARSE_VARIADIC_NO_DEFAULT)]
+pub struct VariadicNoDefault {
+  #[error("this is not allowed")]
+  pub span: Span
+}

@@ -13,8 +13,15 @@ pub enum Type {
   Array(ArrayType),
   Tuple(TupleType),
   Unit(UnitType),
+  Never(NeverType),
   // most likely means that the parsing failed
   Invalid,
+}
+
+#[derive(Debug, Clone)]
+pub struct NeverType {
+  pub id: NodeId,
+  pub span: Span,
 }
 
 #[derive(Debug, Clone)]
@@ -121,7 +128,8 @@ impl Type {
       Self::Tuple(t) => t.span,
       Self::Unit(u) => u.span,
       Self::Optional(o) => o.span,
-      Self::Invalid => Span::dummy()
+      Self::Never(never) => never.span,
+      Self::Invalid => Span::dummy(),
     }
   }
 }

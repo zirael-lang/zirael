@@ -11,6 +11,7 @@ pub struct Expr {
   pub id: NodeId,
   pub kind: ExprKind,
   pub span: Span,
+  pub is_const: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -86,6 +87,7 @@ impl Expr {
         span: Span::default(),
       })),
       span: Span::default(),
+      is_const: false
     }
   }
 }

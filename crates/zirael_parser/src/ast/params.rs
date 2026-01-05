@@ -22,8 +22,8 @@ pub struct SelfParam {
 pub enum SelfKind {
   Value,  // self
   Mut,    // mut self
-  Ref,    // &self
-  RefMut, // &mut self
+  Ptr,    // *self
+  PtrMut, // *mut self
 }
 
 #[derive(Debug, Clone)]

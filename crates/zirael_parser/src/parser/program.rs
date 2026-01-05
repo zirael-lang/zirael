@@ -8,8 +8,8 @@ use crate::parser::errors::{
 };
 use crate::parser::parser::ITEM_TOKENS;
 use crate::{
-  Block, ConstItem, FunctionItem, ItemKind, ModItem, NodeId, Path, ProgramNode,
-  TokenType, Type, Visibility, log_parse_failure,
+  Block, ConstItem, FunctionItem, ItemKind, ModItem, NeverType, NodeId, Path,
+  ProgramNode, TokenType, Type, UnitType, Visibility, log_parse_failure,
 };
 use stringcase::camel_case;
 use zirael_source::span::Span;
@@ -74,15 +74,36 @@ impl Parser<'_> {
     let name = self.parse_identifier();
     self.validate_function_name(name);
     let generics = self.parse_generic_parameters();
-    println!("{:?}", generics);
+
+    self.expect(TokenType::LeftParen, "to open parameter list");
+    let params = self.parse_function_parameters();
+    self.expect(TokenType::RightParen, "to close parameter list");
+
+    let return_type = if self.check(&TokenType::Arrow) {
+      self.advance();
+      if self.eat(TokenType::Not) {
+        // `!` type is only allowed in the function return type
+        Type::Never(NeverType {
+          id: NodeId::new(),
+          span: self.previous().span,
+        })
+      } else {
+        self.parse_type()
+      }
+    } else {
+      Type::Unit(UnitType {
+        id: NodeId::new(),
+        span: Span::dummy(),
+      })
+    };
 
     Some(FunctionItem {
       id: NodeId::new(),
       is_const,
       name,
       generics,
-      params: vec![],
-      return_type: None,
+      params,
+      return_type,
       body: Block {
         id: NodeId::new(),
         statements: vec![],
