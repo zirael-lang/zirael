@@ -1,3 +1,5 @@
-//#error: unexpected BOM (U+FEFF) - only allowed at file start
-var a = 1;
-﻿var b = 2;
+func main() {
+    //#error: unexpected BOM (U+FEFF) - only allowed at file start
+    var a = 1;
+    ﻿var b = 2;
+}

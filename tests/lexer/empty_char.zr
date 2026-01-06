@@ -1,2 +1,4 @@
-//#error: empty character literal
-var c = '';
+func main() {
+    //#error: empty character literal
+    var c = '';
+}

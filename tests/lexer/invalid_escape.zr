@@ -1,2 +1,4 @@
-//#error: invalid escape sequence '\q'
-var s = "\q";
+func main() {
+    //#error: invalid escape sequence '\q'
+    var s = "\q";
+}

@@ -1,2 +1,4 @@
-//#error: missing digits after '{}' prefix
-var n = 0x;
+func main() {
+    //#error: missing digits after '{}' prefix
+    var n = 0x;
+}

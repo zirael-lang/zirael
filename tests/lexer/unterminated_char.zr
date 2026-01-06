@@ -1,2 +1,4 @@
-//#error: unterminated character literal
-var c = 'a;
+func main() {
+    //#error: unterminated character literal
+    var c = 'a;
+}

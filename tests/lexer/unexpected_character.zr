@@ -1,2 +1,4 @@
-//#error: unexpected character '$'
-var $ = 1;
+func main() {
+    //#error: unexpected character '$'
+    var $ = 1;
+}

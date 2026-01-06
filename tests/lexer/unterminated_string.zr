@@ -1,2 +1,4 @@
-//#error: unterminated string literal
-var s = "hello;
+func main() {
+    //#error: unterminated string literal
+    var s = "hello;
+}

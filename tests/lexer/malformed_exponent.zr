@@ -1,2 +1,4 @@
-//#error: exponent requires at least one digit
-var n = 1e;
+func main() {
+    //#error: exponent requires at least one digit
+    var n = 1e;
+}

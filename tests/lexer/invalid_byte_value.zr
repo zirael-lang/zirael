@@ -1,2 +1,4 @@
-//#error: byte value {} is out of range (must be 0-255)
-var b = b'Ā';
+func main() {
+    //#error: byte value {} is out of range (must be 0-255)
+    var b = b'Ā';
+}
