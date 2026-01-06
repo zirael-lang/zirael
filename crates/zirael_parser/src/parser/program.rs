@@ -96,6 +96,11 @@ impl Parser<'_> {
         span: Span::dummy(),
       })
     };
+    let body = if self.check(&TokenType::LeftBrace) {
+      Some(self.parse_block())
+    } else {
+      None
+    };
 
     Some(FunctionItem {
       id: NodeId::new(),
@@ -104,11 +109,7 @@ impl Parser<'_> {
       generics,
       params,
       return_type,
-      body: Block {
-        id: NodeId::new(),
-        statements: vec![],
-        span: Span::dummy(),
-      },
+      body,
       span: Default::default(),
     })
   }

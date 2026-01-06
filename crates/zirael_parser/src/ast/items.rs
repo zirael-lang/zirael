@@ -59,7 +59,7 @@ pub struct FunctionItem {
   pub generics: Option<GenericParams>,
   pub params: Vec<Param>,
   pub return_type: Type,
-  pub body: Block,
+  pub body: Option<Block>,
   pub span: Span,
 }
 

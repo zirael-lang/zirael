@@ -180,3 +180,11 @@ pub struct VariadicNoDefault {
   #[error("this is not allowed")]
   pub span: Span
 }
+
+#[derive(Diagnostic)]
+#[error("all variables have to be initialized")]
+#[code(PARSE_ALL_VARS_INIT)]
+pub struct AllVarsInitialized {
+  #[error("this one isn't")]
+  pub span: Span
+}

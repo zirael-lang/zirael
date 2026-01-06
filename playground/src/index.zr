@@ -1,1 +1,3 @@
-func test<T: Display>() {}
+func test<T: Display>() {
+    var x: i32;
+}
