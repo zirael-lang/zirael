@@ -2,8 +2,7 @@ use crate::ast::NodeId;
 use crate::ast::identifier::Ident;
 use crate::ast::import::Path;
 use crate::ast::statements::Block;
-use crate::ast::types::{Type, TypePath};
-use crate::{Token, TokenType};
+use crate::ast::types::{Mutability, Type, TypePath};
 use zirael_utils::prelude::Span;
 
 #[derive(Debug, Clone)]
@@ -68,10 +67,37 @@ pub enum ExprKind {
     field: Ident,
   },
 
+  Index {
+    object: Box<Expr>,
+    index: Box<Expr>,
+  },
+
+  AddrOf {
+    mutability: Mutability,
+    operand: Box<Expr>,
+  },
+
+  Struct {
+    path: TypePath,
+    fields: Vec<StructFieldInit>,
+  },
+
   // Control flow
   If(IfExpr),
   Match(MatchExpr),
   Block(Block),
+  Loop(LoopExpr),
+  While(WhileExpr),
+  For(ForExpr),
+  Break(BreakExpr),
+  Continue(ContinueExpr),
+  Return(ReturnExpr),
+
+  Range(RangeExpr),
+  Builtin {
+    name: Ident,
+    args: Vec<BuiltinArg>,
+  },
 
   // Composite literals
   Tuple(Vec<Expr>),
@@ -87,7 +113,7 @@ impl Expr {
         span: Span::default(),
       })),
       span: Span::default(),
-      is_const: false
+      is_const: false,
     }
   }
 }
@@ -108,11 +134,79 @@ pub enum ElseBranch {
 }
 
 #[derive(Debug, Clone)]
+pub struct StructFieldInit {
+  pub id: NodeId,
+  pub name: Ident, // .field
+  pub value: Expr, // = value
+  pub span: Span,
+}
+
+#[derive(Debug, Clone)]
 pub struct MatchExpr {
   pub id: NodeId,
   pub scrutinee: Box<Expr>,
   pub arms: Vec<MatchArm>,
   pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct LoopExpr {
+  pub id: NodeId,
+  pub body: Block,
+  pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct WhileExpr {
+  pub id: NodeId,
+  pub condition: Box<Expr>,
+  pub body: Block,
+  pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct ForExpr {
+  pub id: NodeId,
+  pub binding: Ident,
+  pub iterator: Box<Expr>,
+  pub body: Block,
+  pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct BreakExpr {
+  pub id: NodeId,
+  pub value: Option<Box<Expr>>,
+  pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct ContinueExpr {
+  pub id: NodeId,
+  pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct ReturnExpr {
+  pub id: NodeId,
+  pub value: Option<Box<Expr>>,
+  pub span: Span,
+}
+
+// Range expressions: start..end, start..=end, ..end, start.., ..
+#[derive(Debug, Clone)]
+pub struct RangeExpr {
+  pub id: NodeId,
+  pub start: Option<Box<Expr>>,
+  pub end: Option<Box<Expr>>,
+  pub inclusive: bool, // .. vs ..=
+  pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub enum BuiltinArg {
+  Type(Type),
+  Expr(Expr),
 }
 
 #[derive(Debug, Clone)]

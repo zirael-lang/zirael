@@ -1,8 +1,6 @@
 use crate::parser::Parser;
 use crate::parser::errors::AllVarsInitialized;
-use crate::{
-  Block, ExprStmt, NodeId, ReturnStmt, Statement, TokenType, VarDecl,
-};
+use crate::{Block, ExprStmt, NodeId, Statement, TokenType, VarDecl};
 
 impl Parser<'_> {
   pub fn parse_block(&mut self) -> Block {
@@ -83,21 +81,6 @@ impl Parser<'_> {
           value,
           is_mut,
           ty,
-        }))
-      }
-      Return => {
-        self.advance();
-        let value = if self.check(&Semicolon) {
-          self.advance();
-          None
-        } else {
-          Some(self.parse_expr())
-        };
-
-        Some(Statement::Return(ReturnStmt {
-          id: NodeId::new(),
-          span: self.span_from(span),
-          value,
         }))
       }
       _ => {

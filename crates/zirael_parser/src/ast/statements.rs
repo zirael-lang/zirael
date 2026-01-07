@@ -15,10 +15,6 @@ pub struct Block {
 pub enum Statement {
   VarDecl(VarDecl),
   ConstDecl(ConstDecl),
-  For(ForStmt),
-  While(WhileStmt),
-  Loop(LoopStmt),
-  Return(ReturnStmt),
   Expr(ExprStmt),
   Block(Block),
 }
@@ -39,37 +35,6 @@ pub struct ConstDecl {
   pub name: Ident,
   pub ty: Option<Type>,
   pub value: Expr,
-  pub span: Span,
-}
-
-#[derive(Debug, Clone)]
-pub struct ForStmt {
-  pub id: NodeId,
-  pub binding: Ident,
-  pub iterator: Expr,
-  pub body: Block,
-  pub span: Span,
-}
-
-#[derive(Debug, Clone)]
-pub struct WhileStmt {
-  pub id: NodeId,
-  pub condition: Expr,
-  pub body: Block,
-  pub span: Span,
-}
-
-#[derive(Debug, Clone)]
-pub struct LoopStmt {
-  pub id: NodeId,
-  pub body: Block,
-  pub span: Span,
-}
-
-#[derive(Debug, Clone)]
-pub struct ReturnStmt {
-  pub id: NodeId,
-  pub value: Option<Expr>,
   pub span: Span,
 }
 
