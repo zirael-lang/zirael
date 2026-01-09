@@ -1,9 +1,6 @@
 use crate::identifier::Ident;
 use crate::parser::Parser;
-use crate::parser::errors::{
-  ExpectedSuperOrIdentPath, ExpectedTokens, SelfAndPackageRootOnly,
-  UnexpectedToken,
-};
+use crate::parser::errors::{ExpectedSuperOrIdentPath, SelfAndPackageRootOnly};
 use crate::{NodeId, Path, PathRoot, TokenType};
 
 impl Parser<'_> {

@@ -37,12 +37,12 @@ impl<'ctx> CompilationUnit<'ctx> {
     });
     if self.emit_errors() {
       return None;
-    };
+    }
 
     let node = parse(tokens, dcx);
     if self.emit_errors() {
       return None;
-    };
+    }
 
     Some(Module::new(id, node.unwrap()))
   }

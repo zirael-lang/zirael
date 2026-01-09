@@ -103,11 +103,7 @@ fn extract_named_placeholders(
         }
 
         // Split off formatting spec (e.g. name:? or name:>10)
-        let name_part = inner
-          .split([':', '!'])
-          .next()
-          .unwrap_or("")
-          .trim();
+        let name_part = inner.split([':', '!']).next().unwrap_or("").trim();
 
         if name_part.is_empty() {
           return Err(MacroFunctionError::InvalidAttribute(

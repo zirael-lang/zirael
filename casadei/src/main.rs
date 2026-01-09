@@ -81,7 +81,9 @@ fn main() -> color_eyre::Result<()> {
               println!("compiler failed due to some other reasons")
             }
             FailureType::UnexpectedErrors(errors) => {
-              println!("found unexpected errors that weren't annotated with a directive:");
+              println!(
+                "found unexpected errors that weren't annotated with a directive:"
+              );
 
               for error in errors {
                 println!("  - {error}");

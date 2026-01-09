@@ -1,4 +1,3 @@
-use crate::BinaryOp;
 use crate::ast::NodeId;
 use crate::ast::identifier::Ident;
 use crate::ast::types::TypePath;

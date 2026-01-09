@@ -17,7 +17,7 @@ pub enum FailureType {
     direction: LineDirection,
   },
   ExpectedErrorsButCompiled,
-  UnexpectedErrors(Vec<String>)
+  UnexpectedErrors(Vec<String>),
 }
 
 #[derive(Debug, Clone)]

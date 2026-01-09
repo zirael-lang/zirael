@@ -37,7 +37,7 @@ impl Session {
   pub fn dcx(&self) -> &DiagnosticCtx {
     &self.dcx
   }
-  
+
   pub fn is_test(&self) -> bool {
     self.is_test
   }

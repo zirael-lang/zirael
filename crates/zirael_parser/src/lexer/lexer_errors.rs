@@ -185,7 +185,8 @@ impl LexError {
       }
       LexErrorKind::InvalidEscape { escape } if escape.starts_with("\\U") => {
         Some(
-          "Unicode escapes must have exactly 8 hex digits: \\UXXXXXXXX".to_owned(),
+          "Unicode escapes must have exactly 8 hex digits: \\UXXXXXXXX"
+            .to_owned(),
         )
       }
       LexErrorKind::InvalidEscape { escape } if escape.starts_with("\\x") => {

@@ -98,7 +98,9 @@ impl Lexer<'_> {
         self.advance();
         let hex = self.read_hex_digits(4)?;
         let value = u32::from_str_radix(&hex, 16).unwrap();
-        if let Some(ch) = char::from_u32(value) { Ok(ch.to_string()) } else {
+        if let Some(ch) = char::from_u32(value) {
+          Ok(ch.to_string())
+        } else {
           let span = self.make_span(start_offset);
           Err(LexError::new(
             LexErrorKind::InvalidEscape {
@@ -112,7 +114,9 @@ impl Lexer<'_> {
         self.advance();
         let hex = self.read_hex_digits(8)?;
         let value = u32::from_str_radix(&hex, 16).unwrap();
-        if let Some(ch) = char::from_u32(value) { Ok(ch.to_string()) } else {
+        if let Some(ch) = char::from_u32(value) {
+          Ok(ch.to_string())
+        } else {
           let span = self.make_span(start_offset);
           Err(LexError::new(
             LexErrorKind::InvalidEscape {

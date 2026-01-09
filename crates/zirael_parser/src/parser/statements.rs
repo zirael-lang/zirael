@@ -20,13 +20,11 @@ impl Parser<'_> {
     loop {
       if let Some(stmt) = self.parse_statement() {
         statements.push(stmt);
-      } else {
-        if !self.check(&TokenType::Semicolon)
-          && !self.check(&TokenType::RightBrace)
-          && !self.is_at_end()
-        {
-          self.advance();
-        }
+      } else if !self.check(&TokenType::Semicolon)
+        && !self.check(&TokenType::RightBrace)
+        && !self.is_at_end()
+      {
+        self.advance();
       }
 
       if self.check(&TokenType::Semicolon) {
@@ -58,7 +56,7 @@ impl Parser<'_> {
   }
 
   pub fn parse_statement(&mut self) -> Option<Statement> {
-    use TokenType::*;
+    use TokenType::{Assign, Colon, Const, Semicolon, Var};
     let span = self.peek().span;
 
     match self.peek().kind {
@@ -98,7 +96,7 @@ impl Parser<'_> {
 
         let has_semicolon = self.check(&Semicolon);
         if has_semicolon {
-          self.eat_semis()
+          self.eat_semis();
         }
 
         Some(Statement::Expr(ExprStmt {

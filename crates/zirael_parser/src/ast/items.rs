@@ -3,7 +3,6 @@ use crate::ast::NodeId;
 use crate::ast::expressions::Expr;
 use crate::ast::generics::GenericParams;
 use crate::ast::identifier::Ident;
-use crate::ast::import::Path;
 use crate::ast::params::Param;
 use crate::ast::statements::Block;
 use crate::ast::types::Type;

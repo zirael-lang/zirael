@@ -5,9 +5,8 @@ use crate::lexer::IntBase as LexIntBase;
 use crate::parser::Parser;
 use crate::parser::errors::{
   DuplicateNamedArg, EmptyMatch, ExpectedBuiltinName, ExpectedExpressionFound,
-  ExpectedFatArrow, ExpectedFieldName, ExpectedFieldValue, ExpectedPattern,
-  InvalidAssignTarget, MissingColonInTernary, MissingInKeyword, MissingOperand,
-  UnclosedDelimiter,
+  ExpectedFatArrow, ExpectedFieldName, ExpectedPattern, InvalidAssignTarget,
+  MissingColonInTernary, MissingInKeyword,
 };
 use crate::{NodeId, Path, TokenType, TypePath};
 use std::collections::HashMap;
@@ -186,15 +185,14 @@ impl Parser<'_> {
           );
         } else if let TokenType::IntegerLiteral(base) = &self.peek().kind {
           // tuple field access
-          let value = match base {
-            LexIntBase::Decimal(s) => s.clone(),
-            _ => {
-              self.emit(ExpectedFieldName {
-                found: self.peek().kind.clone(),
-                span: self.peek().span,
-              });
-              "0".to_string()
-            }
+          let value = if let LexIntBase::Decimal(s) = base {
+            s.clone()
+          } else {
+            self.emit(ExpectedFieldName {
+              found: self.peek().kind.clone(),
+              span: self.peek().span,
+            });
+            "0".to_owned()
           };
           let span = self.advance().span;
           expr = Expr::new(
@@ -488,29 +486,28 @@ impl Parser<'_> {
     let start = self.current_span();
     let path = self.parse_path();
 
-    if self.check(&TokenType::LeftBrace) {
-      if self
+    if self.check(&TokenType::LeftBrace)
+      && self
         .peek_ahead(1)
         .is_some_and(|t| matches!(t.kind, TokenType::Dot))
-      {
-        self.eat(TokenType::LeftBrace);
-        let type_path = TypePath {
-          id: NodeId::new(),
-          path: path.clone(),
-          args: None,
-          span: self.span_from(start),
-        };
-        let fields = self.parse_struct_field_inits();
-        self.expect(TokenType::RightBrace, "to close struct literal");
+    {
+      self.eat(TokenType::LeftBrace);
+      let type_path = TypePath {
+        id: NodeId::new(),
+        path: path.clone(),
+        args: None,
+        span: self.span_from(start),
+      };
+      let fields = self.parse_struct_field_inits();
+      self.expect(TokenType::RightBrace, "to close struct literal");
 
-        return Expr::new(
-          ExprKind::Struct {
-            path: type_path,
-            fields,
-          },
-          self.span_from(start),
-        );
-      }
+      return Expr::new(
+        ExprKind::Struct {
+          path: type_path,
+          fields,
+        },
+        self.span_from(start),
+      );
     }
 
     Expr::new(ExprKind::Path(path), self.span_from(start))
@@ -534,7 +531,7 @@ impl Parser<'_> {
           ExprKind::Path(Path {
             id: NodeId::new(),
             root: None,
-            segments: vec![name.clone()],
+            segments: vec![name],
             span: *name.span(),
           }),
           *name.span(),

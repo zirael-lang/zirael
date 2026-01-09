@@ -8,7 +8,7 @@ use crate::parser::errors::{
 };
 use crate::parser::parser::ITEM_TOKENS;
 use crate::{
-  Block, ConstItem, FunctionItem, ItemKind, ModItem, NeverType, NodeId, Path,
+  ConstItem, FunctionItem, ItemKind, ModItem, NeverType, NodeId, Path,
   ProgramNode, TokenType, Type, UnitType, Visibility, log_parse_failure,
 };
 use stringcase::camel_case;
@@ -116,9 +116,7 @@ impl Parser<'_> {
 
   fn validate_function_name(&mut self, name: Ident) {
     if name.text() != camel_case(&name.text()) {
-      self.emit(FunctionCamelCase {
-        span: name.span().clone(),
-      });
+      self.emit(FunctionCamelCase { span: *name.span() });
     }
   }
 

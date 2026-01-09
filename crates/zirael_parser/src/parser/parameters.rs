@@ -49,31 +49,26 @@ impl Parser<'_> {
             id: NodeId::new(),
             span: self.previous().span,
             kind: SelfKind::Value,
-          }))
+          }));
         }
         TokenType::Mut => {
           let span = self.peek().span;
           self.advance();
 
-          match &self.peek().kind {
-            TokenType::SelfValue => {
-              self.advance();
-              params.push(Param::SelfParam(SelfParam {
-                id: NodeId::new(),
-                span: self.span_from(span),
-                kind: SelfKind::Mut,
-              }))
-            }
-            _ => {
-              self.expect(
-                TokenType::SelfValue,
-                "after mut in a function parameter",
-              );
-              self.advance_until_one_of(&[
-                TokenType::Comma,
-                TokenType::RightParen,
-              ]);
-            }
+          if self.peek().kind == TokenType::SelfValue {
+            self.advance();
+            params.push(Param::SelfParam(SelfParam {
+              id: NodeId::new(),
+              span: self.span_from(span),
+              kind: SelfKind::Mut,
+            }));
+          } else {
+            self.expect(
+              TokenType::SelfValue,
+              "after mut in a function parameter",
+            );
+            self
+              .advance_until_one_of(&[TokenType::Comma, TokenType::RightParen]);
           }
         }
         TokenType::Star => {
@@ -129,7 +124,7 @@ impl Parser<'_> {
             name,
             ty,
             span: self.span_from(span),
-          }))
+          }));
         }
         _ => {
           self.emit(ExpectedIdentOrDots {

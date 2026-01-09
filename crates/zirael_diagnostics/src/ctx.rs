@@ -1,12 +1,12 @@
 use crate::emitter::{Emitter, HumanReadableEmitter};
 use crate::output_type::DiagnosticOutputType;
 use crate::{Diag, Diagnostic, DiagnosticId, DiagnosticLevel};
+use dashmap::DashMap;
 use dashmap::mapref::one::{Ref, RefMut};
-use dashmap::{DashMap, DashSet};
 use derivative::Derivative;
 use log::debug;
 use parking_lot::Mutex;
-use std::io::{Cursor, Write, stderr};
+use std::io::{Cursor, Write as _, stderr};
 use std::sync::Arc;
 use zirael_source::prelude::Sources;
 

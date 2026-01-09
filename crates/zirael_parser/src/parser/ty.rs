@@ -36,15 +36,12 @@ impl Parser<'_> {
     if self.eat(TokenType::Const) {
       let const_span = self.previous().span;
 
-      return match self.peek().kind {
-        TokenType::Func => {
-          self.advance();
-          self.parse_function_type(true, start)
-        }
-        _ => {
-          self.emit(ConstAloneInType { span: const_span });
-          self.parse_type()
-        }
+      return if self.peek().kind == TokenType::Func {
+        self.advance();
+        self.parse_function_type(true, start)
+      } else {
+        self.emit(ConstAloneInType { span: const_span });
+        self.parse_type()
       };
     }
 
@@ -158,7 +155,7 @@ impl Parser<'_> {
     if let Some(kind) = Self::primitive_kind(&name) {
       let next = self.peek_ahead(1).map(|t| t.kind.clone());
 
-      if !matches!(next, Some(TokenType::ColonColon) | Some(TokenType::Lt)) {
+      if !matches!(next, Some(TokenType::ColonColon | TokenType::Lt)) {
         let span = self.advance().span;
 
         return Type::Primitive(PrimitiveType {
@@ -305,7 +302,7 @@ impl Parser<'_> {
             path,
             args,
           },
-        })
+        });
       } else {
         self.emit(ExpectedTypePathForBound {
           span: self.peek().span,

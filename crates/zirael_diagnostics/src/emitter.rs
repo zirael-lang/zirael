@@ -128,7 +128,9 @@ impl HumanReadableEmitter {
       let label_source = label.span.file_id;
 
       let src_display = self.sources.display(label_source);
-      let src = if let Some(src) = self.sources.get(label_source) { src } else {
+      let src = if let Some(src) = self.sources.get(label_source) {
+        src
+      } else {
         eprintln!("Unable to fetch source '{}'", Show(src_display));
         continue;
       };
@@ -293,7 +295,9 @@ impl Emitter for HumanReadableEmitter {
             .map(|d| d.to_string())
             .unwrap_or_else(|| "<unknown>".to_owned());
 
-          let src = if let Some(src) = self.sources.get(*src_id) { src } else {
+          let src = if let Some(src) = self.sources.get(*src_id) {
+            src
+          } else {
             eprintln!("Unable to fetch source {src_name}");
             return None;
           };
@@ -329,7 +333,9 @@ impl Emitter for HumanReadableEmitter {
         .map(|d| d.to_string())
         .unwrap_or_else(|| "<unknown>".to_owned());
 
-      let src = if let Some(src) = self.sources.get(src_id) { src } else {
+      let src = if let Some(src) = self.sources.get(src_id) {
+        src
+      } else {
         eprintln!("Unable to fetch source {src_name}");
         continue;
       };
