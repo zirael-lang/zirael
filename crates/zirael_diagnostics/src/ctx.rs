@@ -6,7 +6,7 @@ use dashmap::{DashMap, DashSet};
 use derivative::Derivative;
 use log::debug;
 use parking_lot::Mutex;
-use std::io::Cursor;
+use std::io::{Cursor, Write, stderr};
 use std::sync::Arc;
 use zirael_source::prelude::Sources;
 
@@ -14,7 +14,6 @@ use zirael_source::prelude::Sources;
 #[derivative(Debug)]
 pub struct DiagnosticCtx {
   pub diagnostics: Arc<DashMap<DiagnosticId, Diagnostic>>,
-  emitted_diagnostics: Arc<DashSet<DiagnosticId>>,
   emitter: Box<dyn Emitter>,
   #[derivative(Debug = "ignore")]
   pub writer: DiagnosticWriter,
@@ -42,7 +41,6 @@ impl DiagnosticCtx {
 
     Self {
       diagnostics: Default::default(),
-      emitted_diagnostics: Arc::new(DashSet::new()),
       emitter,
       stop_on_error: true,
       writer,
@@ -94,7 +92,8 @@ impl DiagnosticCtx {
     let id = self.add(diagnostic.clone());
 
     if diagnostic.level == DiagnosticLevel::Bug {
-      self.emit_diag(id);
+      self.emit_diag(id, &mut 0);
+      self.flush_to_stderr();
       panic!("look at the emitted diagnostic")
     }
   }
@@ -109,11 +108,7 @@ impl DiagnosticCtx {
   }
 
   // actually emits the diagnostic to stderr
-  fn emit_diag(&self, id: DiagnosticId) {
-    if self.emitted_diagnostics.contains(&id) {
-      return;
-    }
-
+  fn emit_diag(&self, id: DiagnosticId, collected: &mut i32) {
     let diagnostic = {
       let Some(diagnostic) = self.get(id) else {
         panic!("No diagnostic found for {id:?}");
@@ -134,15 +129,22 @@ impl DiagnosticCtx {
       .expect("TODO: panic message");
 
     if let Some(mut diag) = self.get_mut(id) {
+      if diag.diag.level == DiagnosticLevel::Error {
+        *collected += 1;
+      }
+
       diag.emitted = true;
     }
   }
 
-  pub fn emit_all(&self) {
+  pub fn emit_all(&self) -> i32 {
+    let emitted = &mut 0;
     let ids: Vec<_> = self.diagnostics.iter().map(|d| d.id).collect();
     for id in ids {
-      self.emit_diag(id);
+      self.emit_diag(id, emitted);
     }
+
+    *emitted
   }
 
   pub fn has_errors(&self) -> bool {
@@ -150,5 +152,11 @@ impl DiagnosticCtx {
       .diagnostics
       .iter()
       .any(|diag| diag.diag.level == DiagnosticLevel::Error)
+  }
+
+  pub fn flush_to_stderr(&self) {
+    let writer = self.writer.lock();
+    let _ = stderr().write_all(writer.get_ref());
+    let _ = stderr().flush();
   }
 }

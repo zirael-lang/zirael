@@ -8,6 +8,15 @@ impl Parser<'_> {
     self.expect(TokenType::LeftBrace, "to open block");
     let mut statements = vec![];
 
+    if self.check(&TokenType::RightBrace) {
+      self.advance();
+      return Block {
+        id: NodeId::new(),
+        span: self.span_from(span),
+        statements,
+      };
+    }
+
     loop {
       if let Some(stmt) = self.parse_statement() {
         statements.push(stmt);
@@ -72,6 +81,7 @@ impl Parser<'_> {
           self.stmt_safe_boundary();
           return None;
         }
+        self.advance(); // consume the '='
         let value = self.parse_expr();
 
         Some(Statement::VarDecl(VarDecl {

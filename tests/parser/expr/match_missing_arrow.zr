@@ -1,0 +1,7 @@
+func main() {
+    var x = 5;
+    match x {
+        //#error: expected `=>` after match arm pattern
+        1 + 2,
+    }
+}

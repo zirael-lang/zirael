@@ -1,0 +1,6 @@
+func main() {
+    var x = 5;
+    //#error: empty match expression
+    match x {
+    }
+}

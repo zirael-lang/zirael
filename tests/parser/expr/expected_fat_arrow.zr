@@ -1,0 +1,6 @@
+func main() {
+    match x {
+        //#error: expected `=>` after match arm pattern
+        1 2
+    }
+}

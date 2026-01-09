@@ -1,0 +1,4 @@
+func main() {
+    //#error: invalid assignment target
+    1 + 2 = 3;
+}

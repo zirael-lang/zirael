@@ -1,0 +1,6 @@
+func main() {
+    //#error: missing `in` keyword in for loop
+    for i 0..10 {
+        // missing 'in' keyword
+    }
+}

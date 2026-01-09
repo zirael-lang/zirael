@@ -26,9 +26,9 @@ impl Test {
     let directives = lines
       .iter()
       .enumerate()
-      .filter(|(_, line)| line.starts_with("//#"))
+      .filter(|(_, line)| line.trim_start().starts_with("//#"))
       .map(|(line_num, line)| {
-        parse_directive(line.to_string(), line_num, &path)
+        parse_directive(line.trim_start().to_string(), line_num, &path)
       })
       .collect_vec();
 

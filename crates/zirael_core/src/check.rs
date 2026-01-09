@@ -10,6 +10,7 @@ use zirael_utils::prelude::{ProjectConfig, Session, info};
 pub fn check_project(
   config: &ProjectConfig,
   writer: DiagnosticWriter,
+  is_test: bool,
 ) -> Result<Session> {
   let file = &config.entrypoint;
   info!(
@@ -29,7 +30,7 @@ pub fn check_project(
   }
   let sources = Arc::new(Sources::new());
 
-  let sess = Session::new(config.clone(), sources.clone(), writer);
+  let sess = Session::new(config.clone(), sources.clone(), writer, is_test);
   let context = &mut Context::new(&sess, sources.clone());
 
   let file = sess.config().root.join(file);

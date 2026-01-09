@@ -1,0 +1,4 @@
+func main() {
+    //#error: expected an expression
+    var result = if true { 1 } else { + };
+}

@@ -1,0 +1,4 @@
+func main() {
+    //#error: missing `:` after `?` in ternary expression
+    var x = true ? 1 2;
+}

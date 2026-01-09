@@ -1,0 +1,5 @@
+func main() {
+    //#error: missing `:` after `?` in ternary expression
+    //#error: expected an expression
+    var x = a > b ? a;
+}

@@ -12,14 +12,16 @@ pub enum TokenType {
 
   // Keywords
   // Control flow
-  If,     // if
-  Else,   // else
-  While,  // while
-  For,    // for
-  Loop,   // loop
-  Return, // return
-  Match,  // match
-  In,     // in
+  If,       // if
+  Else,     // else
+  While,    // while
+  For,      // for
+  Loop,     // loop
+  Return,   // return
+  Match,    // match
+  In,       // in
+  Break,    // break
+  Continue, // continue
 
   // Declarations
   Func,      // func
@@ -68,6 +70,8 @@ pub enum TokenType {
   Semicolon,    // ;
   Colon,        // :
   Dot,          // .
+  DotDot,       // ..
+  DotDotEq,     // ..=
   Hash,         // #
   At,           // @
   Underscore,   // _
@@ -172,6 +176,8 @@ impl fmt::Display for TokenType {
       Self::Return => write!(f, "keyword `return`"),
       Self::Match => write!(f, "keyword `match`"),
       Self::In => write!(f, "keyword `in`"),
+      Self::Break => write!(f, "keyword `break`"),
+      Self::Continue => write!(f, "keyword `continue`"),
 
       // Keywords - Declarations
       Self::Func => write!(f, "keyword `func`"),
@@ -214,6 +220,8 @@ impl fmt::Display for TokenType {
       Self::Semicolon => write!(f, "`;`"),
       Self::Colon => write!(f, "`:`"),
       Self::Dot => write!(f, "`.`"),
+      Self::DotDot => write!(f, "`..`"),
+      Self::DotDotEq => write!(f, "`..=`"),
       Self::Hash => write!(f, "`#`"),
       Self::At => write!(f, "`@`"),
       Self::Underscore => write!(f, "`_`"),

@@ -1,0 +1,4 @@
+func main() {
+    //#error: expected a builtin function name after `@`
+    var x = @"string";
+}

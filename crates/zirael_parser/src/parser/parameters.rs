@@ -145,8 +145,6 @@ impl Parser<'_> {
         if self.check(&TokenType::RightParen) {
           break;
         }
-      } else if !self.check(&TokenType::RightParen) && !self.is_at_end() {
-        self.expect(TokenType::Comma, "between function parameters");
       } else if self.check(&TokenType::RightParen) {
         break;
       }

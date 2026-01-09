@@ -1,0 +1,4 @@
+func main() {
+    //#error: expected field name after `.`
+    var x = foo.+;
+}

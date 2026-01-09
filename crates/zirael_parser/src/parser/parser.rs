@@ -59,7 +59,6 @@ impl<'dcx> Parser<'dcx> {
     self.dcx.emit(error);
   }
 
-  /// Get the current token without consuming
   #[inline]
   pub fn peek(&self) -> &Token {
     self.tokens.get(self.pos).unwrap_or_else(|| {
@@ -70,19 +69,16 @@ impl<'dcx> Parser<'dcx> {
     })
   }
 
-  /// Get the previous token
   #[inline]
   pub fn previous(&self) -> &Token {
     &self.tokens[self.pos - 1]
   }
 
-  /// Get token at offset from the current position
   #[inline]
   pub fn peek_ahead(&self, offset: usize) -> Option<&Token> {
     self.tokens.get(self.pos + offset)
   }
 
-  /// Check if the current token matches a type
   #[inline]
   pub fn check(&self, token_type: &TokenType) -> bool {
     &self.peek().kind == token_type
@@ -93,13 +89,11 @@ impl<'dcx> Parser<'dcx> {
     (predicate)(&self.peek().kind)
   }
 
-  /// Check if any of the token types match
   #[inline]
   pub fn check_any(&self, token_types: &[TokenType]) -> bool {
     token_types.iter().any(|tt| self.check(tt))
   }
 
-  /// Consume and return the current token
   #[inline]
   pub fn advance(&mut self) -> Token {
     let token = self.peek().clone();
@@ -109,13 +103,11 @@ impl<'dcx> Parser<'dcx> {
     token
   }
 
-  /// Go back in the position by one.
   #[inline]
   pub fn back(&mut self) {
     self.pos -= 1;
   }
 
-  /// Check if the current token matches and consume it
   pub fn eat(&mut self, token_type: TokenType) -> bool {
     self.eat_if(|t| t.kind == token_type)
   }
@@ -129,7 +121,6 @@ impl<'dcx> Parser<'dcx> {
     }
   }
 
-  /// Expect a specific token and consume it or report an error
   pub fn expect(
     &mut self,
     token_type: TokenType,
@@ -230,5 +221,20 @@ impl<'dcx> Parser<'dcx> {
 
   pub fn is_identifier(&self) -> bool {
     self.check_if(|token| matches!(token, TokenType::Identifier(_)))
+  }
+
+  pub fn at_expr_terminator(&self) -> bool {
+    self.check(&TokenType::RightBrace)
+      || self.check(&TokenType::Semicolon)
+      || self.is_at_end()
+      || self.check(&TokenType::Comma)
+  }
+
+  pub fn save_position(&self) -> usize {
+    self.pos
+  }
+
+  pub fn restore_position(&mut self, pos: usize) {
+    self.pos = pos;
   }
 }

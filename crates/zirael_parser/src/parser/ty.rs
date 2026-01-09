@@ -1,6 +1,9 @@
 use crate::expressions::Expr;
 use crate::parser::Parser;
-use crate::parser::errors::{ConstAloneInType, ExpectedIdentifierInGeneric, ExpectedType, ExpectedTypePathForBound, TrailingPlusInTypeBound};
+use crate::parser::errors::{
+  ConstAloneInType, ExpectedIdentifierInGeneric, ExpectedType,
+  ExpectedTypePathForBound, TrailingPlusInTypeBound,
+};
 use crate::{
   ArrayType, FunctionType, GenericParam, GenericParams, Mutability, NodeId,
   OptionalType, PointerType, PrimitiveKind, PrimitiveType, TokenType,
@@ -40,7 +43,7 @@ impl Parser<'_> {
         }
         _ => {
           self.emit(ConstAloneInType { span: const_span });
-          Type::Invalid
+          self.parse_type()
         }
       };
     }
@@ -181,7 +184,7 @@ impl Parser<'_> {
     })
   }
 
-  fn parse_type_arguments(&mut self) -> Option<Vec<Type>> {
+  pub fn parse_type_arguments(&mut self) -> Option<Vec<Type>> {
     if !self.eat(TokenType::Lt) {
       return None;
     }
@@ -314,7 +317,9 @@ impl Parser<'_> {
       if self.check(&TokenType::Plus) {
         self.advance();
         if self.check(&TokenType::Gt) {
-          self.emit(TrailingPlusInTypeBound { span: self.peek().span });
+          self.emit(TrailingPlusInTypeBound {
+            span: self.peek().span,
+          });
           break;
         }
       } else {

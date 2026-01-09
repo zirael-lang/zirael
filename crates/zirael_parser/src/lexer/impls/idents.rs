@@ -62,6 +62,8 @@ impl Lexer<'_> {
       "return" => TokenType::Return,
       "loop" => TokenType::Loop,
       "match" => TokenType::Match,
+      "break" => TokenType::Break,
+      "continue" => TokenType::Continue,
       "import" => TokenType::Import,
       "as" => TokenType::As,
       "pub" => TokenType::Pub,

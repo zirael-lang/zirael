@@ -105,6 +105,24 @@ pub enum ExprKind {
 }
 
 impl Expr {
+  pub fn new(kind: ExprKind, span: Span) -> Expr {
+    Expr {
+      id: NodeId::new(),
+      kind,
+      span,
+      is_const: false,
+    }
+  }
+
+  pub fn new_const(kind: ExprKind, span: Span) -> Expr {
+    Expr {
+      id: NodeId::new(),
+      kind,
+      span,
+      is_const: true,
+    }
+  }
+
   pub fn dummy() -> Expr {
     Expr {
       id: NodeId::new(),
@@ -414,6 +432,38 @@ pub enum IntSuffix {
   U64,
   U128,
   USize,
+}
+
+impl IntSuffix {
+  pub fn parse_int_suffix(lexeme: &str, value: &str) -> Option<IntSuffix> {
+    let suffix_str = lexeme.strip_prefix(value).unwrap_or("");
+    let suffix_str = suffix_str.trim_start_matches(|c: char| {
+      c == 'x'
+        || c == 'X'
+        || c == 'b'
+        || c == 'B'
+        || c == 'o'
+        || c == 'O'
+        || c.is_ascii_hexdigit()
+        || c == '_'
+    });
+
+    match suffix_str {
+      "i8" => Some(IntSuffix::I8),
+      "i16" => Some(IntSuffix::I16),
+      "i32" => Some(IntSuffix::I32),
+      "i64" => Some(IntSuffix::I64),
+      "i128" => Some(IntSuffix::I128),
+      "isize" => Some(IntSuffix::ISize),
+      "u8" => Some(IntSuffix::U8),
+      "u16" => Some(IntSuffix::U16),
+      "u32" => Some(IntSuffix::U32),
+      "u64" => Some(IntSuffix::U64),
+      "u128" => Some(IntSuffix::U128),
+      "usize" => Some(IntSuffix::USize),
+      _ => None,
+    }
+  }
 }
 
 #[derive(Debug, Clone)]

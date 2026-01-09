@@ -178,7 +178,7 @@ pub struct ExpectedIdentOrDots {
 #[code(PARSE_VARIADIC_NO_DEFAULT)]
 pub struct VariadicNoDefault {
   #[error("this is not allowed")]
-  pub span: Span
+  pub span: Span,
 }
 
 #[derive(Diagnostic)]
@@ -186,5 +186,156 @@ pub struct VariadicNoDefault {
 #[code(PARSE_ALL_VARS_INIT)]
 pub struct AllVarsInitialized {
   #[error("this one isn't")]
-  pub span: Span
+  pub span: Span,
+}
+
+#[derive(Diagnostic)]
+#[error("expected an expression")]
+#[code(PARSE_EXPECTED_EXPR)]
+pub struct ExpectedExpression {
+  #[error("expected expression here")]
+  pub span: Span,
+}
+
+#[derive(Diagnostic)]
+#[error("expected an expression, found {found}")]
+#[code(PARSE_EXPECTED_EXPR_FOUND)]
+pub struct ExpectedExpressionFound {
+  pub found: TokenType,
+  #[error("expected expression here")]
+  pub span: Span,
+}
+
+#[derive(Diagnostic)]
+#[error("`break` can only be used inside a loop")]
+#[code(PARSE_BREAK_OUTSIDE_LOOP)]
+pub struct BreakOutsideLoop {
+  #[error("invalid `break` here")]
+  pub span: Span,
+}
+
+#[derive(Diagnostic)]
+#[error("`continue` can only be used inside a loop")]
+#[code(PARSE_CONTINUE_OUTSIDE_LOOP)]
+pub struct ContinueOutsideLoop {
+  #[error("invalid `continue` here")]
+  pub span: Span,
+}
+
+#[derive(Diagnostic)]
+#[error("expected `=>` after match arm pattern")]
+#[code(PARSE_EXPECTED_FAT_ARROW)]
+pub struct ExpectedFatArrow {
+  pub found: TokenType,
+  #[error("expected `=>` here")]
+  pub span: Span,
+}
+
+#[derive(Diagnostic)]
+#[error("expected a pattern")]
+#[code(PARSE_EXPECTED_PATTERN)]
+pub struct ExpectedPattern {
+  pub found: TokenType,
+  #[error("expected pattern here")]
+  pub span: Span,
+}
+
+#[derive(Diagnostic)]
+#[error("expected a builtin function name after `@`")]
+#[code(PARSE_EXPECTED_BUILTIN_NAME)]
+pub struct ExpectedBuiltinName {
+  pub found: TokenType,
+  #[error("expected identifier here")]
+  pub span: Span,
+}
+
+#[derive(Diagnostic)]
+#[error("invalid assignment target")]
+#[code(PARSE_INVALID_ASSIGN_TARGET)]
+#[help(
+  "assignment targets must be a variable, field access, or index expression"
+)]
+pub struct InvalidAssignTarget {
+  #[error("cannot assign to this expression")]
+  pub span: Span,
+}
+
+#[derive(Diagnostic)]
+#[error("expected field name after `.`")]
+#[code(PARSE_EXPECTED_FIELD_NAME)]
+pub struct ExpectedFieldName {
+  pub found: TokenType,
+  #[error("expected identifier here")]
+  pub span: Span,
+}
+
+#[derive(Diagnostic)]
+#[error("missing `:` after `?` in ternary expression")]
+#[code(PARSE_MISSING_COLON_IN_TERNARY)]
+#[help("ternary expressions have the form: condition ? then_expr : else_expr")]
+pub struct MissingColonInTernary {
+  #[error("expected `:` here")]
+  pub span: Span,
+}
+
+#[derive(Diagnostic)]
+#[error("missing `in` keyword in for loop")]
+#[code(PARSE_MISSING_IN_KEYWORD)]
+#[help("for loops have the form: for <binding> in <iterator> {{ ... }}")]
+pub struct MissingInKeyword {
+  pub found: TokenType,
+  #[error("expected `in` here, found `{found}`")]
+  pub span: Span,
+}
+
+#[derive(Diagnostic)]
+#[error("unclosed delimiter `{open}`")]
+#[code(PARSE_UNCLOSED_DELIMITER)]
+pub struct UnclosedDelimiter {
+  pub open: &'static str,
+  pub close: &'static str,
+  #[error("this `{open}` was never closed")]
+  pub open_span: Span,
+  #[error("expected `{close}` here")]
+  pub span: Span,
+}
+
+#[derive(Diagnostic)]
+#[error("empty match expression")]
+#[code(PARSE_EMPTY_MATCH)]
+#[help("match expressions require at least one arm")]
+pub struct EmptyMatch {
+  #[error("this match has no arms")]
+  pub span: Span,
+}
+
+#[derive(Diagnostic)]
+#[error("duplicate named argument `{name}`")]
+#[code(PARSE_DUPLICATE_NAMED_ARG)]
+pub struct DuplicateNamedArg {
+  pub name: String,
+  #[error("first used here")]
+  pub first_span: Span,
+  #[error("duplicate here")]
+  pub span: Span,
+}
+
+#[derive(Diagnostic)]
+#[error("expected expression after `{op}` operator")]
+#[code(PARSE_MISSING_OPERAND)]
+#[help("binary operators require an expression on both sides")]
+pub struct MissingOperand {
+  pub op: String,
+  #[error("expected expression here")]
+  pub span: Span,
+}
+
+#[derive(Diagnostic)]
+#[error("expected expression after struct field `.{field}`")]
+#[code(PARSE_EXPECTED_FIELD_VALUE)]
+#[help("use `.field = value` or `.field` for shorthand initialization")]
+pub struct ExpectedFieldValue {
+  pub field: String,
+  #[error("expected `=` or `,` here")]
+  pub span: Span,
 }

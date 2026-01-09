@@ -1,0 +1,6 @@
+func process(a: i32, b: i32, c: i32) {}
+
+func main() {
+    //#error: duplicate named argument `a`
+    process(a = 1, b = 2, a = 3);
+}

@@ -7,6 +7,8 @@ use zirael_source::prelude::Sources;
 pub struct Session {
   config: ProjectConfig,
   dcx: DiagnosticCtx,
+
+  is_test: bool,
 }
 
 impl Session {
@@ -14,6 +16,7 @@ impl Session {
     config: ProjectConfig,
     sources: Arc<Sources>,
     w: DiagnosticWriter,
+    is_test: bool,
   ) -> Self {
     Self {
       dcx: DiagnosticCtx::new(
@@ -23,6 +26,7 @@ impl Session {
         w,
       ),
       config,
+      is_test,
     }
   }
 
@@ -32,5 +36,9 @@ impl Session {
 
   pub fn dcx(&self) -> &DiagnosticCtx {
     &self.dcx
+  }
+  
+  pub fn is_test(&self) -> bool {
+    self.is_test
   }
 }

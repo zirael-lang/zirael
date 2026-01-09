@@ -1,0 +1,11 @@
+func main() {
+    var x = 5;
+    match x {
+        //#error: expected a pattern
+        //#error: invalid assignment target
+        //#error: expected an expression
+        //#error: expected `=>` after match arm pattern
+        //#error: expected an expression
+        + => 1,
+    }
+}

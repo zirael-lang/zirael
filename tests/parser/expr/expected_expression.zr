@@ -1,0 +1,4 @@
+func main() {
+    //#error: expected an expression
+    var x =;
+}

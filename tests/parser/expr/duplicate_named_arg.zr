@@ -1,0 +1,6 @@
+func greet(name: string, age: i32) {}
+
+func main() {
+    //#error: duplicate named argument `name`
+    greet(name = "Alice", name = "Bob");
+}

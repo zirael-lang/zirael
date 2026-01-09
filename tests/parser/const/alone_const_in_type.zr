@@ -1,1 +1,2 @@
+//#error: found `const` alone in a type
 func test(x: const i32) {}

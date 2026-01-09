@@ -212,11 +212,18 @@ impl Lexer<'_> {
       }
       Some('.') => {
         self.advance();
-        // Check for ... (ellipsis)
-        if self.peek() == Some('.') && self.peek_ahead(1) == Some('.') {
+        // Check for .., ..=, or ...
+        if self.peek() == Some('.') {
           self.advance();
-          self.advance();
-          TokenType::DotDotDot
+          if self.peek() == Some('=') {
+            self.advance();
+            TokenType::DotDotEq
+          } else if self.peek() == Some('.') {
+            self.advance();
+            TokenType::DotDotDot
+          } else {
+            TokenType::DotDot
+          }
         } else {
           TokenType::Dot
         }
