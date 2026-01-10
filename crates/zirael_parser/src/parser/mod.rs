@@ -1,4 +1,4 @@
-mod errors;
+pub mod errors;
 mod expr;
 mod parameters;
 mod parser;

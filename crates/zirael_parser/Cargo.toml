@@ -9,11 +9,11 @@ repository.workspace = true
 unicode-xid = "0.2.6"
 unicode-normalization = "0.1.25"
 zirael_utils = { workspace = true }
-zirael_diagnostics = { workspace = true }  # Already present
+zirael_diagnostics = { workspace = true }
 zirael_diagnostic_macro = { workspace = true }
 zirael_source = { workspace = true }
-itertools = { workspace = true }
 stringcase = "0.4.0"
+dashmap = { workspace = true }
 
 [lints]
 workspace = true

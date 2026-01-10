@@ -13,13 +13,14 @@ colored = { workspace = true }
 fs-err = { workspace = true }
 lasso = { workspace = true }
 log = { workspace = true }
-once_cell = { workspace = true }
 parking_lot = { workspace = true }
 rayon = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
 zirael_source = { workspace = true }
 zirael_diagnostics = { workspace = true }
+petgraph = { workspace = true }
+dashmap = { workspace = true }
 
 [lints]
 workspace = true

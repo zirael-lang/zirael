@@ -1,4 +1,4 @@
-use crate::TokenType;
+use crate::{Path, TokenType};
 use std::fmt;
 use std::fmt::{Display, Formatter};
 use zirael_diagnostic_macro::Diagnostic;
@@ -338,4 +338,14 @@ pub struct ExpectedFieldValue {
   pub field: String,
   #[error("expected `=` or `,` here")]
   pub span: Span,
+}
+
+#[derive(Diagnostic)]
+#[error("module `{module}` couldn't be resolved")]
+#[code(PARSE_MODULE_NOT_FOUND)]
+pub struct ModuleNotFound {
+  pub module: Path,
+  
+  #[error("in this `mod` item")]
+  pub span: Span
 }

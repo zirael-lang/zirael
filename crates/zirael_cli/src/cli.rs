@@ -163,9 +163,8 @@ impl TryFrom<Cli> for ProjectConfig {
 
   fn try_from(cli: Cli) -> Result<Self, Self::Error> {
     let root = current_dir()?;
-
     Ok(Self {
-      entrypoint: cli.entrypoint,
+      entrypoint: canonicalize_with_strip(cli.entrypoint)?,
       project_type: cli.ty.into(),
       packages: cli.packages,
       mode: cli.mode.into(),
@@ -184,3 +183,4 @@ pub use term_style::{
   WARN,
 };
 use zirael_diagnostics::prelude::DiagnosticOutputType;
+use zirael_utils::prelude::canonicalize_with_strip;

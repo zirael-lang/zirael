@@ -12,3 +12,9 @@ zirael_core = { workspace = true }
 
 [lints]
 workspace = true
+
+[profile.release]
+panic = "abort"
+
+[profile.dev]
+panic = "abort"
