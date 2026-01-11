@@ -1,7 +1,7 @@
 use crate::ast::NodeId;
 use crate::ast::import::Path;
 use crate::ast::statements::Block;
-use crate::ast::types::{Mutability, Type, TypePath};
+use crate::ast::types::{Mutability, Type};
 use zirael_utils::ident_table::Identifier;
 use zirael_utils::prelude::Span;
 
@@ -78,7 +78,7 @@ pub enum ExprKind {
   },
 
   Struct {
-    path: TypePath,
+    path: Path,
     fields: Vec<StructFieldInit>,
   },
 
@@ -357,7 +357,7 @@ pub struct WildcardPat {
 #[derive(Debug, Clone)]
 pub struct StructPattern {
   pub id: NodeId,
-  pub path: TypePath,
+  pub path: Path,
   pub fields: Vec<StructPatternField>,
   pub span: Span,
 }
@@ -378,7 +378,7 @@ pub struct TuplePattern {
 #[derive(Debug, Clone)]
 pub struct EnumPattern {
   pub id: NodeId,
-  pub path: TypePath,
+  pub path: Path,
   pub patterns: Vec<Pattern>,
   pub span: Span,
 }

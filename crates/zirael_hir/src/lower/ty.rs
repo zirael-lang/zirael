@@ -1,10 +1,30 @@
 use crate::lower::context::LoweringContext;
 use crate::ty::{ArrayLen, PathSegment, Ty, TyKind};
+use zirael_parser::Path;
 use zirael_parser::ast::types::Type;
 use zirael_source::prelude::Span;
-use zirael_utils::prelude::Identifier;
+use zirael_utils::prelude::{Identifier, get_or_intern};
 
 impl LoweringContext<'_> {
+  pub fn lower_path(&mut self, path: &Path) -> Vec<PathSegment> {
+    let mut segments = vec![];
+    if let Some(root) = path.root {
+      segments.push(PathSegment {
+        name: Identifier::new(&root.to_string(), Span::dummy()),
+        args: vec![],
+      })
+    }
+
+    for seg in &path.segments {
+      segments.push(PathSegment {
+        name: seg.identifier,
+        args: seg.args.iter().map(|s| self.lower_type(s)).collect(),
+      })
+    }
+
+    segments
+  }
+
   pub fn lower_type(&mut self, ty: &Type) -> Ty {
     let kind = match ty {
       Type::Primitive(p) => TyKind::Primitive(p.kind),
@@ -15,23 +35,7 @@ impl LoweringContext<'_> {
         if let Some(def_id) = def_id {
           TyKind::Path {
             def_id,
-            segments: vec![PathSegment {
-              name: Identifier::new(
-                &path
-                  .path
-                  .segments
-                  .iter()
-                  .map(|s| s.text())
-                  .collect::<Vec<_>>()
-                  .join("::"),
-                Span::dummy(), // TODO: correct span
-              ),
-              args: path
-                .args
-                .as_ref()
-                .map(|args| args.iter().map(|t| self.lower_type(t)).collect())
-                .unwrap_or_default(),
-            }],
+            segments: self.lower_path(path),
           }
         } else {
           TyKind::Err

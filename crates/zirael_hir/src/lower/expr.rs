@@ -24,8 +24,8 @@ impl LoweringContext<'_> {
               .segments
               .iter()
               .map(|s| PathSegment {
-                name: *s,
-                args: vec![], // TODO: handle generic args in paths
+                name: s.identifier,
+                args: s.args.iter().map(|a| self.lower_type(a)).collect(),
               })
               .collect(),
           })

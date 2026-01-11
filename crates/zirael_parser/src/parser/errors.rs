@@ -349,3 +349,22 @@ pub struct ModuleNotFound {
   #[error("in this `mod` item")]
   pub span: Span,
 }
+
+#[derive(Diagnostic)]
+#[error("generic arguments are not allowed in `super` segment")]
+#[code(PARSE_GENERICS_IN_SUPER)]
+pub struct GenericsInSuper {
+  #[error("found here. these are useless")]
+  pub span: Span,
+}
+
+#[derive(Diagnostic)]
+#[error("generic arguments can't appear after the first path segment")]
+#[help(
+  "generic arguments in this place don't make sense. you can only attach generic arguments to items"
+)]
+#[code(PARSE_GENERICS_FIRST_SEGMENT)]
+pub struct GenericsFirstSegment {
+  #[error("found here")]
+  pub span: Span,
+}

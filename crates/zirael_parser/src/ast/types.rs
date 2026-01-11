@@ -6,7 +6,7 @@ use zirael_utils::prelude::Span;
 #[derive(Debug, Clone)]
 pub enum Type {
   Primitive(PrimitiveType),
-  Path(TypePath),
+  Path(Path),
   Function(FunctionType),
   Pointer(PointerType),
   Optional(OptionalType),
@@ -68,14 +68,6 @@ pub enum PrimitiveKind {
 pub enum Mutability {
   Mut,
   Const,
-}
-
-#[derive(Debug, Clone)]
-pub struct TypePath {
-  pub id: NodeId,
-  pub path: Path,
-  pub args: Option<Vec<Type>>,
-  pub span: Span,
 }
 
 #[derive(Debug, Clone)]

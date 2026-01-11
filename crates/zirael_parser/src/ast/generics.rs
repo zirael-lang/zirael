@@ -1,6 +1,6 @@
 use crate::ast::NodeId;
-use crate::ast::types::TypePath;
 use zirael_utils::prelude::{Identifier, Span};
+use crate::Path;
 
 #[derive(Debug, Clone)]
 pub struct GenericParams {
@@ -20,6 +20,6 @@ pub struct GenericParam {
 #[derive(Debug, Clone)]
 pub struct TypeBound {
   pub id: NodeId,
-  pub path: TypePath,
+  pub path: Path,
   pub span: Span,
 }

@@ -17,7 +17,7 @@ use zirael_parser::ast::statements::{Block, Statement};
 use zirael_parser::ast::types::Type;
 use zirael_parser::module::Modules;
 use zirael_parser::{
-  BuiltinArg, ElseBranch, IfExpr, NodeId, StructMember, TypePath, VariantField,
+  BuiltinArg, ElseBranch, IfExpr, NodeId, Path, StructMember, VariantField,
   VariantPayload,
 };
 use zirael_source::prelude::{SourceFileId, Span};
@@ -526,7 +526,7 @@ impl<'a> ResolveVisitor<'a> {
       ExprKind::Path(path) => {
         // single segment path is a local name lookup
         if path.root.is_none() && path.segments.len() == 1 {
-          let name = path.segments[0].text();
+          let name = path.segments[0].identifier.text();
           if let Some(def_id) = self.module_resolver.lookup_value(&name) {
             // Record the resolution
             self.resolver().symbols.record_resolution(expr.id, def_id);
@@ -718,12 +718,13 @@ impl<'a> ResolveVisitor<'a> {
     }
   }
 
-  fn resolve_type_path(&mut self, type_path: &TypePath) {
-    let path = &type_path.path;
-
+  fn resolve_type_path(&mut self, type_path: &Path) {
     // single segment
-    if path.root.is_none() && path.segments.len() == 1 {
-      let name = path.segments[0].text();
+    if type_path.root.is_none() && type_path.segments.len() == 1 {
+      let name = type_path.segments[0].identifier.text();
+      for arg in &type_path.segments[0].args {
+        self.resolve_type(arg);
+      }
       if let Some(def_id) = self.module_resolver.lookup_type(&name) {
         self
           .resolver()
@@ -738,10 +739,6 @@ impl<'a> ResolveVisitor<'a> {
     }
     // TODO: multi segment paths
 
-    if let Some(args) = &type_path.args {
-      for arg in args {
-        self.resolve_type(arg);
-      }
-    }
+    todo!()
   }
 }

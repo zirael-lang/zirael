@@ -7,7 +7,7 @@ use crate::parser::errors::{
   ExpectedFatArrow, ExpectedFieldName, ExpectedPattern, InvalidAssignTarget,
   MissingColonInTernary, MissingInKeyword,
 };
-use crate::{NodeId, Path, TokenType, TypePath};
+use crate::{NodeId, Path, PathSegment, TokenType};
 use std::collections::HashMap;
 use zirael_source::prelude::Span;
 use zirael_utils::prelude::Identifier;
@@ -492,20 +492,11 @@ impl Parser<'_> {
         .is_some_and(|t| matches!(t.kind, TokenType::Dot))
     {
       self.eat(TokenType::LeftBrace);
-      let type_path = TypePath {
-        id: NodeId::new(),
-        path: path.clone(),
-        args: None,
-        span: self.span_from(start),
-      };
       let fields = self.parse_struct_field_inits();
       self.expect(TokenType::RightBrace, "to close struct literal");
 
       return Expr::new(
-        ExprKind::Struct {
-          path: type_path,
-          fields,
-        },
+        ExprKind::Struct { path, fields },
         self.span_from(start),
       );
     }
@@ -531,7 +522,10 @@ impl Parser<'_> {
           ExprKind::Path(Path {
             id: NodeId::new(),
             root: None,
-            segments: vec![name],
+            segments: vec![PathSegment {
+              identifier: name,
+              args: vec![],
+            }],
             span: *name.span(),
           }),
           *name.span(),
@@ -717,12 +711,6 @@ impl Parser<'_> {
       }
       TokenType::Identifier(_) | TokenType::Package | TokenType::Super => {
         let path = self.parse_path();
-        let type_path = crate::TypePath {
-          id: NodeId::new(),
-          path: path.clone(),
-          args: None,
-          span: self.span_from(start),
-        };
 
         if self.eat(TokenType::LeftBrace) {
           let mut fields = vec![];
@@ -750,7 +738,7 @@ impl Parser<'_> {
 
           Pattern::Struct(StructPattern {
             id: NodeId::new(),
-            path: type_path,
+            path,
             fields,
             span: self.span_from(start),
           })
@@ -769,16 +757,17 @@ impl Parser<'_> {
 
           Pattern::Enum(EnumPattern {
             id: NodeId::new(),
-            path: type_path,
+            path,
             patterns,
             span: self.span_from(start),
           })
         } else if path.segments.len() == 1 && path.root.is_none() {
-          Pattern::Ident(path.segments.into_iter().next().unwrap())
+          // Pattern::Ident(path.segments.into_iter().next().unwrap())
+          todo!("fix this")
         } else {
           Pattern::Enum(EnumPattern {
             id: NodeId::new(),
-            path: type_path,
+            path,
             patterns: vec![],
             span: self.span_from(start),
           })

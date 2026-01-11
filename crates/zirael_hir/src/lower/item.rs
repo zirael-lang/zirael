@@ -299,24 +299,7 @@ impl LoweringContext<'_> {
     TypeBound {
       hir_id: self.next_hir_id(),
       def_id: def_id.unwrap_or(DefId(0)),
-      path: vec![PathSegment {
-        name: Identifier::new(
-          &b.path
-            .path
-            .segments
-            .iter()
-            .map(|s| s.text())
-            .collect::<Vec<_>>()
-            .join("::"),
-          Span::dummy(), // TODO: correct span
-        ),
-        args: b
-          .path
-          .args
-          .as_ref()
-          .map(|args| args.iter().map(|t| self.lower_type(t)).collect())
-          .unwrap_or_default(),
-      }],
+      path: self.lower_path(&b.path),
       span: b.span,
     }
   }

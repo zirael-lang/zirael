@@ -6,8 +6,8 @@ use crate::parser::errors::{
 };
 use crate::{
   ArrayType, FunctionType, GenericParam, GenericParams, Mutability, NodeId,
-  OptionalType, PointerType, PrimitiveKind, PrimitiveType, TokenType,
-  TupleType, Type, TypeBound, TypePath, UnitType,
+  OptionalType, Path, PointerType, PrimitiveKind, PrimitiveType, TokenType,
+  TupleType, Type, TypeBound, UnitType,
 };
 use zirael_source::span::Span;
 
@@ -60,7 +60,7 @@ impl Parser<'_> {
       }
       TokenType::Identifier(name) => self.parse_identifier_type(start, name),
       TokenType::Package | TokenType::SelfValue | TokenType::Super => {
-        self.parse_path_type(start)
+        self.parse_path_type()
       }
       _ => {
         self.emit(ExpectedType {
@@ -166,50 +166,12 @@ impl Parser<'_> {
       }
     }
 
-    self.parse_path_type(start)
+    self.parse_path_type()
   }
 
-  fn parse_path_type(&mut self, start: Span) -> Type {
+  fn parse_path_type(&mut self) -> Type {
     let path = self.parse_path();
-    let args = self.parse_type_arguments();
-
-    Type::Path(TypePath {
-      id: NodeId::new(),
-      path,
-      args,
-      span: self.span_from(start),
-    })
-  }
-
-  pub fn parse_type_arguments(&mut self) -> Option<Vec<Type>> {
-    if !self.eat(TokenType::Lt) {
-      return None;
-    }
-
-    let mut args = Vec::new();
-
-    if self.check(&TokenType::Gt) {
-      self.advance();
-      return Some(args);
-    }
-
-    loop {
-      args.push(self.parse_type());
-
-      if self.eat(TokenType::Comma) {
-        if self.check(&TokenType::Gt) {
-          self.advance();
-          break;
-        }
-
-        continue;
-      }
-
-      self.expect(TokenType::Gt, "to close type arguments");
-      break;
-    }
-
-    Some(args)
+    Type::Path(path)
   }
 
   fn parse_function_type(&mut self, is_const: bool, span: Span) -> Type {
@@ -291,17 +253,11 @@ impl Parser<'_> {
       if self.is_identifier() {
         let span = self.peek().span;
         let path = self.parse_path();
-        let args = self.parse_type_arguments();
 
         bounds.push(TypeBound {
           id: NodeId::new(),
           span: self.span_from(span),
-          path: TypePath {
-            span: self.span_from(span),
-            id: NodeId::new(),
-            path,
-            args,
-          },
+          path,
         });
       } else {
         self.emit(ExpectedTypePathForBound {
@@ -325,6 +281,44 @@ impl Parser<'_> {
     }
 
     bounds
+  }
+
+  pub fn parse_generic_arguments(&mut self) -> Vec<Type> {
+    if !self.check(&TokenType::Lt) {
+      return vec![];
+    }
+    let mut args = vec![];
+    self.advance();
+
+    loop {
+      if self.check(&TokenType::Gt) {
+        break;
+      }
+
+      let ty = self.parse_type();
+
+      if let Type::Invalid = ty {
+        self.advance_until_one_of(&[TokenType::Comma, TokenType::Gt]);
+        if self.check(&TokenType::Gt) {
+          break;
+        }
+        if self.check(&TokenType::Comma) {
+          self.advance();
+        }
+        continue;
+      }
+
+      args.push(ty);
+
+      if self.check(&TokenType::Comma) {
+        self.advance();
+      } else {
+        break;
+      }
+    }
+
+    self.expect(TokenType::Gt, "to end generic arguments list");
+    args
   }
 
   pub fn parse_generic_parameters(&mut self) -> Option<GenericParams> {

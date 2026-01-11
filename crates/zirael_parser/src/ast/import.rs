@@ -1,6 +1,8 @@
 use crate::ast::NodeId;
+use crate::{GenericParams, Type};
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
+use zirael_diagnostics::DiagnosticCtx;
 use zirael_utils::prelude::{Identifier, Span};
 
 #[derive(Debug, Clone)]
@@ -35,8 +37,14 @@ pub enum ImportName {
 pub struct Path {
   pub id: NodeId,
   pub root: Option<PathRoot>,
-  pub segments: Vec<Identifier>,
+  pub segments: Vec<PathSegment>,
   pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct PathSegment {
+  pub identifier: Identifier,
+  pub args: Vec<Type>,
 }
 
 impl Path {
@@ -52,7 +60,11 @@ impl Path {
     };
 
     for part in &self.segments {
-      let text = part.text();
+      if !part.args.is_empty() {
+        break;
+      }
+      
+      let text = part.identifier.text();
 
       if text == "super" {
         path = path.parent()?.to_path_buf();
@@ -68,15 +80,11 @@ impl Path {
 impl Display for Path {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
     if let Some(root) = &self.root {
-      match root {
-        PathRoot::Super => write!(f, "super")?,
-        PathRoot::SelfMod => write!(f, "self")?,
-        PathRoot::Package => write!(f, "package")?,
-      }
+      write!(f, "{root}")?;
     }
 
     for segment in &self.segments {
-      write!(f, "::{}", segment.text())?;
+      write!(f, "::{}", segment.identifier.text())?;
     }
 
     Ok(())
@@ -91,4 +99,14 @@ pub enum PathRoot {
   SelfMod,
   /// Relative from the parent
   Super,
+}
+
+impl Display for PathRoot {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    match self {
+      PathRoot::Super => write!(f, "super"),
+      PathRoot::SelfMod => write!(f, "self"),
+      PathRoot::Package => write!(f, "package"),
+    }
+  }
 }
