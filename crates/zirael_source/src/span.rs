@@ -142,13 +142,13 @@ impl Default for Span {
     Self {
       start: 0,
       end: 0,
-      file_id: SourceFileId(usize::MAX - 1),
+      file_id: SourceFileId(0),
     }
   }
 }
 
 impl Debug for Span {
   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-    writeln!(f, "Span({}..{} - {:?})", self.start, self.end, self.file_id)
+    write!(f, "Span({}..{} - {:?})", self.start, self.end, self.file_id)
   }
 }

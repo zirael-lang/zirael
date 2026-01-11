@@ -1,8 +1,8 @@
 use crate::ast::NodeId;
-use crate::ast::identifier::Ident;
 use crate::ast::import::Path;
 use crate::ast::statements::Block;
 use crate::ast::types::{Mutability, Type, TypePath};
+use zirael_utils::ident_table::Identifier;
 use zirael_utils::prelude::Span;
 
 #[derive(Debug, Clone)]
@@ -64,7 +64,7 @@ pub enum ExprKind {
   // Field access
   Field {
     object: Box<Expr>,
-    field: Ident,
+    field: Identifier,
   },
 
   Index {
@@ -95,7 +95,7 @@ pub enum ExprKind {
 
   Range(RangeExpr),
   Builtin {
-    name: Ident,
+    name: Identifier,
     args: Vec<BuiltinArg>,
   },
 
@@ -154,8 +154,8 @@ pub enum ElseBranch {
 #[derive(Debug, Clone)]
 pub struct StructFieldInit {
   pub id: NodeId,
-  pub name: Ident, // .field
-  pub value: Expr, // = value
+  pub name: Identifier, // .field
+  pub value: Expr,      // = value
   pub span: Span,
 }
 
@@ -185,7 +185,7 @@ pub struct WhileExpr {
 #[derive(Debug, Clone)]
 pub struct ForExpr {
   pub id: NodeId,
-  pub binding: Ident,
+  pub binding: Identifier,
   pub iterator: Box<Expr>,
   pub body: Block,
   pub span: Span,
@@ -238,7 +238,7 @@ pub struct MatchArm {
 #[derive(Debug, Clone)]
 pub struct Argument {
   pub id: NodeId,
-  pub name: Option<Ident>,
+  pub name: Option<Identifier>,
   pub value: Expr,
   pub span: Span,
 }
@@ -342,7 +342,7 @@ pub enum AssignOp {
 pub enum Pattern {
   Wildcard(WildcardPat),
   Literal(Literal),
-  Ident(Ident),
+  Ident(Identifier),
   Struct(StructPattern),
   Tuple(TuplePattern),
   Enum(EnumPattern),
@@ -364,8 +364,8 @@ pub struct StructPattern {
 
 #[derive(Debug, Clone)]
 pub enum StructPatternField {
-  Full { name: Ident, pattern: Pattern },
-  Shorthand(Ident),
+  Full { name: Identifier, pattern: Pattern },
+  Shorthand(Identifier),
 }
 
 #[derive(Debug, Clone)]

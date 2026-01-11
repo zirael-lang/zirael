@@ -9,7 +9,7 @@ pub struct IdentTable {
 }
 
 #[derive(Clone, Copy, Eq)]
-pub struct Identifier(Spur, Span);
+pub struct Identifier(Spur, Span, bool);
 
 impl PartialEq for Identifier {
   fn eq(&self, other: &Self) -> bool {
@@ -45,6 +45,18 @@ impl Identifier {
   pub fn span(&self) -> &Span {
     &self.1
   }
+
+  pub fn new(text: &str, span: Span) -> Self {
+    get_or_intern(text, Some(span), false)
+  }
+
+  pub fn text(&self) -> String {
+    resolve(&self)
+  }
+
+  pub fn dummy() -> Self {
+    get_or_intern("", None, true)
+  }
 }
 
 impl IdentTable {
@@ -79,8 +91,16 @@ pub static GLOBAL_TABLE: std::sync::LazyLock<Mutex<IdentTable>> =
   std::sync::LazyLock::new(|| Mutex::new(IdentTable::new()));
 
 #[inline]
-pub fn get_or_intern(name: &str, span: Option<Span>) -> Identifier {
-  Identifier(GLOBAL_TABLE.lock().intern(name), span.unwrap_or_default())
+pub fn get_or_intern(
+  name: &str,
+  span: Option<Span>,
+  dummy: bool,
+) -> Identifier {
+  Identifier(
+    GLOBAL_TABLE.lock().intern(name),
+    span.unwrap_or_default(),
+    dummy,
+  )
 }
 
 #[inline]
@@ -90,5 +110,5 @@ pub fn resolve(sym: &Identifier) -> String {
 
 #[inline]
 pub fn default_ident() -> Identifier {
-  get_or_intern("__default_identifier__", None)
+  get_or_intern("__default_identifier__", None, true)
 }

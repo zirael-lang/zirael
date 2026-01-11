@@ -1,6 +1,5 @@
 pub mod expressions;
 pub mod generics;
-pub mod identifier;
 pub mod import;
 pub mod items;
 pub mod params;
@@ -8,7 +7,6 @@ pub mod statements;
 pub mod types;
 
 use crate::ast::expressions::Expr;
-use crate::ast::identifier::Ident;
 use crate::ast::import::ImportDecl;
 use crate::ast::items::Item;
 pub use expressions::*;
@@ -19,7 +17,7 @@ pub use params::*;
 pub use statements::*;
 pub use types::*;
 use zirael_source::new_id;
-use zirael_utils::prelude::Span;
+use zirael_utils::prelude::{Identifier, Span};
 
 new_id!(NodeId);
 
@@ -34,13 +32,13 @@ pub struct Attribute {
 #[derive(Debug, Clone)]
 pub struct AttrPath {
   pub id: NodeId,
-  pub segments: Vec<Ident>,
+  pub segments: Vec<Identifier>,
   pub span: Span,
 }
 
 #[derive(Debug, Clone)]
 pub enum AttrArg {
-  Named { name: Ident, value: Expr },
+  Named { name: Identifier, value: Expr },
   Positional(Expr),
 }
 

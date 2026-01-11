@@ -1,5 +1,7 @@
 use crate::prelude::*;
 use std::process::exit;
+use zirael_hir::hir::Hir;
+use zirael_hir::lower::lower_to_hir;
 use zirael_parser::module::{Module, Modules};
 use zirael_parser::parser::errors::ModuleNotFound;
 use zirael_parser::parser::parse;
@@ -11,6 +13,7 @@ pub struct CompilationUnit<'ctx> {
   pub ctx: &'ctx Context<'ctx>,
   pub modules: Modules,
   pub resolver: Resolver,
+  pub hir: Option<Hir>,
 }
 
 impl<'ctx> CompilationUnit<'ctx> {
@@ -20,6 +23,7 @@ impl<'ctx> CompilationUnit<'ctx> {
       ctx: context,
       modules: Modules::new(),
       resolver: Resolver::new(),
+      hir: None,
     }
   }
 
@@ -31,13 +35,23 @@ impl<'ctx> CompilationUnit<'ctx> {
     self.resolver.build_import_graph(&self.modules);
     self.resolve_names();
 
-    println!("{:#?}", self.resolver.module_exports_values);
+    self.lower_to_hir();
+
+    if let Some(ref hir) = self.hir {
+      println!("HIR functions: {:#?}", hir);
+    }
   }
 
   fn resolve_names(&mut self) {
     let dcx = self.ctx.dcx();
     ResolveVisitor::resolve_modules(&self.resolver, &self.modules, dcx);
     self.emit_errors();
+  }
+
+  fn lower_to_hir(&mut self) {
+    let dcx = self.ctx.dcx();
+    let hir = lower_to_hir(&self.resolver, &self.modules, dcx);
+    self.hir = Some(hir);
   }
 
   pub fn sess(&self) -> &Session {

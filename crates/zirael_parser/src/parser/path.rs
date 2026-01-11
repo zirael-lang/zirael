@@ -1,7 +1,7 @@
-use crate::identifier::Ident;
 use crate::parser::Parser;
 use crate::parser::errors::{ExpectedSuperOrIdentPath, SelfAndPackageRootOnly};
 use crate::{NodeId, Path, PathRoot, TokenType};
+use zirael_utils::prelude::Identifier;
 
 impl Parser<'_> {
   pub fn parse_path(&mut self) -> Path {
@@ -28,7 +28,7 @@ impl Parser<'_> {
 
       match self.peek().kind {
         TokenType::Super => {
-          segments.push(Ident::new("super", self.peek().span));
+          segments.push(Identifier::new("super", self.peek().span));
           self.advance();
         }
         TokenType::Package | TokenType::SelfValue => {

@@ -2,11 +2,10 @@ use crate::ast::Attribute;
 use crate::ast::NodeId;
 use crate::ast::expressions::Expr;
 use crate::ast::generics::GenericParams;
-use crate::ast::identifier::Ident;
 use crate::ast::params::Param;
 use crate::ast::statements::Block;
 use crate::ast::types::Type;
-use zirael_utils::prelude::Span;
+use zirael_utils::prelude::{Identifier, Span};
 
 #[derive(Debug, Clone)]
 pub struct Item {
@@ -36,7 +35,7 @@ pub enum ItemKind {
 #[derive(Debug, Clone)]
 pub struct ModItem {
   pub id: NodeId,
-  pub name: Ident,
+  pub name: Identifier,
   pub items: Vec<Item>,
   pub span: Span,
 }
@@ -44,7 +43,7 @@ pub struct ModItem {
 #[derive(Debug, Clone)]
 pub struct ConstItem {
   pub id: NodeId,
-  pub name: Ident,
+  pub name: Identifier,
   pub ty: Type,
   pub value: Expr,
   pub span: Span,
@@ -54,7 +53,7 @@ pub struct ConstItem {
 pub struct FunctionItem {
   pub id: NodeId,
   pub is_const: bool,
-  pub name: Ident,
+  pub name: Identifier,
   pub generics: Option<GenericParams>,
   pub params: Vec<Param>,
   pub return_type: Type,
@@ -65,7 +64,7 @@ pub struct FunctionItem {
 #[derive(Debug, Clone)]
 pub struct StructItem {
   pub id: NodeId,
-  pub name: Ident,
+  pub name: Identifier,
   pub generics: Option<GenericParams>,
   pub members: Vec<StructMember>,
   pub span: Span,
@@ -82,7 +81,7 @@ pub struct StructField {
   pub id: NodeId,
   pub attributes: Vec<Attribute>,
   pub visibility: Visibility,
-  pub name: Ident,
+  pub name: Identifier,
   pub ty: Type,
   pub span: Span,
 }
@@ -92,7 +91,7 @@ pub struct MethodItem {
   pub id: NodeId,
   pub attributes: Vec<Attribute>,
   pub visibility: Visibility,
-  pub name: Ident,
+  pub name: Identifier,
   pub params: Vec<Param>,
   pub return_type: Option<Type>,
   pub body: Block,
@@ -102,7 +101,7 @@ pub struct MethodItem {
 #[derive(Debug, Clone)]
 pub struct EnumItem {
   pub id: NodeId,
-  pub name: Ident,
+  pub name: Identifier,
   pub generics: Option<GenericParams>,
   pub variants: Vec<Variant>,
   pub span: Span,
@@ -112,7 +111,7 @@ pub struct EnumItem {
 pub struct Variant {
   pub id: NodeId,
   pub attributes: Vec<Attribute>,
-  pub name: Ident,
+  pub name: Identifier,
   pub payload: Option<VariantPayload>,
   pub span: Span,
 }
@@ -125,13 +124,13 @@ pub enum VariantPayload {
 
 #[derive(Debug, Clone)]
 pub enum VariantField {
-  Named { name: Ident, ty: Type },
+  Named { name: Identifier, ty: Type },
   Unnamed(Type),
 }
 
 #[derive(Debug, Clone)]
 pub struct AssociatedType {
   pub id: NodeId,
-  pub name: Ident,
+  pub name: Identifier,
   pub span: Span,
 }

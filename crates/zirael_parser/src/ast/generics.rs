@@ -1,7 +1,6 @@
 use crate::ast::NodeId;
-use crate::ast::identifier::Ident;
 use crate::ast::types::TypePath;
-use zirael_utils::prelude::Span;
+use zirael_utils::prelude::{Identifier, Span};
 
 #[derive(Debug, Clone)]
 pub struct GenericParams {
@@ -13,7 +12,7 @@ pub struct GenericParams {
 #[derive(Debug, Clone)]
 pub struct GenericParam {
   pub id: NodeId,
-  pub name: Ident,
+  pub name: Identifier,
   pub bounds: Vec<TypeBound>,
   pub span: Span,
 }

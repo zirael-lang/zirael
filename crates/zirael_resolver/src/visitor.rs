@@ -137,6 +137,8 @@ impl<'a> ResolveVisitor<'a> {
     let def_id = self.resolver().add_definition(def);
     self.module_resolver.define_value(name.clone(), def_id);
 
+    self.resolver().symbols.record_resolution(node_id, def_id);
+
     if let Some(scope_id) = self.module_resolver.current_scope() {
       let symbol =
         Symbol::new(name.clone(), def_id, SymbolKind::Value, scope_id);
@@ -174,6 +176,9 @@ impl<'a> ResolveVisitor<'a> {
     let def = Definition::new(node_id, self.current_file(), kind, span);
     let def_id = self.resolver().add_definition(def);
     self.module_resolver.define_type(name.clone(), def_id);
+
+    // Record the resolution so we can look up DefId from NodeId during HIR lowering
+    self.resolver().symbols.record_resolution(node_id, def_id);
 
     if let Some(scope_id) = self.module_resolver.current_scope() {
       let symbol =

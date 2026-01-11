@@ -1,5 +1,4 @@
 use crate::ast::expressions::*;
-use crate::ast::identifier::Ident;
 use crate::ast::types::Mutability;
 use crate::lexer::IntBase as LexIntBase;
 use crate::parser::Parser;
@@ -11,6 +10,7 @@ use crate::parser::errors::{
 use crate::{NodeId, Path, TokenType, TypePath};
 use std::collections::HashMap;
 use zirael_source::prelude::Span;
+use zirael_utils::prelude::Identifier;
 
 impl Parser<'_> {
   pub fn parse_expr(&mut self) -> Expr {
@@ -198,7 +198,7 @@ impl Parser<'_> {
           expr = Expr::new(
             ExprKind::Field {
               object: Box::new(expr),
-              field: Ident::new(&value, span),
+              field: Identifier::new(&value, span),
             },
             self.span_from(start),
           );
@@ -1033,7 +1033,7 @@ impl Parser<'_> {
           self.advance(); // consume =
           let value = self.parse_expr();
 
-          let name_str = name.ident.to_string();
+          let name_str = name.text();
           if let Some(&first_span) = named_args.get(&name_str) {
             self.emit(DuplicateNamedArg {
               name: name_str.clone(),

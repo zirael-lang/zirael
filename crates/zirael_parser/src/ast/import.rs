@@ -1,8 +1,7 @@
-use std::fmt::{write, Display, Formatter};
 use crate::ast::NodeId;
-use crate::ast::identifier::Ident;
+use std::fmt::{Display, Formatter, write};
 use std::path::PathBuf;
-use zirael_utils::prelude::Span;
+use zirael_utils::prelude::{Identifier, Span};
 
 #[derive(Debug, Clone)]
 pub struct ImportDecl {
@@ -22,21 +21,21 @@ pub enum ImportTail {
 pub struct ImportSpec {
   pub id: NodeId,
   pub name: ImportName,
-  pub alias: Option<Ident>,
+  pub alias: Option<Identifier>,
   pub span: Span,
 }
 
 #[derive(Debug, Clone)]
 pub enum ImportName {
   SelfValue,
-  Ident(Ident),
+  Ident(Identifier),
 }
 
 #[derive(Debug, Clone)]
 pub struct Path {
   pub id: NodeId,
   pub root: Option<PathRoot>,
-  pub segments: Vec<Ident>,
+  pub segments: Vec<Identifier>,
   pub span: Span,
 }
 
@@ -72,14 +71,14 @@ impl Display for Path {
       match root {
         PathRoot::Super => write!(f, "super")?,
         PathRoot::SelfMod => write!(f, "self")?,
-        PathRoot::Package => write!(f, "package")?
+        PathRoot::Package => write!(f, "package")?,
       };
     }
-    
+
     for segment in &self.segments {
       write!(f, "::{}", segment.text())?;
-    } 
-    
+    }
+
     Ok(())
   }
 }

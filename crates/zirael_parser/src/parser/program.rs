@@ -1,5 +1,4 @@
 use crate::expressions::Expr;
-use crate::identifier::Ident;
 use crate::items::Item;
 use crate::parser::Parser;
 use crate::parser::errors::{
@@ -13,7 +12,7 @@ use crate::{
 };
 use stringcase::camel_case;
 use zirael_source::span::Span;
-use zirael_utils::prelude::debug;
+use zirael_utils::prelude::{debug, Identifier};
 
 impl Parser<'_> {
   pub fn parse_program(&mut self) -> Option<ProgramNode> {
@@ -114,7 +113,7 @@ impl Parser<'_> {
     })
   }
 
-  fn validate_function_name(&mut self, name: Ident) {
+  fn validate_function_name(&mut self, name: Identifier) {
     if name.text() != camel_case(&name.text()) {
       self.emit(FunctionCamelCase { span: *name.span() });
     }

@@ -1,5 +1,4 @@
 use crate::Path;
-use crate::identifier::Ident;
 use crate::import::ImportDecl;
 use crate::lexer::{Token, TokenType};
 use crate::parser::errors::{
@@ -7,7 +6,7 @@ use crate::parser::errors::{
 };
 use zirael_diagnostics::DiagnosticCtx;
 use zirael_diagnostics::ToDiagnostic;
-use zirael_utils::prelude::Span;
+use zirael_utils::prelude::{Identifier, Span};
 
 pub const ITEM_TOKENS: &[TokenType] = &[
   TokenType::Pub,
@@ -200,16 +199,16 @@ impl<'dcx> Parser<'dcx> {
     self.peek().span
   }
 
-  pub fn parse_identifier(&mut self) -> Ident {
+  pub fn parse_identifier(&mut self) -> Identifier {
     let token = self.advance();
     if let TokenType::Identifier(name) = &token.kind {
-      Ident::new(name.as_str(), token.span)
+      Identifier::new(name.as_str(), token.span)
     } else {
       self.emit(ExpectedIdentifier {
         span: token.span,
         found: token.kind,
       });
-      Ident::dummy()
+      Identifier::dummy()
     }
   }
 

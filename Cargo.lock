@@ -1344,6 +1344,7 @@ dependencies = [
  "fs-err",
  "zirael_c_compiler",
  "zirael_diagnostics",
+ "zirael_hir",
  "zirael_parser",
  "zirael_resolver",
  "zirael_source",
@@ -1374,6 +1375,18 @@ dependencies = [
  "unicode-width",
  "yansi",
  "zirael_source",
+]
+
+[[package]]
+name = "zirael_hir"
+version = "0.1.0"
+dependencies = [
+ "dashmap 7.0.0-rc2",
+ "zirael_diagnostics",
+ "zirael_parser",
+ "zirael_resolver",
+ "zirael_source",
+ "zirael_utils",
 ]
 
 [[package]]

@@ -3,7 +3,7 @@ macro_rules! new_id {
   ($name:ident) => {
     $crate::paste::paste! {
       pub static [<LAST_ID_$name:upper>]: ::std::sync::atomic::AtomicUsize =
-                ::std::sync::atomic::AtomicUsize::new(0);
+                ::std::sync::atomic::AtomicUsize::new(1);
 
       #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
       pub struct $name(pub usize);
