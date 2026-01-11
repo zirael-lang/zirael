@@ -16,7 +16,7 @@ pub struct Ty {
 pub enum TyKind {
   Primitive(PrimitiveKind),
 
-  /// Named type with resolved DefId: `Foo`, `Vec<T>`
+  /// Named type with resolved `DefId`: `Foo`, `Vec<T>`
   Path {
     def_id: DefId,
     segments: Vec<PathSegment>,

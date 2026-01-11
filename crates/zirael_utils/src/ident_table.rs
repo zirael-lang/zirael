@@ -51,7 +51,7 @@ impl Identifier {
   }
 
   pub fn text(&self) -> String {
-    resolve(&self)
+    resolve(self)
   }
 
   pub fn dummy() -> Self {

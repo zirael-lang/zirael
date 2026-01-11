@@ -33,7 +33,7 @@ impl Modules {
   }
 
   pub fn add(&self, module: Module) -> SourceFileId {
-    let id = module.source_file_id.clone();
+    let id = module.source_file_id;
     self.sources.insert(id, module);
     id
   }

@@ -130,10 +130,8 @@ impl Resolver {
     module: SourceFileId,
     name: &str,
   ) -> Option<DefId> {
-    self
-      .module_exports_values
-      .get(&module)
-      .and_then(|exports| exports.get(name).map(|r| *r))
+    let exports = self.module_exports_values.get(&module)?;
+    exports.get(name).map(|r| *r)
   }
 
   pub fn lookup_module_type(
@@ -141,10 +139,8 @@ impl Resolver {
     module: SourceFileId,
     name: &str,
   ) -> Option<DefId> {
-    self
-      .module_exports_types
-      .get(&module)
-      .and_then(|exports| exports.get(name).map(|r| *r))
+    let exports = self.module_exports_types.get(&module)?;
+    exports.get(name).map(|r| *r)
   }
 }
 

@@ -12,7 +12,7 @@ use crate::{
 };
 use stringcase::camel_case;
 use zirael_source::span::Span;
-use zirael_utils::prelude::{debug, Identifier};
+use zirael_utils::prelude::{Identifier, debug};
 
 impl Parser<'_> {
   pub fn parse_program(&mut self) -> Option<ProgramNode> {

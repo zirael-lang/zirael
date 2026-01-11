@@ -23,9 +23,9 @@ impl HirId {
 pub struct LocalId(pub u32);
 
 impl LocalId {
-  pub const ZERO: LocalId = LocalId(0);
+  pub const ZERO: Self = Self(0);
 
-  pub fn next(&self) -> LocalId {
-    LocalId(self.0 + 1)
+  pub fn next(&self) -> Self {
+    Self(self.0 + 1)
   }
 }

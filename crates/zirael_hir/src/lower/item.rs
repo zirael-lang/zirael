@@ -20,7 +20,7 @@ use zirael_resolver::DefId;
 use zirael_source::span::Span;
 use zirael_utils::prelude::Identifier;
 
-impl<'a> LoweringContext<'a> {
+impl LoweringContext<'_> {
   pub fn lower_module(&mut self, node: &ProgramNode) {
     for item in &node.items {
       self.lower_item(item);

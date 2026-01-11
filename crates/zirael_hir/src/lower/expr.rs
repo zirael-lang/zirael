@@ -9,7 +9,7 @@ use zirael_parser::ast::statements;
 use zirael_source::prelude::Span;
 use zirael_utils::prelude::Identifier;
 
-impl<'a> LoweringContext<'a> {
+impl LoweringContext<'_> {
   pub fn lower_expr(&mut self, expr: &expressions::Expr) -> Expr {
     let kind = match &expr.kind {
       AstExprKind::Literal(lit) => ExprKind::Literal(self.lower_literal(lit)),

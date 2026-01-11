@@ -2,7 +2,7 @@ use crate::lower::context::LoweringContext;
 use crate::pat::{FieldPat, Pat, PatKind};
 use zirael_parser::ast::expressions::{Pattern, StructPatternField};
 
-impl<'a> LoweringContext<'a> {
+impl LoweringContext<'_> {
   pub fn lower_ast_pattern(&mut self, pat: &Pattern) -> Pat {
     let (kind, span) = match pat {
       Pattern::Wildcard(w) => (PatKind::Wild, w.span),

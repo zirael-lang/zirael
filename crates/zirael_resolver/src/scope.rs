@@ -97,7 +97,8 @@ impl Scopes {
   }
 
   pub fn parent(&self, id: ScopeId) -> Option<ScopeId> {
-    self.get(id).and_then(|s| s.parent)
+    let s = self.get(id)?;
+    s.parent
   }
 
   pub fn ancestors(&self, id: ScopeId) -> ScopeAncestors<'_> {

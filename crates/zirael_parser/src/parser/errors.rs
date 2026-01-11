@@ -345,7 +345,7 @@ pub struct ExpectedFieldValue {
 #[code(PARSE_MODULE_NOT_FOUND)]
 pub struct ModuleNotFound {
   pub module: Path,
-  
+
   #[error("in this `mod` item")]
-  pub span: Span
+  pub span: Span,
 }

@@ -4,7 +4,7 @@ use zirael_parser::ast::types::Type;
 use zirael_source::prelude::Span;
 use zirael_utils::prelude::Identifier;
 
-impl<'a> LoweringContext<'a> {
+impl LoweringContext<'_> {
   pub fn lower_type(&mut self, ty: &Type) -> Ty {
     let kind = match ty {
       Type::Primitive(p) => TyKind::Primitive(p.kind),

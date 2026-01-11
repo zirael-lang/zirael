@@ -21,9 +21,10 @@ impl GraphWithMap {
   }
 
   fn ensure_node(&self, id: SourceFileId) -> NodeIndex {
-    *self.map.entry(id).or_insert_with(|| {
-      self.graph.lock().add_node(id)
-    })
+    *self
+      .map
+      .entry(id)
+      .or_insert_with(|| self.graph.lock().add_node(id))
   }
 
   fn add_edge(&self, from: SourceFileId, to: SourceFileId) {

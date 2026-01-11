@@ -38,7 +38,7 @@ impl<'ctx> CompilationUnit<'ctx> {
     self.lower_to_hir();
 
     if let Some(ref hir) = self.hir {
-      println!("HIR functions: {:#?}", hir);
+      println!("HIR functions: {hir:#?}");
     }
   }
 
@@ -55,7 +55,7 @@ impl<'ctx> CompilationUnit<'ctx> {
   }
 
   pub fn sess(&self) -> &Session {
-    &self.ctx.session
+    self.ctx.session
   }
 
   fn file_to_module(&mut self, id: SourceFileId) -> Option<SourceFileId> {

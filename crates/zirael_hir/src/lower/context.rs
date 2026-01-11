@@ -31,7 +31,7 @@ impl<'a> LoweringContext<'a> {
     }
   }
 
-  /// Generate a new HirId within the current owner.
+  /// Generate a new `HirId` within the current owner.
   pub fn next_hir_id(&mut self) -> HirId {
     let owner = self.current_owner.expect("no current owner set");
     let local_id = self.next_local_id;

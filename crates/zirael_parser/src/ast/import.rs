@@ -1,5 +1,5 @@
 use crate::ast::NodeId;
-use std::fmt::{Display, Formatter, write};
+use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
 use zirael_utils::prelude::{Identifier, Span};
 
@@ -72,7 +72,7 @@ impl Display for Path {
         PathRoot::Super => write!(f, "super")?,
         PathRoot::SelfMod => write!(f, "self")?,
         PathRoot::Package => write!(f, "package")?,
-      };
+      }
     }
 
     for segment in &self.segments {

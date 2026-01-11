@@ -50,7 +50,7 @@ pub enum RibKind {
 impl RibKind {
   pub fn allows_value_lookup(&self) -> bool {
     match self {
-      RibKind::Const => false,
+      Self::Const => false,
       _ => true,
     }
   }
