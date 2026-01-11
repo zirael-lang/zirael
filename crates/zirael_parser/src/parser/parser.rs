@@ -9,8 +9,12 @@ use zirael_diagnostics::DiagnosticCtx;
 use zirael_diagnostics::ToDiagnostic;
 use zirael_utils::prelude::Span;
 
-pub const ITEM_TOKENS: &[TokenType] =
-  &[TokenType::Mod, TokenType::Const, TokenType::Func];
+pub const ITEM_TOKENS: &[TokenType] = &[
+  TokenType::Pub,
+  TokenType::Mod,
+  TokenType::Const,
+  TokenType::Func,
+];
 
 pub struct Parser<'dcx> {
   tokens: Vec<Token>,

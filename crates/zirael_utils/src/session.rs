@@ -7,31 +7,51 @@ use std::sync::Arc;
 use zirael_diagnostics::{DiagnosticCtx, DiagnosticWriter};
 use zirael_source::prelude::{SourceFileId, Sources};
 
-pub struct ModuleGraph {
+struct GraphWithMap {
   graph: Mutex<DiGraph<SourceFileId, ()>>,
   map: DashMap<SourceFileId, NodeIndex>,
 }
 
-impl ModuleGraph {
-  pub fn new() -> Self {
+impl GraphWithMap {
+  fn new() -> Self {
     Self {
       graph: Mutex::new(DiGraph::new()),
       map: DashMap::new(),
     }
   }
 
-  pub fn ensure_node(&self, id: SourceFileId) -> NodeIndex {
+  fn ensure_node(&self, id: SourceFileId) -> NodeIndex {
     *self.map.entry(id).or_insert_with(|| {
-      let mut graph = self.graph.lock();
-      graph.add_node(id)
+      self.graph.lock().add_node(id)
     })
   }
 
-  /// from is the module that declares the mod item and to is the module that got resolved from that item
-  pub fn add_relation(&self, from: SourceFileId, to: SourceFileId) {
+  fn add_edge(&self, from: SourceFileId, to: SourceFileId) {
     let a = self.ensure_node(from);
     let b = self.ensure_node(to);
     self.graph.lock().add_edge(a, b, ());
+  }
+}
+
+pub struct ModuleGraph {
+  discovered: GraphWithMap,
+  imported: GraphWithMap,
+}
+
+impl ModuleGraph {
+  pub fn new() -> Self {
+    Self {
+      discovered: GraphWithMap::new(),
+      imported: GraphWithMap::new(),
+    }
+  }
+
+  pub fn add_discovered_relation(&self, from: SourceFileId, to: SourceFileId) {
+    self.discovered.add_edge(from, to);
+  }
+
+  pub fn add_import_relation(&self, from: SourceFileId, to: SourceFileId) {
+    self.imported.add_edge(from, to);
   }
 }
 

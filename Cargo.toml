@@ -42,6 +42,7 @@ zirael_core = { path = "crates/zirael_core" }
 zirael_diagnostic_macro = { path = "crates/zirael_diagnostic_macro" }
 zirael_diagnostics = { path = "crates/zirael_diagnostics" }
 zirael_parser = { path = "crates/zirael_parser" }
+zirael_resolver = { path = "crates/zirael_resolver" }
 zirael_source = { path = "crates/zirael_source" }
 zirael_utils = { path = "crates/zirael_utils" }
 

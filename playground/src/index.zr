@@ -1,5 +1,5 @@
 mod add;
 
-func test<T: Display>() {
+pub func test<T: Display>() {
 
 }

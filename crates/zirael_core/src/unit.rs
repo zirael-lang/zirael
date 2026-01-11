@@ -3,12 +3,14 @@ use std::process::exit;
 use zirael_parser::module::{Module, Modules};
 use zirael_parser::parser::errors::ModuleNotFound;
 use zirael_parser::parser::parse;
+use zirael_resolver::{ResolveVisitor, Resolver};
 use zirael_source::source_file::SourceFileId;
 
 pub struct CompilationUnit<'ctx> {
   pub entry_point: SourceFileId,
   pub ctx: &'ctx Context<'ctx>,
   pub modules: Modules,
+  pub resolver: Resolver,
 }
 
 impl<'ctx> CompilationUnit<'ctx> {
@@ -17,20 +19,32 @@ impl<'ctx> CompilationUnit<'ctx> {
       entry_point,
       ctx: context,
       modules: Modules::new(),
+      resolver: Resolver::new(),
     }
   }
 
   pub fn check(&mut self) {
-    let Some(entrypoint) = self.file_to_module(self.entry_point) else {
+    let Some(_entrypoint) = self.file_to_module(self.entry_point) else {
       return;
     };
+
+    self.resolver.build_import_graph(&self.modules);
+    self.resolve_names();
+
+    println!("{:#?}", self.resolver.module_exports_values);
+  }
+
+  fn resolve_names(&mut self) {
+    let dcx = self.ctx.dcx();
+    ResolveVisitor::resolve_modules(&self.resolver, &self.modules, dcx);
+    self.emit_errors();
   }
 
   pub fn sess(&self) -> &Session {
     &self.ctx.session
   }
 
-  fn file_to_module(&self, id: SourceFileId) -> Option<SourceFileId> {
+  fn file_to_module(&mut self, id: SourceFileId) -> Option<SourceFileId> {
     let dcx = self.ctx.dcx();
 
     let source_file = self.ctx.sources.get(id).unwrap_or_else(|| {
@@ -55,42 +69,54 @@ impl<'ctx> CompilationUnit<'ctx> {
     let module = Module::new(id, node);
     self.modules.add(module);
 
-    for module in &self.modules.get_unchecked(id).node.discover_modules {
-      let full_path =
-        module.construct_file(self.ctx.session.root(), source_file.path());
+    let files_to_process: Vec<_> = {
+      let this = self.modules.get_unchecked(id);
+      let dcx = self.ctx.dcx();
+      let mut files = Vec::new();
 
-      let Some(path) = full_path else {
-        dcx.emit(ModuleNotFound {
-          module: module.clone(),
-          span: module.span,
-        });
+      for module in &this.node.discover_modules {
+        let full_path =
+          module.construct_file(self.ctx.session.root(), source_file.path());
 
-        continue;
-      };
+        let Some(path) = full_path else {
+          dcx.emit(ModuleNotFound {
+            module: module.clone(),
+            span: module.span,
+          });
+          continue;
+        };
 
-      if !path.exists() {
-        dcx.emit(ModuleNotFound {
-          module: module.clone(),
-          span: module.span,
-        });
-        continue;
+        if !path.exists() {
+          dcx.emit(ModuleNotFound {
+            module: module.clone(),
+            span: module.span,
+          });
+          continue;
+        }
+
+        if self.ctx.sources.get_by_path(&path).is_some() {
+          continue;
+        }
+
+        let contents = fs_err::read_to_string(path.clone());
+        let Ok(contents) = contents else {
+          dcx.bug(format!("Failed to read contents of {}", path.display()));
+          continue;
+        };
+
+        let file_id = self.ctx.sources.add(contents, path);
+        self.sess().graph().add_discovered_relation(id, file_id);
+        self.resolver.add_import_edge(id, file_id);
+        files.push(file_id);
       }
 
-      if self.ctx.sources.get_by_path(&path).is_some() {
-        continue;
-      }
+      files
+    };
 
-      let contents = fs_err::read_to_string(path.clone());
-      let Ok(contents) = contents else {
-        dcx.bug(format!("Failed to read contents of {}", path.display()));
-        continue;
-      };
-
-      let file_id = self.ctx.sources.add(contents, path);
-
-      self.sess().graph().add_relation(id, file_id);
+    for file_id in files_to_process {
       let _ = self.file_to_module(file_id);
     }
+
     self.emit_errors();
 
     Some(id)

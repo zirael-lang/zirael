@@ -1345,6 +1345,7 @@ dependencies = [
  "zirael_c_compiler",
  "zirael_diagnostics",
  "zirael_parser",
+ "zirael_resolver",
  "zirael_source",
  "zirael_utils",
 ]
@@ -1385,6 +1386,21 @@ dependencies = [
  "unicode-xid",
  "zirael_diagnostic_macro",
  "zirael_diagnostics",
+ "zirael_source",
+ "zirael_utils",
+]
+
+[[package]]
+name = "zirael_resolver"
+version = "0.1.0"
+dependencies = [
+ "dashmap 7.0.0-rc2",
+ "parking_lot",
+ "petgraph",
+ "thiserror",
+ "zirael_diagnostic_macro",
+ "zirael_diagnostics",
+ "zirael_parser",
  "zirael_source",
  "zirael_utils",
 ]
