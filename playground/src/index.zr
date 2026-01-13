@@ -1,5 +1,8 @@
-mod add;
+mod math::add;
+
+import add from math::add;
 
 pub func test<T: Display>() {
-
+    var b = 10;
+    var val = add::add(10, b);
 }

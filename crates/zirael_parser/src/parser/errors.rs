@@ -368,3 +368,31 @@ pub struct GenericsFirstSegment {
   #[error("found here")]
   pub span: Span,
 }
+
+// TODO: add a proper code suggestion
+#[derive(Diagnostic)]
+#[error("there is no point of aliasing an import binding")]
+#[help("just use the aliased name")]
+#[code(PARSE_ALIASING_A_BINDING)]
+pub struct AliasingABinding {
+  #[error("found here")]
+  pub span: Span,
+}
+
+#[derive(Diagnostic)]
+#[error("expected wildcard, identifier or import list, found {found}")]
+#[help("just use the aliased name")]
+#[code(PARSE_UNEXPECTED_IMPORT_KIND)]
+pub struct UnexpectedImportKind {
+  #[error("found here")]
+  pub span: Span,
+  pub found: TokenType,
+}
+
+#[derive(Diagnostic)]
+#[error("imports take a path not a string literal")]
+#[code(PARSE_IMPORT_NOT_A_PATH)]
+pub struct ImportNotAPath {
+  #[error("found here")]
+  pub span: Span,
+}

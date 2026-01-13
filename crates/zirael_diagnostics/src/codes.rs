@@ -3,7 +3,6 @@ use crate::DiagnosticCode;
 // NOTE: Codes are global (0001..9999). Do NOT reuse or renumber existing codes.
 // If you change meaning, add a new code.
 
-// --- Lexer (0001..0099) ---
 macro_rules! define_codes {
   ($($name:ident => $value:literal),+ $(,)?) => {
     $(
@@ -17,6 +16,7 @@ macro_rules! define_codes {
 }
 
 define_codes! {
+  // Lexer (0001..0099)
   LEX_UNTERMINATED_STRING => 1,
   LEX_UNTERMINATED_CHAR => 2,
   LEX_UNTERMINATED_BLOCK_COMMENT => 3,
@@ -37,7 +37,7 @@ define_codes! {
   LEX_UNATTACHED_DOC_COMMENT => 18,
   LEX_UNEXPECTED_CHARACTER => 19,
 
-  // --- Parser (0100..0199) ---
+  // Parser (0100..0199)
   PARSE_UNEXPECTED_TOKEN => 100,
   PARSE_MOD_STRING_LIT => 101,
   PARSE_MOD_EXPECTED_IDENTIFIER => 102,
@@ -74,15 +74,20 @@ define_codes! {
   PARSE_MODULE_NOT_FOUND => 133,
   PARSE_GENERICS_IN_SUPER => 134,
   PARSE_GENERICS_FIRST_SEGMENT => 135,
+  PARSE_ALIASING_A_BINDING => 136,
+  PARSE_UNEXPECTED_IMPORT_KIND => 137,
+  PARSE_IMPORT_NOT_A_PATH => 138,
 
-  // --- Resolver (0200..0299) ---
+  // Resolver (0200..0299)
   RESOLVE_UNDEFINED_NAME => 200,
   RESOLVE_UNDEFINED_TYPE => 201,
   RESOLVE_DUPLICATE_DEFINITION => 202,
   RESOLVE_UNDEFINED_MODULE => 203,
   RESOLVE_CYCLIC_IMPORT => 204,
   RESOLVE_PRIVATE_ITEM => 205,
-  RESOLVE_UNRESOLVED_IMPORT => 206
+  RESOLVE_UNRESOLVED_IMPORT => 206,
+  RESOLVE_INVALID_PATH_ROOT => 207,
+  RESOLVE_UNDEFINED_NAME_IN_MODULE => 208
 }
 
 #[cfg(test)]

@@ -1,14 +1,17 @@
 use crate::expressions::Expr;
+use crate::import::ImportDecl;
 use crate::items::Item;
 use crate::parser::Parser;
 use crate::parser::errors::{
-  ConstCannotBeUninitialized, ConstExpectedFuncOrIdent,
-  ConstItemsNeedTypeAnnotation, FunctionCamelCase, ModStringLit,
+  AliasingABinding, ConstCannotBeUninitialized, ConstExpectedFuncOrIdent,
+  ConstItemsNeedTypeAnnotation, FunctionCamelCase, ImportNotAPath,
+  ModStringLit, UnexpectedImportKind,
 };
 use crate::parser::parser::ITEM_TOKENS;
 use crate::{
-  ConstItem, FunctionItem, ItemKind, ModItem, NeverType, NodeId, Path,
-  ProgramNode, TokenType, Type, UnitType, Visibility, log_parse_failure,
+  ConstItem, FunctionItem, ImportKind, ImportSpec, ItemKind, ModItem,
+  NeverType, NodeId, Path, ProgramNode, TokenType, Type, UnitType, Visibility,
+  log_parse_failure,
 };
 use stringcase::camel_case;
 use zirael_source::span::Span;
@@ -78,7 +81,7 @@ impl Parser<'_> {
     let params = self.parse_function_parameters();
     self.expect(TokenType::RightParen, "to close parameter list");
 
-    let return_type = if self.check(&TokenType::Arrow) {
+    let return_type = if self.check(TokenType::Arrow) {
       self.advance();
       if self.eat(TokenType::Not) {
         // `!` type is only allowed in the function return type
@@ -95,7 +98,7 @@ impl Parser<'_> {
         span: Span::dummy(),
       })
     };
-    let body = if self.check(&TokenType::LeftBrace) {
+    let body = if self.check(TokenType::LeftBrace) {
       Some(self.parse_block())
     } else {
       None
@@ -230,6 +233,17 @@ impl Parser<'_> {
         self.parse_function(false, span_start),
         "function item"
       )?)),
+      TokenType::Import => {
+        let import = self.parse_import();
+
+        if let Some(import) = import {
+          self.imports.push(import);
+        } else {
+          debug!("couldn't parse import");
+        }
+
+        return None;
+      }
       _ => unreachable!(),
     };
 
@@ -243,6 +257,92 @@ impl Parser<'_> {
       span: self.span_from(span_start),
       visibility,
       doc_comments: self.doc_comment.clone(),
+    })
+  }
+
+  fn parse_import(&mut self) -> Option<ImportDecl> {
+    let span = self.previous().span;
+
+    let kind = match self.peek().kind {
+      TokenType::Star => ImportKind::Wildcard,
+      TokenType::LeftBrace => {
+        let mut specs = vec![];
+        self.expect(TokenType::LeftBrace, "to open import list");
+
+        loop {
+          if self.check(TokenType::RightBrace) || self.is_at_end() {
+            break;
+          }
+
+          let name = self.parse_identifier();
+
+          let alias = if self.check(TokenType::As) {
+            self.advance();
+            let alias = self.parse_identifier();
+            Some(alias)
+          } else {
+            None
+          };
+
+          specs.push(ImportSpec {
+            id: NodeId::new(),
+            name,
+            alias,
+            span: self.span_from(span),
+          });
+
+          if self.check(TokenType::Comma) {
+            self.advance();
+          } else {
+            break;
+          }
+        }
+
+        self.expect(TokenType::RightBrace, "to close import list");
+
+        ImportKind::Items(specs)
+      }
+      TokenType::Identifier(_) => {
+        let identifier = self.parse_identifier();
+
+        if self.check(TokenType::As) {
+          let span = self.peek().span;
+          self.advance();
+          let _ = self.parse_identifier();
+
+          self.emit(AliasingABinding { span })
+        }
+
+        ImportKind::Binding(identifier)
+      }
+      _ => {
+        self.emit(UnexpectedImportKind {
+          span: self.peek().span,
+          found: self.peek().kind.clone(),
+        });
+        self.synchronize_to_next_item();
+        return None;
+      }
+    };
+    self.expect(TokenType::From, "to indicate the import path");
+
+    let path = if self.check_if(|t| matches!(t, &TokenType::StringLiteral(_))) {
+      self.emit(ImportNotAPath {
+        span: self.peek().span,
+      });
+      self.advance();
+      Path::dummy()
+    } else {
+      self.parse_path()
+    };
+
+    self.eat_semis();
+
+    Some(ImportDecl {
+      id: NodeId::new(),
+      span: self.span_from(span),
+      path,
+      kind,
     })
   }
 }

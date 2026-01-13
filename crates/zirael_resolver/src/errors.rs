@@ -11,6 +11,16 @@ pub struct UndefinedName {
 }
 
 #[derive(Diagnostic)]
+#[error("cannot find `{name}` in module `{module_name}`")]
+#[code(RESOLVE_UNDEFINED_NAME_IN_MODULE)]
+pub struct UndefinedNameInModule {
+  pub name: String,
+  pub module_name: String,
+  #[error("not found in `{module_name}`")]
+  pub span: Span,
+}
+
+#[derive(Diagnostic)]
 #[error("cannot find type `{name}` in this scope")]
 #[code(RESOLVE_UNDEFINED_TYPE)]
 pub struct UndefinedType {
@@ -64,5 +74,17 @@ pub struct PrivateItem {
 pub struct UnresolvedImport {
   pub path: String,
   #[error("could not resolve")]
+  pub span: Span,
+}
+
+#[derive(Diagnostic)]
+#[error(
+  "`{root}::` path prefix is only valid in import declarations or mod discoveries"
+)]
+#[code(RESOLVE_INVALID_PATH_ROOT)]
+#[help("use an import to bring items into scope, then access them directly")]
+pub struct InvalidPathRoot {
+  pub root: String,
+  #[error("not allowed here")]
   pub span: Span,
 }

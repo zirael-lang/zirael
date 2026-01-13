@@ -35,7 +35,6 @@ impl LoweringContext<'_> {
       }
 
       AstExprKind::SelfValue => {
-        // `self` should resolve to a DefId
         if let Some(def_id) = self.get_def_id(expr.id) {
           ExprKind::Path(PathExpr {
             def_id,

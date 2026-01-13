@@ -96,7 +96,7 @@ impl Parser<'_> {
     if self.eat(TokenType::Comma) {
       let mut elements = vec![first];
 
-      while !self.check(&TokenType::RightParen) && !self.is_at_end() {
+      while !self.check(TokenType::RightParen) && !self.is_at_end() {
         elements.push(self.parse_type());
 
         if !self.eat(TokenType::Comma) {
@@ -140,11 +140,11 @@ impl Parser<'_> {
   }
 
   fn parse_array_size_expr(&mut self) -> Expr {
-    if self.check(&TokenType::RightBracket) || self.is_at_end() {
+    if self.check(TokenType::RightBracket) || self.is_at_end() {
       return Expr::dummy();
     }
 
-    while !self.check(&TokenType::RightBracket) && !self.is_at_end() {
+    while !self.check(TokenType::RightBracket) && !self.is_at_end() {
       self.advance();
     }
 
@@ -181,7 +181,7 @@ impl Parser<'_> {
       .expect(TokenType::LeftParen, "after func in function type")
       .is_some()
     {
-      if !self.check(&TokenType::RightParen) {
+      if !self.check(TokenType::RightParen) {
         loop {
           params.push(self.parse_type());
 
@@ -267,9 +267,9 @@ impl Parser<'_> {
         self.advance_until_one_of(&[TokenType::Comma, TokenType::Gt]);
       }
 
-      if self.check(&TokenType::Plus) {
+      if self.check(TokenType::Plus) {
         self.advance();
-        if self.check(&TokenType::Gt) {
+        if self.check(TokenType::Gt) {
           self.emit(TrailingPlusInTypeBound {
             span: self.peek().span,
           });
@@ -284,14 +284,14 @@ impl Parser<'_> {
   }
 
   pub fn parse_generic_arguments(&mut self) -> Vec<Type> {
-    if !self.check(&TokenType::Lt) {
+    if !self.check(TokenType::Lt) {
       return vec![];
     }
     let mut args = vec![];
     self.advance();
 
     loop {
-      if self.check(&TokenType::Gt) {
+      if self.check(TokenType::Gt) {
         break;
       }
 
@@ -299,10 +299,10 @@ impl Parser<'_> {
 
       if let Type::Invalid = ty {
         self.advance_until_one_of(&[TokenType::Comma, TokenType::Gt]);
-        if self.check(&TokenType::Gt) {
+        if self.check(TokenType::Gt) {
           break;
         }
-        if self.check(&TokenType::Comma) {
+        if self.check(TokenType::Comma) {
           self.advance();
         }
         continue;
@@ -310,7 +310,7 @@ impl Parser<'_> {
 
       args.push(ty);
 
-      if self.check(&TokenType::Comma) {
+      if self.check(TokenType::Comma) {
         self.advance();
       } else {
         break;
@@ -322,7 +322,7 @@ impl Parser<'_> {
   }
 
   pub fn parse_generic_parameters(&mut self) -> Option<GenericParams> {
-    if !self.check(&TokenType::Lt) {
+    if !self.check(TokenType::Lt) {
       return None;
     }
     let span = self.peek().span;
@@ -352,9 +352,9 @@ impl Parser<'_> {
         self.advance_until_one_of(&[TokenType::Comma, TokenType::Gt]);
       }
 
-      if self.check(&TokenType::Comma) {
+      if self.check(TokenType::Comma) {
         self.advance();
-        if self.check(&TokenType::Gt) {
+        if self.check(TokenType::Gt) {
           break;
         }
       } else {

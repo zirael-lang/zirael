@@ -27,14 +27,14 @@ impl Parser<'_> {
     let start = self.current_span();
 
     // Parse range prefix (..x or ..=x)
-    if self.check(&TokenType::DotDot) || self.check(&TokenType::DotDotEq) {
+    if self.check(TokenType::DotDot) || self.check(TokenType::DotDotEq) {
       return self.parse_range_expr(None, start);
     }
 
     let mut left = self.parse_unary_expr();
 
     loop {
-      if self.check(&TokenType::DotDot) || self.check(&TokenType::DotDotEq) {
+      if self.check(TokenType::DotDot) || self.check(TokenType::DotDotEq) {
         left = self.parse_range_expr(Some(left), start);
         continue;
       }
@@ -61,7 +61,7 @@ impl Parser<'_> {
         }
       }
 
-      if self.check(&TokenType::Question) && min_precedence <= 13 {
+      if self.check(TokenType::Question) && min_precedence <= 13 {
         left = self.parse_ternary_expr(left, start);
         continue;
       }
@@ -433,7 +433,7 @@ impl Parser<'_> {
     if self.eat(TokenType::Comma) {
       let mut elements = vec![first];
 
-      while !self.check(&TokenType::RightParen) && !self.is_at_end() {
+      while !self.check(TokenType::RightParen) && !self.is_at_end() {
         elements.push(self.parse_expr());
         if !self.eat(TokenType::Comma) {
           break;
@@ -471,7 +471,7 @@ impl Parser<'_> {
     let mut elements = vec![first];
 
     while self.eat(TokenType::Comma) {
-      if self.check(&TokenType::RightBracket) {
+      if self.check(TokenType::RightBracket) {
         break;
       }
       elements.push(self.parse_expr());
@@ -486,7 +486,7 @@ impl Parser<'_> {
     let start = self.current_span();
     let path = self.parse_path();
 
-    if self.check(&TokenType::LeftBrace)
+    if self.check(TokenType::LeftBrace)
       && self
         .peek_ahead(1)
         .is_some_and(|t| matches!(t.kind, TokenType::Dot))
@@ -507,7 +507,7 @@ impl Parser<'_> {
   fn parse_struct_field_inits(&mut self) -> Vec<StructFieldInit> {
     let mut fields = vec![];
 
-    while !self.check(&TokenType::RightBrace) && !self.is_at_end() {
+    while !self.check(TokenType::RightBrace) && !self.is_at_end() {
       if !self.eat(TokenType::Dot) {
         break;
       }
@@ -555,7 +555,7 @@ impl Parser<'_> {
     let then_block = self.parse_block();
 
     let else_branch = if self.eat(TokenType::Else) {
-      if self.check(&TokenType::If) {
+      if self.check(TokenType::If) {
         let else_if = self.parse_if_expr();
         if let ExprKind::If(if_expr) = else_if.kind {
           Some(ElseBranch::If(Box::new(if_expr)))
@@ -592,7 +592,7 @@ impl Parser<'_> {
 
     let mut arms = vec![];
 
-    while !self.check(&TokenType::RightBrace) && !self.is_at_end() {
+    while !self.check(TokenType::RightBrace) && !self.is_at_end() {
       let arm_start = self.current_span();
       let pattern = self.parse_pattern();
 
@@ -694,7 +694,7 @@ impl Parser<'_> {
         self.advance();
         let mut patterns = vec![];
 
-        while !self.check(&TokenType::RightParen) && !self.is_at_end() {
+        while !self.check(TokenType::RightParen) && !self.is_at_end() {
           patterns.push(self.parse_pattern());
           if !self.eat(TokenType::Comma) {
             break;
@@ -715,7 +715,7 @@ impl Parser<'_> {
         if self.eat(TokenType::LeftBrace) {
           let mut fields = vec![];
 
-          while !self.check(&TokenType::RightBrace) && !self.is_at_end() {
+          while !self.check(TokenType::RightBrace) && !self.is_at_end() {
             if !self.eat(TokenType::Dot) {
               break;
             }
@@ -746,7 +746,7 @@ impl Parser<'_> {
           // Enum pattern
           let mut patterns = vec![];
 
-          while !self.check(&TokenType::RightParen) && !self.is_at_end() {
+          while !self.check(TokenType::RightParen) && !self.is_at_end() {
             patterns.push(self.parse_pattern());
             if !self.eat(TokenType::Comma) {
               break;
@@ -972,7 +972,7 @@ impl Parser<'_> {
 
     let mut args = vec![];
 
-    while !self.check(&TokenType::RightParen) && !self.is_at_end() {
+    while !self.check(TokenType::RightParen) && !self.is_at_end() {
       if self.is_type_start() {
         let ty = self.parse_type();
         args.push(BuiltinArg::Type(ty));
@@ -1010,7 +1010,7 @@ impl Parser<'_> {
     let mut args = vec![];
     let mut named_args: HashMap<String, Span> = HashMap::new();
 
-    while !self.check(&TokenType::RightParen) && !self.is_at_end() {
+    while !self.check(TokenType::RightParen) && !self.is_at_end() {
       let arg_start = self.current_span();
 
       let (name, value) = if self.is_identifier() {

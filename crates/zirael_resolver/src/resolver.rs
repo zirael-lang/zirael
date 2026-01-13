@@ -6,24 +6,31 @@ use crate::symbol::SymbolTable;
 use dashmap::DashMap;
 use parking_lot::RwLock;
 use zirael_parser::module::Modules;
+use zirael_parser::{NodeId, Path};
 use zirael_source::prelude::SourceFileId;
 
 /// The main resolver structure.
 /// This struct contains all shared state for name resolution.
 #[derive(Debug)]
 pub struct Resolver {
-  /// All scopes in the program.
+  /// All scopes in the program
   pub scopes: Scopes,
-  /// The symbol table mapping names to definitions.
+  /// The symbol table mapping names to definitions
   pub symbols: SymbolTable,
-  /// All definitions in the program.
+  /// All definitions in the program
   pub definitions: DashMap<DefId, Definition>,
-  /// The import dependency graph.
+  /// The import dependency graph
   pub import_graph: ImportGraph,
-  /// Per-module exported symbols for cross-module resolution.
+  /// Path to SourceFileId mapping
+  pub path_to_files: DashMap<NodeId, SourceFileId>,
+  /// Per-file exported symbols for cross-module resolution
   pub module_exports_values: DashMap<SourceFileId, DashMap<String, DefId>>,
-  /// Per-module exported symbols for cross-module resolution.
+  /// Per-file exported symbols for cross-module resolution
   pub module_exports_types: DashMap<SourceFileId, DashMap<String, DefId>>,
+  /// Per-DefId exported symbols for inline modules
+  pub inline_module_exports_values: DashMap<DefId, DashMap<String, DefId>>,
+  /// Per-DefId exported symbols for inline modules
+  pub inline_module_exports_types: DashMap<DefId, DashMap<String, DefId>>,
   module_ribs: DashMap<SourceFileId, RwLock<(ScopeId, Rib)>>,
 }
 
@@ -36,6 +43,9 @@ impl Resolver {
       import_graph: ImportGraph::new(),
       module_exports_values: DashMap::new(),
       module_exports_types: DashMap::new(),
+      inline_module_exports_values: DashMap::new(),
+      inline_module_exports_types: DashMap::new(),
+      path_to_files: DashMap::new(),
       module_ribs: DashMap::new(),
     }
   }
@@ -141,6 +151,66 @@ impl Resolver {
   ) -> Option<DefId> {
     let exports = self.module_exports_types.get(&module)?;
     exports.get(name).map(|r| *r)
+  }
+
+  /// Export a value from an inline module (mod foo { ... })
+  pub fn export_inline_value(
+    &self,
+    module_def: DefId,
+    name: String,
+    def_id: DefId,
+  ) {
+    self
+      .inline_module_exports_values
+      .entry(module_def)
+      .or_insert_with(DashMap::new)
+      .insert(name, def_id);
+  }
+
+  /// Export a type from an inline module (mod foo { ... })
+  pub fn export_inline_type(
+    &self,
+    module_def: DefId,
+    name: String,
+    def_id: DefId,
+  ) {
+    self
+      .inline_module_exports_types
+      .entry(module_def)
+      .or_insert_with(DashMap::new)
+      .insert(name, def_id);
+  }
+
+  /// Look up a value in an inline module's exports
+  pub fn lookup_inline_module_value(
+    &self,
+    module_def: DefId,
+    name: &str,
+  ) -> Option<DefId> {
+    let exports = self.inline_module_exports_values.get(&module_def)?;
+    exports.get(name).map(|r| *r)
+  }
+
+  /// Look up a type in an inline module's exports
+  pub fn lookup_inline_module_type(
+    &self,
+    module_def: DefId,
+    name: &str,
+  ) -> Option<DefId> {
+    let exports = self.inline_module_exports_types.get(&module_def)?;
+    exports.get(name).map(|r| *r)
+  }
+
+  pub fn lookup_file_for_path(&self, path: &Path) -> SourceFileId {
+    self
+      .path_to_files
+      .get(&path.id)
+      .map(|f| *f)
+      .expect("path should be already resolved")
+  }
+
+  pub fn add_path_mapping(&self, path: &Path, source_file_id: SourceFileId) {
+    self.path_to_files.insert(path.id, source_file_id);
   }
 }
 

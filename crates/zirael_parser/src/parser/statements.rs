@@ -8,7 +8,7 @@ impl Parser<'_> {
     self.expect(TokenType::LeftBrace, "to open block");
     let mut statements = vec![];
 
-    if self.check(&TokenType::RightBrace) {
+    if self.check(TokenType::RightBrace) {
       self.advance();
       return Block {
         id: NodeId::new(),
@@ -20,19 +20,19 @@ impl Parser<'_> {
     loop {
       if let Some(stmt) = self.parse_statement() {
         statements.push(stmt);
-      } else if !self.check(&TokenType::Semicolon)
-        && !self.check(&TokenType::RightBrace)
+      } else if !self.check(TokenType::Semicolon)
+        && !self.check(TokenType::RightBrace)
         && !self.is_at_end()
       {
         self.advance();
       }
 
-      if self.check(&TokenType::Semicolon) {
+      if self.check(TokenType::Semicolon) {
         self.eat_semis();
-        if self.check(&TokenType::RightBrace) {
+        if self.check(TokenType::RightBrace) {
           break;
         }
-      } else if self.check(&TokenType::RightBrace) {
+      } else if self.check(TokenType::RightBrace) {
         break;
       } else if self.is_at_end() {
         break;
@@ -50,7 +50,7 @@ impl Parser<'_> {
 
   pub fn stmt_safe_boundary(&mut self) {
     self.advance_until_one_of(&[TokenType::Semicolon]);
-    if self.check(&TokenType::Semicolon) {
+    if self.check(TokenType::Semicolon) {
       self.eat_semis();
     }
   }
@@ -65,14 +65,14 @@ impl Parser<'_> {
         self.advance();
         let is_mut = self.previous().kind == Var;
         let name = self.parse_identifier();
-        let ty = if self.check(&Colon) {
+        let ty = if self.check(Colon) {
           self.advance();
           Some(self.parse_type())
         } else {
           None
         };
 
-        if !self.check(&Assign) {
+        if !self.check(Assign) {
           self.emit(AllVarsInitialized {
             span: self.span_from(span),
           });
@@ -94,7 +94,7 @@ impl Parser<'_> {
       _ => {
         let expr = self.parse_expr();
 
-        let has_semicolon = self.check(&Semicolon);
+        let has_semicolon = self.check(Semicolon);
         if has_semicolon {
           self.eat_semis();
         }

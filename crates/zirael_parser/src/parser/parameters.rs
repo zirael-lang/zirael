@@ -28,7 +28,7 @@ impl Parser<'_> {
             Type::Invalid
           };
 
-          let default = if self.check(&TokenType::Assign) {
+          let default = if self.check(TokenType::Assign) {
             self.advance();
             Some(self.parse_const_expr())
           } else {
@@ -110,7 +110,7 @@ impl Parser<'_> {
           );
           let ty = self.parse_type();
 
-          if self.check(&TokenType::Assign) {
+          if self.check(TokenType::Assign) {
             self.advance();
             self.emit(VariadicNoDefault {
               span: self.previous().span,
@@ -135,12 +135,12 @@ impl Parser<'_> {
         }
       }
 
-      if self.check(&TokenType::Comma) {
+      if self.check(TokenType::Comma) {
         self.advance();
-        if self.check(&TokenType::RightParen) {
+        if self.check(TokenType::RightParen) {
           break;
         }
-      } else if self.check(&TokenType::RightParen) {
+      } else if self.check(TokenType::RightParen) {
         break;
       }
     }

@@ -36,23 +36,17 @@ impl GraphWithMap {
 
 pub struct ModuleGraph {
   discovered: GraphWithMap,
-  imported: GraphWithMap,
 }
 
 impl ModuleGraph {
   pub fn new() -> Self {
     Self {
       discovered: GraphWithMap::new(),
-      imported: GraphWithMap::new(),
     }
   }
 
   pub fn add_discovered_relation(&self, from: SourceFileId, to: SourceFileId) {
     self.discovered.add_edge(from, to);
-  }
-
-  pub fn add_import_relation(&self, from: SourceFileId, to: SourceFileId) {
-    self.imported.add_edge(from, to);
   }
 }
 

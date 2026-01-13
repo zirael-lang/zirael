@@ -4,7 +4,6 @@ pub mod hir;
 pub mod ids;
 pub mod item;
 pub mod lower;
-pub mod node;
 pub mod pat;
 pub mod ty;
 

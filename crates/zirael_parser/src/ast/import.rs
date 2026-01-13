@@ -9,28 +9,26 @@ use zirael_utils::prelude::{Identifier, Span};
 pub struct ImportDecl {
   pub id: NodeId,
   pub path: Path,
-  pub tail: Option<ImportTail>,
+  pub kind: ImportKind,
   pub span: Span,
 }
 
 #[derive(Debug, Clone)]
-pub enum ImportTail {
+pub enum ImportKind {
+  // import * from utils::logger;
   Wildcard,
+  // import logger from utils::logger;
+  Binding(Identifier),
+  // import { error } from utils::logger;
   Items(Vec<ImportSpec>),
 }
 
 #[derive(Debug, Clone)]
 pub struct ImportSpec {
   pub id: NodeId,
-  pub name: ImportName,
+  pub name: Identifier,
   pub alias: Option<Identifier>,
   pub span: Span,
-}
-
-#[derive(Debug, Clone)]
-pub enum ImportName {
-  SelfValue,
-  Ident(Identifier),
 }
 
 #[derive(Debug, Clone)]
@@ -48,6 +46,24 @@ pub struct PathSegment {
 }
 
 impl Path {
+  pub fn with_segments(mut self, segments: Vec<PathSegment>) -> Self {
+    self.segments = segments;
+    self
+  }
+
+  pub fn dummy() -> Self {
+    Self {
+      id: NodeId::new(),
+      root: None,
+      segments: vec![],
+      span: Span::dummy(),
+    }
+  }
+
+  pub fn is_empty_path(&self) -> bool {
+    self.segments.is_empty() && self.root.is_none()
+  }
+
   pub fn construct_file(
     &self,
     root: PathBuf,
@@ -63,7 +79,7 @@ impl Path {
       if !part.args.is_empty() {
         break;
       }
-      
+
       let text = part.identifier.text();
 
       if text == "super" {
@@ -83,8 +99,17 @@ impl Display for Path {
       write!(f, "{root}")?;
     }
 
-    for segment in &self.segments {
-      write!(f, "::{}", segment.identifier.text())?;
+    for (index, segment) in self.segments.iter().enumerate() {
+      write!(
+        f,
+        "{}{}",
+        if index == 0 && self.root.is_none() {
+          ""
+        } else {
+          "::"
+        },
+        segment.identifier.text()
+      )?;
     }
 
     Ok(())

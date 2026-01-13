@@ -37,7 +37,7 @@ impl Parser<'_> {
     };
 
     while self.eat(TokenType::ColonColon) {
-      if self.check(&TokenType::Lt) || self.check(&TokenType::LeftBrace) {
+      if self.check(TokenType::Lt) || self.check(TokenType::LeftBrace) {
         break;
       }
 

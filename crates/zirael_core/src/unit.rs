@@ -36,15 +36,10 @@ impl<'ctx> CompilationUnit<'ctx> {
     self.resolve_names();
 
     self.lower_to_hir();
-
-    if let Some(ref hir) = self.hir {
-      println!("HIR functions: {hir:#?}");
-    }
   }
 
   fn resolve_names(&mut self) {
-    let dcx = self.ctx.dcx();
-    ResolveVisitor::resolve_modules(&self.resolver, &self.modules, dcx);
+    ResolveVisitor::resolve_modules(&self.resolver, &self.modules, self.ctx);
     self.emit_errors();
   }
 
@@ -120,7 +115,6 @@ impl<'ctx> CompilationUnit<'ctx> {
 
         let file_id = self.ctx.sources.add(contents, path);
         self.sess().graph().add_discovered_relation(id, file_id);
-        self.resolver.add_import_edge(id, file_id);
         files.push(file_id);
       }
 

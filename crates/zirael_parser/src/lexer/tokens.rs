@@ -41,6 +41,7 @@ pub enum TokenType {
   Package,   // package
   SelfValue, // self
   Super,     // super
+  From,      // from
 
   // Visibility
   Pub, // pub
@@ -125,8 +126,8 @@ pub enum TokenType {
   Arrow,      // ->
   ColonColon, // ::
 
-  Whitespace, // spaces, tabs, newlines (usually skipped)
-  Eof,        // end of file
+  Whitespace,
+  Eof, // end of file
 }
 
 /// Integer literal base
@@ -197,6 +198,7 @@ impl fmt::Display for TokenType {
       Self::Package => write!(f, "keyword `package`"),
       Self::SelfValue => write!(f, "keyword `self`"),
       Self::Super => write!(f, "keyword `super`"),
+      Self::From => write!(f, "keyword `from`"),
 
       // Keywords - Visibility
       Self::Pub => write!(f, "keyword `pub`"),

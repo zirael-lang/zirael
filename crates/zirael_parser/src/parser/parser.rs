@@ -13,6 +13,7 @@ pub const ITEM_TOKENS: &[TokenType] = &[
   TokenType::Mod,
   TokenType::Const,
   TokenType::Func,
+  TokenType::Import,
 ];
 
 pub struct Parser<'dcx> {
@@ -83,8 +84,8 @@ impl<'dcx> Parser<'dcx> {
   }
 
   #[inline]
-  pub fn check(&self, token_type: &TokenType) -> bool {
-    &self.peek().kind == token_type
+  pub fn check(&self, token_type: TokenType) -> bool {
+    &self.peek().kind == &token_type
   }
 
   #[inline]
@@ -94,7 +95,7 @@ impl<'dcx> Parser<'dcx> {
 
   #[inline]
   pub fn check_any(&self, token_types: &[TokenType]) -> bool {
-    token_types.iter().any(|tt| self.check(tt))
+    token_types.iter().any(|tt| self.check(tt.clone()))
   }
 
   #[inline]
@@ -129,7 +130,7 @@ impl<'dcx> Parser<'dcx> {
     token_type: TokenType,
     context: &str,
   ) -> Option<Token> {
-    if self.check(&token_type) {
+    if self.check(token_type.clone()) {
       Some(self.advance())
     } else {
       let current = self.peek();
@@ -174,7 +175,7 @@ impl<'dcx> Parser<'dcx> {
   }
 
   pub fn is(&mut self, token_type: TokenType) -> Option<Token> {
-    if self.check(&token_type) {
+    if self.check(token_type) {
       Some(self.advance())
     } else {
       None
@@ -227,10 +228,10 @@ impl<'dcx> Parser<'dcx> {
   }
 
   pub fn at_expr_terminator(&self) -> bool {
-    self.check(&TokenType::RightBrace)
-      || self.check(&TokenType::Semicolon)
+    self.check(TokenType::RightBrace)
+      || self.check(TokenType::Semicolon)
       || self.is_at_end()
-      || self.check(&TokenType::Comma)
+      || self.check(TokenType::Comma)
   }
 
   pub fn save_position(&self) -> usize {
