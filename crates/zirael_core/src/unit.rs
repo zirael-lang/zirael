@@ -1,5 +1,6 @@
 use crate::prelude::*;
 use std::process::exit;
+use zirael_analysis::{TypeTable, typeck_hir};
 use zirael_hir::hir::Hir;
 use zirael_hir::lower::lower_to_hir;
 use zirael_parser::module::{Module, Modules};
@@ -14,6 +15,7 @@ pub struct CompilationUnit<'ctx> {
   pub modules: Modules,
   pub resolver: Resolver,
   pub hir: Option<Hir>,
+  pub typeck: Option<TypeTable>,
 }
 
 impl<'ctx> CompilationUnit<'ctx> {
@@ -24,6 +26,7 @@ impl<'ctx> CompilationUnit<'ctx> {
       modules: Modules::new(),
       resolver: Resolver::new(),
       hir: None,
+      typeck: None,
     }
   }
 
@@ -36,6 +39,17 @@ impl<'ctx> CompilationUnit<'ctx> {
     self.resolve_names();
 
     self.lower_to_hir();
+    self.typeck();
+  }
+
+  fn typeck(&mut self) {
+    let Some(hir) = &self.hir else { return };
+    let dcx = self.ctx.dcx();
+
+    let table = typeck_hir(hir, dcx, &self.resolver);
+
+    self.emit_errors();
+    self.typeck = Some(table);
   }
 
   fn resolve_names(&mut self) {

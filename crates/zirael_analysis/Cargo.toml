@@ -1,0 +1,18 @@
+[package]
+name = "zirael_analysis"
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+edition.workspace = true
+
+[dependencies]
+zirael_diagnostics = { workspace = true }
+zirael_hir = { workspace = true }
+zirael_parser = { workspace = true }
+zirael_resolver = { workspace = true }
+zirael_utils = { workspace = true }
+dashmap = { workspace = true }
+parking_lot = { workspace = true }
+
+[lints]
+workspace = true

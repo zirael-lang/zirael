@@ -64,6 +64,48 @@ pub enum PrimitiveKind {
   Char,
 }
 
+impl PrimitiveKind {
+  pub fn is_integer(&self) -> bool {
+    matches!(
+      self,
+      Self::I8
+        | Self::I16
+        | Self::I32
+        | Self::I64
+        | Self::I128
+        | Self::ISize
+        | Self::U8
+        | Self::U16
+        | Self::U32
+        | Self::U64
+        | Self::U128
+        | Self::USize
+    )
+  }
+
+  pub fn is_float(&self) -> bool {
+    matches!(self, Self::F32 | Self::F64)
+  }
+
+  pub fn is_numeric(&self) -> bool {
+    self.is_integer() || self.is_float()
+  }
+
+  pub fn is_signed(&self) -> bool {
+    matches!(
+      self,
+      Self::I8 | Self::I16 | Self::I32 | Self::I64 | Self::I128 | Self::ISize
+    )
+  }
+
+  pub fn is_unsigned(&self) -> bool {
+    matches!(
+      self,
+      Self::U8 | Self::U16 | Self::U32 | Self::U64 | Self::U128 | Self::USize
+    )
+  }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mutability {
   Mut,

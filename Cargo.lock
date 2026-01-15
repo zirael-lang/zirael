@@ -1310,6 +1310,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "zirael_analysis"
+version = "0.1.0"
+dependencies = [
+ "dashmap 7.0.0-rc2",
+ "parking_lot",
+ "zirael_diagnostics",
+ "zirael_hir",
+ "zirael_parser",
+ "zirael_resolver",
+ "zirael_utils",
+]
+
+[[package]]
 name = "zirael_c_compiler"
 version = "0.1.0"
 dependencies = [
@@ -1342,6 +1355,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "fs-err",
+ "zirael_analysis",
  "zirael_c_compiler",
  "zirael_diagnostics",
  "zirael_hir",

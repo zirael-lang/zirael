@@ -1,8 +1,12 @@
-mod math::add;
+func identity<T>(value: T) -> T {
+    value
+}
 
-import add from math::add;
+pub func add(a: i32, b: i32) -> i32 {
+    return a + b;
+}
 
-pub func test<T: Display>() {
-    var b = 10;
-    var val = add::add(10, b);
+pub func test() {
+    var a = identity(10);
+    var b = add(10, "w");
 }

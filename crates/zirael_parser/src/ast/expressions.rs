@@ -435,6 +435,24 @@ pub enum IntSuffix {
 }
 
 impl IntSuffix {
+  pub fn to_primitive_kind(&self) -> crate::ast::types::PrimitiveKind {
+    use crate::ast::types::PrimitiveKind;
+    match self {
+      Self::I8 => PrimitiveKind::I8,
+      Self::I16 => PrimitiveKind::I16,
+      Self::I32 => PrimitiveKind::I32,
+      Self::I64 => PrimitiveKind::I64,
+      Self::I128 => PrimitiveKind::I128,
+      Self::ISize => PrimitiveKind::ISize,
+      Self::U8 => PrimitiveKind::U8,
+      Self::U16 => PrimitiveKind::U16,
+      Self::U32 => PrimitiveKind::U32,
+      Self::U64 => PrimitiveKind::U64,
+      Self::U128 => PrimitiveKind::U128,
+      Self::USize => PrimitiveKind::USize,
+    }
+  }
+
   pub fn parse_int_suffix(lexeme: &str, value: &str) -> Option<Self> {
     let suffix_str = lexeme.strip_prefix(value).unwrap_or("");
     let suffix_str = suffix_str.trim_start_matches(|c: char| {
@@ -478,6 +496,16 @@ pub struct FloatLit {
 pub enum FloatSuffix {
   F32,
   F64,
+}
+
+impl FloatSuffix {
+  pub fn to_primitive_kind(&self) -> crate::ast::types::PrimitiveKind {
+    use crate::ast::types::PrimitiveKind;
+    match self {
+      Self::F32 => PrimitiveKind::F32,
+      Self::F64 => PrimitiveKind::F64,
+    }
+  }
 }
 
 #[derive(Debug, Clone)]

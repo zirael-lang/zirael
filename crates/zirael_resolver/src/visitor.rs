@@ -541,6 +541,7 @@ impl<'a> ResolveVisitor<'a> {
           span,
         );
         let def_id = self.resolver().add_definition(def);
+        self.resolver().symbols.record_resolution(param.id, def_id);
         self.module_resolver.define_type(name, def_id);
       }
     }
@@ -607,6 +608,7 @@ impl<'a> ResolveVisitor<'a> {
           span,
         );
         let def_id = self.resolver().add_definition(def);
+        self.resolver().symbols.record_resolution(param.id, def_id);
         self.module_resolver.define_type(name, def_id);
       }
     }
@@ -651,6 +653,7 @@ impl<'a> ResolveVisitor<'a> {
           span,
         );
         let def_id = self.resolver().add_definition(def);
+        self.resolver().symbols.record_resolution(param.id, def_id);
         self.module_resolver.define_type(name, def_id);
       }
     }
@@ -759,7 +762,7 @@ impl<'a> ResolveVisitor<'a> {
     }
   }
 
-  fn resolve_path(&mut self, path: &Path, expr: &Expr) {
+  fn resolve_path(&mut self, path: &Path, span: Span, id: NodeId) {
     if path.segments.is_empty() {
       return;
     }
@@ -773,7 +776,7 @@ impl<'a> ResolveVisitor<'a> {
     if let Some(root) = &path.root {
       self.ctx.dcx().emit(InvalidPathRoot {
         root: root.to_string(),
-        span: expr.span,
+        span,
       });
       return;
     }
@@ -781,13 +784,14 @@ impl<'a> ResolveVisitor<'a> {
     if path.segments.len() == 1 {
       let name = path.segments[0].identifier.text();
 
-      if let Some(def_id) = self.module_resolver.lookup_value(&name) {
-        self.resolver().symbols.record_resolution(expr.id, def_id);
+      if let Some(def_id) = self
+        .module_resolver
+        .lookup_value(&name)
+        .or_else(|| self.module_resolver.lookup_type(&name))
+      {
+        self.resolver().symbols.record_resolution(id, def_id);
       } else {
-        self.ctx.dcx().emit(UndefinedName {
-          name,
-          span: expr.span,
-        });
+        self.ctx.dcx().emit(UndefinedName { name, span });
       }
       return;
     }
@@ -861,15 +865,12 @@ impl<'a> ResolveVisitor<'a> {
       }
     }
 
-    self
-      .resolver()
-      .symbols
-      .record_resolution(expr.id, current_def);
+    self.resolver().symbols.record_resolution(id, current_def);
   }
 
   fn resolve_expr(&mut self, expr: &Expr) {
     match &expr.kind {
-      ExprKind::Path(path) => self.resolve_path(path, expr),
+      ExprKind::Path(path) => self.resolve_path(path, expr.span, expr.id),
 
       ExprKind::Binary { left, right, .. } => {
         self.resolve_expr(left);
@@ -921,7 +922,7 @@ impl<'a> ResolveVisitor<'a> {
       }
 
       ExprKind::Struct { path, fields } => {
-        self.resolve_type_path(path);
+        self.resolve_path(path, expr.span, expr.id);
         for field in fields {
           self.resolve_expr(&field.value);
         }
@@ -1022,7 +1023,7 @@ impl<'a> ResolveVisitor<'a> {
   fn resolve_type(&mut self, ty: &Type) {
     match ty {
       Type::Path(type_path) => {
-        self.resolve_type_path(type_path);
+        self.resolve_path(type_path, type_path.span, type_path.id);
       }
       Type::Function(func_ty) => {
         for param in &func_ty.params {
@@ -1047,29 +1048,5 @@ impl<'a> ResolveVisitor<'a> {
       }
       Type::Primitive(_) | Type::Unit(_) | Type::Never(_) | Type::Invalid => {}
     }
-  }
-
-  fn resolve_type_path(&mut self, type_path: &Path) {
-    // single segment
-    if type_path.root.is_none() && type_path.segments.len() == 1 {
-      let name = type_path.segments[0].identifier.text();
-      for arg in &type_path.segments[0].args {
-        self.resolve_type(arg);
-      }
-      if let Some(def_id) = self.module_resolver.lookup_type(&name) {
-        self
-          .resolver()
-          .symbols
-          .record_resolution(type_path.id, def_id);
-      } else {
-        self.ctx.dcx().emit(UndefinedType {
-          name,
-          span: type_path.span,
-        });
-      }
-    }
-    // TODO: multi segment paths
-
-    todo!()
   }
 }
