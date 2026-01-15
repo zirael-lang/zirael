@@ -9,4 +9,6 @@ pub func add(a: i32, b: i32) -> i32 {
 pub func test() {
     var a = identity(10);
     var b = add(10, "w");
+
+    var y = &b;
 }
