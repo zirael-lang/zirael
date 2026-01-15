@@ -141,7 +141,7 @@ impl Parser<'_> {
       } else if self.eat(TokenType::Const) {
         Mutability::Const
       } else {
-        todo!("proper diagnostic")
+        Mutability::Const
       };
       let operand = self.parse_unary_expr();
       return Expr::new(
