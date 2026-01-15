@@ -1,0 +1,4 @@
+//#error: expected '(' to open parameter list
+func add {}
+
+func main() {}
