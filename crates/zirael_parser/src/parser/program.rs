@@ -4,8 +4,8 @@ use crate::items::Item;
 use crate::parser::Parser;
 use crate::parser::errors::{
   AliasingABinding, ConstCannotBeUninitialized, ConstExpectedFuncOrIdent,
-  ConstItemsNeedTypeAnnotation, FunctionCamelCase, ImportNotAPath,
-  ModStringLit, UnexpectedImportKind,
+  ConstItemsNeedTypeAnnotation, ExpectedParenToOpenList, FunctionCamelCase,
+  ImportNotAPath, ModStringLit, UnexpectedImportKind,
 };
 use crate::parser::parser::ITEM_TOKENS;
 use crate::{
@@ -77,13 +77,30 @@ impl Parser<'_> {
     self.validate_function_name(name);
     let generics = self.parse_generic_parameters();
 
-    self.expect(TokenType::LeftParen, "to open parameter list");
-    let params = self.parse_function_parameters();
-    self.expect(TokenType::RightParen, "to close parameter list");
+    let has_parens = self.eat(TokenType::LeftParen);
+    if !has_parens {
+      self.emit(ExpectedParenToOpenList {
+        span: self.peek().span,
+      });
+      self.advance_until_one_of(&[
+        TokenType::Arrow,
+        TokenType::LeftBrace,
+        TokenType::Semicolon,
+      ]);
+    }
+
+    let params = if has_parens {
+      let params = self.parse_function_parameters();
+      self.expect(TokenType::RightParen, "to close parameter list");
+      params
+    } else {
+      vec![]
+    };
 
     let return_type = if self.check(TokenType::Arrow) {
       self.advance();
       if self.eat(TokenType::Not) {
+        // TODO: diagnostic on invalid usage in normal types
         // `!` type is only allowed in the function return type
         Type::Never(NeverType {
           id: NodeId::new(),
@@ -98,6 +115,7 @@ impl Parser<'_> {
         span: Span::dummy(),
       })
     };
+
     let body = if self.check(TokenType::LeftBrace) {
       Some(self.parse_block())
     } else {
@@ -112,7 +130,7 @@ impl Parser<'_> {
       params,
       return_type,
       body,
-      span: Default::default(),
+      span: self.span_from(span_start),
     })
   }
 

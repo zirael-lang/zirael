@@ -396,3 +396,11 @@ pub struct ImportNotAPath {
   #[error("found here")]
   pub span: Span,
 }
+
+#[derive(Diagnostic)]
+#[error("expected '(' to open parameter list")]
+#[code(PARSE_EXPECTED_PAREN_OPEN_LIST)]
+pub struct ExpectedParenToOpenList {
+  #[error("expected here")]
+  pub span: Span,
+}
