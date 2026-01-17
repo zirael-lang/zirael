@@ -101,7 +101,10 @@ pub enum ExprKind {
 
   // Composite literals
   Tuple(Vec<Expr>),
-  Array(Vec<Expr>),
+  Array {
+    values: Vec<Expr>,
+    repeat: Option<Box<Expr>>,
+  },
 }
 
 impl Expr {

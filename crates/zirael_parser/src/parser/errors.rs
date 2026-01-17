@@ -404,3 +404,29 @@ pub struct ExpectedParenToOpenList {
   #[error("expected here")]
   pub span: Span,
 }
+
+#[derive(Diagnostic)]
+#[error("array repeat syntax cannot be mixed with comma-separated elements")]
+#[code(PARSE_REPEAT_SYNTAX_ONLY_AT_START)]
+#[help("repeat syntax must be `[value; count]`, not mixed with other elements")]
+pub struct RepeatSyntaxOnlyAtStart {
+  #[error("semicolon found here")]
+  pub span: Span,
+}
+
+#[derive(Diagnostic)]
+#[error("invalid array repeat syntax")]
+#[code(PARSE_INVALID_REPEAT_SYNTAX)]
+#[help("array repeat syntax is `[value; count]` with no additional elements")]
+pub struct InvalidRepeatSyntax {
+  #[error("unexpected tokens after repeat count")]
+  pub span: Span,
+}
+
+#[derive(Diagnostic)]
+#[error("repeat syntax requires exactly one value before the semicolon")]
+#[code(PARSE_REPEAT_SYNTAX_REQUIRED_VALUE)]
+pub struct RepeatSyntaxRequiredValue {
+  #[error("semicolon without preceding value")]
+  pub span: Span,
+}

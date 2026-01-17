@@ -118,8 +118,8 @@ impl LoweringContext<'_> {
         ExprKind::Tuple(exprs.iter().map(|e| self.lower_expr(e)).collect())
       }
 
-      AstExprKind::Array(exprs) => {
-        ExprKind::Array(exprs.iter().map(|e| self.lower_expr(e)).collect())
+      AstExprKind::Array { values, .. } => {
+        ExprKind::Array(values.iter().map(|e| self.lower_expr(e)).collect())
       }
 
       AstExprKind::Block(block) => ExprKind::Block(self.lower_block(block)),

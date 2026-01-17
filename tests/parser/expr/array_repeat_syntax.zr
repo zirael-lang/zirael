@@ -1,0 +1,8 @@
+func main() {
+    //#error: invalid array repeat syntax
+    var test = ["w"; 10; 10]
+    //#error: array repeat syntax cannot be mixed with comma-separated elements
+    var test1 = ["w", "o"; 10]
+    //#error: repeat syntax requires exactly one value before
+    var test2 = [; 10]
+}

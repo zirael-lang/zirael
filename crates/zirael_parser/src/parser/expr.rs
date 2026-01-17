@@ -5,7 +5,8 @@ use crate::parser::Parser;
 use crate::parser::errors::{
   DuplicateNamedArg, EmptyMatch, ExpectedBuiltinName, ExpectedExpressionFound,
   ExpectedFatArrow, ExpectedFieldName, ExpectedPattern, InvalidAssignTarget,
-  MissingColonInTernary, MissingInKeyword,
+  InvalidRepeatSyntax, MissingColonInTernary, MissingInKeyword,
+  RepeatSyntaxOnlyAtStart, RepeatSyntaxRequiredValue,
 };
 use crate::{NodeId, Path, PathSegment, TokenType};
 use std::collections::HashMap;
@@ -451,35 +452,90 @@ impl Parser<'_> {
 
   fn parse_array_expr(&mut self) -> Expr {
     let start = self.current_span();
-    self.eat(TokenType::LeftBracket);
+    self.expect(TokenType::LeftBracket, "to open array expr");
 
-    // Empty array
     if self.eat(TokenType::RightBracket) {
-      return Expr::new_const(ExprKind::Array(vec![]), self.span_from(start));
+      return Expr::new_const(
+        ExprKind::Array {
+          values: vec![],
+          repeat: None,
+        },
+        self.span_from(start),
+      );
     }
 
-    let first = self.parse_expr();
+    if self.check(TokenType::Semicolon) {
+      let semi_span = self.peek().span;
+      self.emit(RepeatSyntaxRequiredValue { span: semi_span });
 
-    // repeat syntax: [value; count]
-    // TODO: implement repeat syntax and add it to reference
-    if self.eat(TokenType::Semicolon) {
-      let _count = self.parse_expr();
+      while !self.check(TokenType::RightBracket) && !self.is_at_end() {
+        self.advance();
+      }
       self.expect(TokenType::RightBracket, "to close array");
-      return Expr::new(ExprKind::Array(vec![first]), self.span_from(start));
+
+      return Expr::new(
+        ExprKind::Array {
+          values: vec![],
+          repeat: None,
+        },
+        self.span_from(start),
+      );
     }
 
-    let mut elements = vec![first];
+    let first_elem = self.parse_expr();
+
+    if self.eat(TokenType::Semicolon) {
+      let repeat_count = self.parse_const_expr();
+
+      if self.eat(TokenType::Comma) || self.check(TokenType::Semicolon) {
+        let error_start = self.peek().span;
+        self.emit(InvalidRepeatSyntax {
+          span: self.span_from(error_start),
+        });
+
+        while !self.check(TokenType::RightBracket) && !self.is_at_end() {
+          self.advance();
+        }
+      }
+
+      self.expect(TokenType::RightBracket, "to close array");
+
+      return Expr::new(
+        ExprKind::Array {
+          values: vec![first_elem],
+          repeat: Some(Box::new(repeat_count)),
+        },
+        self.span_from(start),
+      );
+    }
+
+    let mut elements = vec![first_elem];
 
     while self.eat(TokenType::Comma) {
       if self.check(TokenType::RightBracket) {
         break;
       }
+
       elements.push(self.parse_expr());
+
+      if self.check(TokenType::Semicolon) {
+        let semi_span = self.peek().span;
+        self.emit(RepeatSyntaxOnlyAtStart { span: semi_span });
+
+        self.advance(); // eat ;
+        self.advance_until_one_of(&[TokenType::RightBracket, TokenType::Comma]);
+      }
     }
 
     self.expect(TokenType::RightBracket, "to close array");
 
-    Expr::new(ExprKind::Array(elements), self.span_from(start))
+    Expr::new(
+      ExprKind::Array {
+        values: elements,
+        repeat: None,
+      },
+      self.span_from(start),
+    )
   }
 
   fn parse_path_or_struct_expr(&mut self) -> Expr {

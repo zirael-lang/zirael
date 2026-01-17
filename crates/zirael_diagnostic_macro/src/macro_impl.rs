@@ -29,6 +29,27 @@ fn is_span_type(ty: &syn::Type) -> bool {
   }
 }
 
+fn is_vec_span_type(ty: &syn::Type) -> bool {
+  match ty {
+    syn::Type::Path(type_path) => {
+      let last_seg = type_path.path.segments.last();
+      if let Some(seg) = last_seg {
+        if seg.ident != "Vec" {
+          return false;
+        }
+        if let syn::PathArguments::AngleBracketed(args) = &seg.arguments {
+          if let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first()
+          {
+            return is_span_type(inner_ty);
+          }
+        }
+      }
+      false
+    }
+    _ => false,
+  }
+}
+
 fn get_lit_str(expr: &Expr) -> Result<syn::LitStr, MacroFunctionError> {
   match expr {
     Expr::Lit(expr_lit) => {
@@ -397,7 +418,10 @@ fn impl_diagnostic_derive(
     .named
     .iter()
     .filter_map(|field| {
-      if !is_span_type(&field.ty) {
+      let is_span = is_span_type(&field.ty);
+      let is_vec_span = is_vec_span_type(&field.ty);
+
+      if !is_span && !is_vec_span {
         return None;
       }
 
@@ -426,7 +450,7 @@ fn impl_diagnostic_derive(
         .and_then(|expr| get_string_literal(&expr).ok())
         .unwrap_or_default();
 
-      Some((field_ident.clone(), message, severity))
+      Some((field_ident.clone(), message, severity, is_vec_span))
     })
     .collect();
 
@@ -435,13 +459,21 @@ fn impl_diagnostic_derive(
   });
 
   let mut label_implementations: Vec<proc_macro2::TokenStream> = Vec::new();
-  for (ident, message, severity) in &label_fields {
+  for (ident, message, severity, is_vec) in &label_fields {
     let diagnostic_level = get_diagnostic_level(severity);
 
     if message.is_empty() {
-      label_implementations.push(quote! {
-        zirael_diagnostics::Label::new(String::new(), self.#ident, #diagnostic_level)
-      });
+      if *is_vec {
+        label_implementations.push(quote! {
+          self.#ident.iter().map(|span| {
+            zirael_diagnostics::Label::new(String::new(), *span, #diagnostic_level)
+          })
+        });
+      } else {
+        label_implementations.push(quote! {
+          std::iter::once(zirael_diagnostics::Label::new(String::new(), self.#ident, #diagnostic_level))
+        });
+      }
       continue;
     }
 
@@ -459,12 +491,23 @@ fn impl_diagnostic_derive(
     }
 
     if used_fields.is_empty() {
-      label_implementations.push(quote! {
-        {
-          let message = format!(#message_lit);
-          zirael_diagnostics::Label::new(message, self.#ident, #diagnostic_level)
-        }
-      });
+      if *is_vec {
+        label_implementations.push(quote! {
+          {
+            let message = format!(#message_lit);
+            self.#ident.iter().map(move |span| {
+              zirael_diagnostics::Label::new(message.clone(), *span, #diagnostic_level)
+            })
+          }
+        });
+      } else {
+        label_implementations.push(quote! {
+          {
+            let message = format!(#message_lit);
+            std::iter::once(zirael_diagnostics::Label::new(message, self.#ident, #diagnostic_level))
+          }
+        });
+      }
     } else {
       let field_refs = used_fields.iter().map(|&field_ident| {
         quote! { let #field_ident = &self.#field_ident; }
@@ -472,13 +515,25 @@ fn impl_diagnostic_derive(
       let field_args = used_fields.iter().map(|&field_ident| {
         quote! { #field_ident = #field_ident }
       });
-      label_implementations.push(quote! {
-        {
-          #(#field_refs)*
-          let message = format!(#message_lit, #(#field_args),*);
-          zirael_diagnostics::Label::new(message, self.#ident, #diagnostic_level)
-        }
-      });
+      if *is_vec {
+        label_implementations.push(quote! {
+          {
+            #(#field_refs)*
+            let message = format!(#message_lit, #(#field_args),*);
+            self.#ident.iter().map(move |span| {
+              zirael_diagnostics::Label::new(message.clone(), *span, #diagnostic_level)
+            })
+          }
+        });
+      } else {
+        label_implementations.push(quote! {
+          {
+            #(#field_refs)*
+            let message = format!(#message_lit, #(#field_args),*);
+            std::iter::once(zirael_diagnostics::Label::new(message, self.#ident, #diagnostic_level))
+          }
+        });
+      }
     }
   }
 
@@ -558,6 +613,16 @@ fn impl_diagnostic_derive(
     quote! { None }
   };
 
+  let labels_impl = if label_implementations.is_empty() {
+    quote! { vec![] }
+  } else {
+    quote! {
+      vec![
+        #(#label_implementations),*
+      ].into_iter().flatten().collect()
+    }
+  };
+
   Ok(TokenStream::from(quote! {
       #[automatically_derived]
         impl zirael_diagnostics::ToDiagnostic for #struct_name {
@@ -567,9 +632,7 @@ fn impl_diagnostic_derive(
             zirael_diagnostics::Diag {
                   message,
                   level: #diagnostic_level,
-                  labels: vec![
-                      #(#label_implementations,)*
-                  ],
+                  labels: #labels_impl,
                   notes: #notes_impl,
                 helps: #helps_impl,
                 code: #code_impl,

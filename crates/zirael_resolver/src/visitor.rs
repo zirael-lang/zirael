@@ -997,7 +997,7 @@ impl<'a> ResolveVisitor<'a> {
         }
       }
 
-      ExprKind::Tuple(exprs) | ExprKind::Array(exprs) => {
+      ExprKind::Tuple(exprs) | ExprKind::Array { values: exprs, .. } => {
         for e in exprs {
           self.resolve_expr(e);
         }

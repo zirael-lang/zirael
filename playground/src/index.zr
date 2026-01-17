@@ -10,5 +10,6 @@ pub func test() {
     var a = identity(10);
     var b = add(10, "w");
 
+    var test = ["w", "o"; 10];
     var y = &b;
 }
